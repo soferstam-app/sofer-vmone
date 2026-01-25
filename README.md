@@ -47,8 +47,8 @@
 ## 📥 הורדה והתקנה
 
 ניתן להוריד את הגרסה האחרונה מדף ה-Releases בגיטהאב:
-קישור להורדות
-
+[קישור להורדות
+](https://github.com/soferstam-app/stam-sofer/releases/tag/APP)
 ### אנדרואיד (Android)
 1.  הורד את קובץ ה-`apk`.
 2.  התקן אותו על המכשיר שלך (ייתכן שתצטרך לאשר התקנה ממקורות לא ידועים).
