@@ -1,27 +1,337 @@
 <!DOCTYPE html>
-<html>
+<html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>Privacy Policy - Stam Sofer</title>
-    <style>body { font-family: sans-serif; padding: 20px; max-width: 800px; margin: auto; line-height: 1.6; }</style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>מדיניות פרטיות - סופר ומונה</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts - Heebo for Hebrew -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Heebo', sans-serif;
+        }
+    </style>
 </head>
-<body>
-    <h1>Privacy Policy for Stam Sofer</h1>
-    <p>Last updated: January 2026</p>
+<body class="bg-gray-50">
+    
+    <!-- Header -->
+    <header class="bg-gradient-to-r from-purple-600 to-purple-800 text-white py-12">
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8 max-w-4xl">
+            <a href="index.html" class="inline-flex items-center gap-2 text-purple-200 hover:text-white mb-6 transition-colors">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd"/>
+                </svg>
+                חזרה לדף הבית
+            </a>
+            <h1 class="text-4xl sm:text-5xl font-bold mb-4">מדיניות פרטיות</h1>
+            <p class="text-purple-100 text-lg">עודכן לאחרונה: פברואר 2026</p>
+            <p class="mt-2 text-purple-200 text-sm">
+                <a href="privacy_policy_en.html" class="underline hover:text-white">Read in English (for Google reviewers)</a>
+            </p>
+        </div>
+    </header>
 
-    <h2>Introduction</h2>
-    <p>Stam Sofer ("we" or "the app") is an open-source application designed to help scribes (Sofer Stam) edit and manage their texts. We respect your privacy and are committed to protecting your personal data.</p>
+    <!-- Main Content -->
+    <main class="py-12 px-4 sm:px-6 lg:px-8">
+        <div class="container mx-auto max-w-4xl">
+            
+            <!-- Introduction -->
+            <section class="bg-white rounded-2xl shadow-lg p-8 mb-8">
+                <div class="flex items-start gap-4 mb-6">
+                    <svg class="w-10 h-10 text-purple-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                    </svg>
+                    <div>
+                        <h2 class="text-3xl font-bold mb-4 text-purple-900">מבוא</h2>
+                        <p class="text-gray-700 leading-relaxed text-lg">
+                            "סופר ומונה" (להלן "האפליקציה" או "אנחנו") היא אפליקציית קוד פתוח שפותחה במיוחד 
+                            לסייע לסופרי סת״ם בניהול ומעקב אחר עבודתם. אנחנו מכבדים את הפרטיות שלך ומחויבים 
+                            להגן על המידע האישי שלך.
+                        </p>
+                    </div>
+                </div>
+            </section>
 
-    <h2>Google User Data</h2>
-    <p>Our app accesses your Google Drive to allow you to save and edit your documents directly from the app. Here is how we handle your data:</p>
-    <ul>
-        <li><strong>Access:</strong> The app requests access to your Google Drive files to list, open, and save files managed by the app.</li>
-        <li><strong>Use:</strong> We use this access solely to display your files within the app and save your edits back to your Drive.</li>
-        <li><strong>Storage:</strong> The app does not store your files on any external servers. Files are processed locally on your device and synchronized directly with Google Drive.</li>
-        <li><strong>Sharing:</strong> We do not share, sell, or transfer your Google user data to any third parties or advertising tools.</li>
-    </ul>
+            <!-- Google Drive Data -->
+            <section class="bg-white rounded-2xl shadow-lg p-8 mb-8">
+                <div class="flex items-start gap-4 mb-6">
+                    <svg class="w-10 h-10 text-blue-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M5.5 16a3.5 3.5 0 01-.369-6.98 4 4 0 117.753-1.977A4.5 4.5 0 1113.5 16h-8z"/>
+                    </svg>
+                    <div class="flex-1">
+                        <h2 class="text-3xl font-bold mb-4 text-purple-900">גישה לנתוני Google Drive</h2>
+                        <p class="text-gray-700 leading-relaxed mb-6">
+                            האפליקציה מבקשת גישה ל-Google Drive שלך כדי לאפשר לך לגבות ולסנכרן את הנתונים שלך 
+                            בין מכשירים שונים. להלן פירוט מדויק כיצד אנחנו מטפלים בנתונים שלך:
+                        </p>
+                        
+                        <div class="space-y-6">
+                            <!-- Access -->
+                            <div class="bg-blue-50 rounded-xl p-6 border-r-4 border-blue-500">
+                                <h3 class="text-xl font-bold mb-3 text-blue-900 flex items-center gap-2">
+                                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"/>
+                                    </svg>
+                                    גישה (Access)
+                                </h3>
+                                <p class="text-gray-700 leading-relaxed">
+                                    האפליקציה מבקשת הרשאת <code class="bg-blue-100 px-2 py-1 rounded">drive.file</code> 
+                                    מ-Google OAuth API. הרשאה זו מאפשרת לאפליקציה:
+                                </p>
+                                <ul class="list-disc list-inside mt-3 space-y-2 text-gray-700 mr-4">
+                                    <li>ליצור ולנהל קובץ גיבוי בשם <code class="bg-blue-100 px-2 py-1 rounded">sofer_vmone_backup.json</code> ב-Drive שלך</li>
+                                    <li>לקרוא ולעדכן רק את הקבצים שהאפליקציה יצרה (לא קבצים אחרים)</li>
+                                    <li>לסנכרן שינויים בין מכשירים שונים</li>
+                                </ul>
+                                <p class="mt-3 text-sm text-blue-800 font-semibold">
+                                    ⚠️ האפליקציה <u>לא</u> יכולה לגשת לקבצים אחרים ב-Drive שלך.
+                                </p>
+                            </div>
+                            
+                            <!-- Use -->
+                            <div class="bg-green-50 rounded-xl p-6 border-r-4 border-green-500">
+                                <h3 class="text-xl font-bold mb-3 text-green-900 flex items-center gap-2">
+                                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd"/>
+                                    </svg>
+                                    שימוש (Use)
+                                </h3>
+                                <p class="text-gray-700 leading-relaxed">
+                                    אנחנו משתמשים בגישה זו <strong>אך ורק</strong> למטרות הבאות:
+                                </p>
+                                <ul class="list-disc list-inside mt-3 space-y-2 text-gray-700 mr-4">
+                                    <li>שמירת נתוני הפרויקטים וההיסטוריה שלך (מקומית וב-Drive)</li>
+                                    <li>סנכרון אוטומטי בין מכשירים (אנדרואיד, ווינדוס, macOS)</li>
+                                    <li>מיזוג חכם של נתונים במקרה של עבודה ממספר מכשירים</li>
+                                    <li>גיבוי אוטומטי לשמירה על המידע שלך</li>
+                                </ul>
+                            </div>
+                            
+                            <!-- Storage -->
+                            <div class="bg-purple-50 rounded-xl p-6 border-r-4 border-purple-500">
+                                <h3 class="text-xl font-bold mb-3 text-purple-900 flex items-center gap-2">
+                                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+                                    </svg>
+                                    אחסון (Storage)
+                                </h3>
+                                <p class="text-gray-700 leading-relaxed">
+                                    <strong class="text-purple-900">האפליקציה לא מאחסנת את הנתונים שלך בשרתים חיצוניים.</strong>
+                                </p>
+                                <ul class="list-disc list-inside mt-3 space-y-2 text-gray-700 mr-4">
+                                    <li>הנתונים נשמרים מקומית במכשיר שלך (SharedPreferences / Local Storage)</li>
+                                    <li>קובץ הגיבוי נשמר <strong>רק</strong> ב-Google Drive שלך (לא בשרתים שלנו)</li>
+                                    <li>כל העיבוד מתבצע מקומית במכשיר – אין העברת נתונים לשרתים אחרים</li>
+                                    <li>הקובץ מוצפן בפורמט JSON ונגיש רק לך</li>
+                                </ul>
+                            </div>
+                            
+                            <!-- Sharing -->
+                            <div class="bg-red-50 rounded-xl p-6 border-r-4 border-red-500">
+                                <h3 class="text-xl font-bold mb-3 text-red-900 flex items-center gap-2">
+                                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clip-rule="evenodd"/>
+                                    </svg>
+                                    שיתוף (Sharing)
+                                </h3>
+                                <p class="text-gray-700 leading-relaxed font-semibold">
+                                    אנחנו <strong class="text-red-700">לא משתפים, לא מוכרים ולא מעבירים</strong> 
+                                    את נתוני המשתמש שלך (Google user data) לכל צד שלישי, כלי פרסום, או גורם אחר.
+                                </p>
+                                <p class="mt-3 text-gray-700 leading-relaxed">
+                                    הנתונים שלך שייכים לך בלבד. האפליקציה היא קוד פתוח – ניתן לבדוק את הקוד 
+                                    ולוודא שאין גישה לא מורשית.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
 
-    <h2>Contact Us</h2>
-    <p>If you have any questions about this Privacy Policy, please contact us via our GitHub repository.</p>
+            <!-- Data We Collect -->
+            <section class="bg-white rounded-2xl shadow-lg p-8 mb-8">
+                <h2 class="text-3xl font-bold mb-6 text-purple-900">📋 אילו נתונים אנחנו אוספים?</h2>
+                <div class="space-y-4 text-gray-700 leading-relaxed">
+                    <p>
+                        האפליקציה אוספת ומאחסנת את הנתונים הבאים <strong>מקומית במכשיר שלך</strong> 
+                        וב-<strong>Google Drive שלך בלבד</strong>:
+                    </p>
+                    <ul class="list-disc list-inside space-y-2 mr-6">
+                        <li><strong>פרויקטים:</strong> שם פרויקט, סוג (ספר תורה/תפילין/מזוזה), מחיר, הוצאות, יעדים, אימייל לקוח, תאריך יעד</li>
+                        <li><strong>היסטוריית עבודה:</strong> תאריך ושעה, זמן עבודה, עמודים/שורות שנכתבו, תיאור</li>
+                        <li><strong>הגדרות:</strong> העדפות התראות, שעת מעבר יום, הגדרות ימי עבודה</li>
+                        <li><strong>מידע חשבון Google:</strong> כתובת אימייל (לצורך זיהוי והצגה בלבד)</li>
+                    </ul>
+                    <p class="mt-4 text-sm bg-yellow-50 border-r-4 border-yellow-400 p-4 rounded">
+                        <strong>חשוב:</strong> האפליקציה לא אוספת מידע אישי נוסף, לא עוקבת אחר מיקום, 
+                        ולא משתמשת בכלי אנליטיקה או פרסום.
+                    </p>
+                </div>
+            </section>
+
+            <!-- Google OAuth Compliance -->
+            <section class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl shadow-lg p-8 mb-8 border-2 border-blue-300">
+                <h2 class="text-3xl font-bold mb-6 text-blue-900">🔐 עמידה בדרישות Google OAuth API</h2>
+                <div class="space-y-4 text-gray-800 leading-relaxed">
+                    <p class="font-semibold text-lg">
+                        האפליקציה עומדת בדרישות Google לשימוש ב-OAuth API Sensitive Scopes:
+                    </p>
+                    
+                    <div class="bg-white rounded-xl p-6 shadow-md">
+                        <h3 class="font-bold text-xl mb-3 text-blue-900">✅ Limited Use Requirements</h3>
+                        <ul class="space-y-3 text-gray-700">
+                            <li class="flex items-start gap-3">
+                                <svg class="w-5 h-5 text-green-500 flex-shrink-0 mt-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                </svg>
+                                <span>האפליקציה משתמשת בנתוני Google רק לתכלית שהוצהרה: גיבוי וסנכרון נתוני עבודה</span>
+                            </li>
+                            <li class="flex items-start gap-3">
+                                <svg class="w-5 h-5 text-green-500 flex-shrink-0 mt-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                </svg>
+                                <span>הנתונים לא מועברים, נמכרים או משותפים עם צדדים שלישיים</span>
+                            </li>
+                            <li class="flex items-start gap-3">
+                                <svg class="w-5 h-5 text-green-500 flex-shrink-0 mt-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                </svg>
+                                <span>הנתונים לא משמשים למטרות פרסום או שיווק</span>
+                            </li>
+                            <li class="flex items-start gap-3">
+                                <svg class="w-5 h-5 text-green-500 flex-shrink-0 mt-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                </svg>
+                                <span>הנתונים לא משמשים לשיפור מוצרים או שירותים אחרים</span>
+                            </li>
+                            <li class="flex items-start gap-3">
+                                <svg class="w-5 h-5 text-green-500 flex-shrink-0 mt-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                </svg>
+                                <span>הנתונים לא מועברים לבני אדם (למעט בקשה מפורשת שלך לתמיכה טכנית)</span>
+                            </li>
+                        </ul>
+                    </div>
+                    
+                    <div class="bg-white rounded-xl p-6 shadow-md">
+                        <h3 class="font-bold text-xl mb-3 text-blue-900">🔒 אבטחה</h3>
+                        <p class="text-gray-700 leading-relaxed">
+                            החיבור ל-Google Drive מתבצע דרך OAuth 2.0 המאובטח של Google.
+                            אסימוני הגישה (Access Tokens) נשמרים מקומית במכשיר ומוצפנים.
+                            אין שרתי ביניים – התקשורת היא ישירה בין המכשיר שלך ל-Google Drive.
+                        </p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- User Rights -->
+            <section class="bg-white rounded-2xl shadow-lg p-8 mb-8">
+                <h2 class="text-3xl font-bold mb-6 text-purple-900">👤 הזכויות שלך</h2>
+                <div class="space-y-4 text-gray-700 leading-relaxed">
+                    <p>כמשתמש, יש לך את הזכויות הבאות:</p>
+                    <ul class="list-disc list-inside space-y-2 mr-6">
+                        <li><strong>גישה:</strong> ניתן לצפות בכל הנתונים שלך בכל עת (במסכי הסיכומים והפרויקטים)</li>
+                        <li><strong>עריכה:</strong> ניתן לערוך או למחוק כל נתון (פרויקטים, רשומות עבודה)</li>
+                        <li><strong>מחיקה:</strong> ניתן למחוק את כל הנתונים (כפתור "איפוס כל הנתונים" במסך פרויקטים)</li>
+                        <li><strong>ניתוק:</strong> ניתן לנתק את החשבון מ-Google Drive בכל עת (כפתור "Sign Out" בהגדרות)</li>
+                        <li><strong>ייצוא:</strong> הנתונים נשמרים בפורמט JSON פתוח וניתן לייצא אותם מ-Drive שלך</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- Data Retention -->
+            <section class="bg-white rounded-2xl shadow-lg p-8 mb-8">
+                <h2 class="text-3xl font-bold mb-6 text-purple-900">🗄️ שמירת נתונים</h2>
+                <div class="space-y-4 text-gray-700 leading-relaxed">
+                    <p>
+                        הנתונים נשמרים כל עוד אתה משתמש באפליקציה. כאשר אתה מוחק פרויקט או רשומה:
+                    </p>
+                    <ul class="list-disc list-inside space-y-2 mr-6">
+                        <li>הנתון עובר ל<strong>סל מחזור</strong> (מחיקה לוגית) ונשמר למשך 30 יום</li>
+                        <li>לאחר 30 יום, הנתון מנוקה אוטומטית בסנכרון הבא</li>
+                        <li>ניתן למחוק לצמיתות מיד מסל המחזור</li>
+                    </ul>
+                    <p class="mt-4">
+                        כאשר אתה מנתק את החשבון מ-Google Drive או מוחק את האפליקציה:
+                    </p>
+                    <ul class="list-disc list-inside space-y-2 mr-6">
+                        <li>הנתונים המקומיים נמחקים מהמכשיר</li>
+                        <li>קובץ הגיבוי ב-Drive נשאר שלך – ניתן למחוק אותו ידנית מ-Drive</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- Open Source -->
+            <section class="bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl shadow-lg p-8 mb-8">
+                <h2 class="text-3xl font-bold mb-6 text-purple-900">💻 קוד פתוח ושקיפות</h2>
+                <div class="space-y-4 text-gray-700 leading-relaxed">
+                    <p>
+                        "סופר ומונה" היא אפליקציית <strong>קוד פתוח</strong>. כל הקוד זמין לצפייה ב-GitHub:
+                    </p>
+                    <a href="https://github.com/soferstam-app/sofer-vmone" 
+                       class="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-full font-bold hover:bg-purple-700 transition-all duration-300 shadow-lg">
+                        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                            <path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd"/>
+                        </svg>
+                        צפה בקוד המקור
+                    </a>
+                    <p class="mt-4">
+                        ניתן לבדוק בעצמך כיצד האפליקציה מטפלת בנתונים, לדווח על בעיות אבטחה,
+                        ולתרום לפיתוח.
+                    </p>
+                </div>
+            </section>
+
+            <!-- Contact -->
+            <section class="bg-white rounded-2xl shadow-lg p-8 mb-8">
+                <h2 class="text-3xl font-bold mb-6 text-purple-900">📧 יצירת קשר</h2>
+                <div class="space-y-4 text-gray-700 leading-relaxed">
+                    <p>
+                        אם יש לך שאלות או חששות לגבי מדיניות הפרטיות שלנו או האופן שבו אנחנו מטפלים 
+                        בנתונים שלך, אנא פנה אלינו:
+                    </p>
+                    <ul class="space-y-2 mr-6">
+                        <li><strong>GitHub Issues:</strong> <a href="https://github.com/soferstam-app/sofer-vmone/issues" class="text-purple-600 hover:text-purple-800 underline">דווח על בעיה או שאל שאלה</a></li>
+                        <li><strong>דף הפרויקט:</strong> <a href="https://github.com/soferstam-app/sofer-vmone" class="text-purple-600 hover:text-purple-800 underline">github.com/soferstam-app/sofer-vmone</a></li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- Changes to Policy -->
+            <section class="bg-gray-100 rounded-2xl shadow-lg p-8">
+                <h2 class="text-3xl font-bold mb-6 text-purple-900">🔄 שינויים במדיניות</h2>
+                <div class="text-gray-700 leading-relaxed">
+                    <p>
+                        אנחנו עשויים לעדכן את מדיניות הפרטיות מעת לעת. כל שינוי יפורסם בדף זה עם 
+                        תאריך העדכון. אנו ממליצים לבדוק דף זה מדי פעם כדי להישאר מעודכן.
+                    </p>
+                    <p class="mt-4 text-sm text-gray-600">
+                        <strong>תאריך עדכון אחרון:</strong> פברואר 2026
+                    </p>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-gray-300 py-8 px-4 sm:px-6 lg:px-8">
+        <div class="container mx-auto max-w-4xl text-center">
+            <p class="mb-2">
+                © 2026 Sofer v'Mone. קוד פתוח תחת רישיון MIT.
+            </p>
+            <p class="text-sm text-gray-500">
+                <a href="index.html" class="hover:text-purple-400 transition-colors">חזרה לדף הבית</a>
+            </p>
+        </div>
+    </footer>
+
 </body>
 </html>

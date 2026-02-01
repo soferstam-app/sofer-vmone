@@ -2,17 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 import 'models.dart';
 import 'project_summary_screen.dart';
+import 'hebrew_utils.dart';
+import 'storage_service.dart';
 
 class SummaryScreen extends StatefulWidget {
   final List<Project> projects;
   final List<WorkSession> history;
   final Function(List<WorkSession>) onHistoryUpdated;
+  final bool useGregorianDates;
 
   const SummaryScreen({
     super.key,
     required this.projects,
     required this.history,
     required this.onHistoryUpdated,
+    this.useGregorianDates = false,
   });
 
   @override
@@ -22,10 +26,8 @@ class SummaryScreen extends StatefulWidget {
 class _SummaryScreenState extends State<SummaryScreen> {
   DateTime _selectedDate = DateTime.now();
   bool _viewByMonth = false;
+  final StorageService _storage = StorageService();
 
-  // --- לוגיקה לחישוב נתונים ---
-
-  // סינון ההיסטוריה לפי היום הנבחר
   List<WorkSession> _getSessionsForDate(DateTime date) {
     return widget.history.where((session) {
       if (_viewByMonth) {
@@ -39,7 +41,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
     }).toList();
   }
 
-  // קיבוץ סשנים לפי פרויקט
   Map<String, List<WorkSession>> _groupSessionsByProject(
       List<WorkSession> sessions) {
     final Map<String, List<WorkSession>> grouped = {};
@@ -51,8 +52,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
     }
     return grouped;
   }
-
-  // --- תצוגה ---
 
   @override
   Widget build(BuildContext context) {
@@ -74,28 +73,36 @@ class _SummaryScreenState extends State<SummaryScreen> {
       ),
       body: Column(
         children: [
-          // כותרת תאריך
           Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Text(
-              _getHebrewDate(_selectedDate, _viewByMonth),
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.deepPurple,
-              ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.today_rounded,
+                    color: Colors.deepPurple.shade300, size: 24),
+                const SizedBox(width: 10),
+                Text(
+                  widget.useGregorianDates
+                      ? (_viewByMonth
+                          ? formatDisplayDateMonth(_selectedDate, true)
+                          : formatDisplayDate(_selectedDate, true))
+                      : _getHebrewDate(_selectedDate, _viewByMonth),
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.deepPurple,
+                  ),
+                ),
+              ],
             ),
           ),
-
-          // גוף המסך - כרטיסי סיכום או הודעה ריקה
           Expanded(
             child: dailySessions.isEmpty
                 ? _buildEmptyState()
                 : ListView(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     children: groupedSessions.entries
-                        .where((entry) => validProjectIds
-                            .contains(entry.key)) // סינון פרויקטים מחוקים
+                        .where((entry) => validProjectIds.contains(entry.key))
                         .map((entry) {
                       final project = widget.projects.firstWhere(
                         (p) => p.id == entry.key,
@@ -113,8 +120,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
                     }).toList(),
                   ),
           ),
-
-          // כפתורים למטה
           _buildBottomButtons(),
         ],
       ),
@@ -122,15 +127,27 @@ class _SummaryScreenState extends State<SummaryScreen> {
   }
 
   Widget _buildEmptyState() {
-    return const Center(
+    return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.lightbulb, size: 60, color: Colors.orangeAccent),
-          SizedBox(height: 20),
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0.0, end: 1.0),
+            duration: const Duration(milliseconds: 600),
+            curve: Curves.elasticOut,
+            builder: (context, value, child) {
+              return Transform.scale(scale: value, child: child);
+            },
+            child: Icon(Icons.auto_awesome,
+                size: 64, color: Colors.orange.shade300),
+          ),
+          const SizedBox(height: 20),
           Text(
             "כל זמן שהנר דולק אפשר לכתוב",
-            style: TextStyle(fontSize: 18, fontStyle: FontStyle.italic),
+            style: TextStyle(
+                fontSize: 18,
+                fontStyle: FontStyle.italic,
+                color: Colors.grey.shade700),
           ),
         ],
       ),
@@ -138,50 +155,39 @@ class _SummaryScreenState extends State<SummaryScreen> {
   }
 
   Widget _buildProjectSummaryCard(Project project, List<WorkSession> sessions) {
-    // 1. חישובים בסיסיים
     Duration totalDuration = Duration.zero;
-    int totalLinesWritten = 0; // לספר תורה
-    int totalUnitsWritten = 0; // למזוזה/תפילין
-    int totalParshiyotForAvg = 0; // לתפילין
-    int totalMezuzaLines = 0; // למזוזה
+    int totalLinesWritten = 0;
+    int totalUnitsWritten = 0;
+    int totalParshiyotForAvg = 0;
+    int totalMezuzaLines = 0;
 
     for (var s in sessions) {
       totalDuration += s.duration;
       if (project.type == ProjectType.sefer) {
-        // חישוב שורות: סוף - התחלה + 1
         totalLinesWritten += (s.endLine - s.startLine + 1);
       } else {
         totalUnitsWritten += s.amount;
 
-        // חישוב פרשיות לתפילין לצורך ממוצע
         if (project.type == ProjectType.tefillin) {
           if (s.tefillinType == null && s.parshiya == null) {
-            // זוג שלם = 8 פרשיות
             totalParshiyotForAvg += s.amount * 8;
           } else if ((s.tefillinType == 'head' || s.tefillinType == 'hand') &&
               s.parshiya == null) {
-            // סט ראש או יד = 4 פרשיות
             totalParshiyotForAvg += s.amount * 4;
           } else {
-            // פרשייה בודדת
             totalParshiyotForAvg += s.amount;
           }
         } else if (project.type == ProjectType.mezuza) {
-          // חישוב שורות למזוזה (22 שורות למזוזה)
           if (s.endLine > 0) {
-            // אם הוזן מספר שורות ספציפי (חלקי)
-            // נניח שכל היחידות המלאות (amount-1) הן 22 שורות, והאחרונה היא endLine
             totalMezuzaLines +=
                 (s.amount > 0 ? (s.amount - 1) * 22 : 0) + s.endLine;
           } else {
-            // מזוזות שלמות
             totalMezuzaLines += s.amount * 22;
           }
         }
       }
     }
 
-    // 2. חישוב הספק (עמודים ושורות לספר)
     String outputText = "";
     double profit = 0;
     double progressPercent = 0;
@@ -197,18 +203,14 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
       outputText = "$pages עמודים ו-$lines שורות";
 
-      // חישוב רווח: (שורות שנכתבו / שורות לעמוד) * (מחיר - הוצאות)
       double pagesDecimal = totalLinesWritten / linesPerPage;
       profit = pagesDecimal * (project.price - project.expenses);
 
-      // ממוצע דקות לשורה
       if (totalLinesWritten > 0) {
         double avgMinutes = totalDuration.inMinutes / totalLinesWritten;
         avgTimeText = "${avgMinutes.toStringAsFixed(2)} דקות לשורה";
       }
 
-      // יעד יומי (בדרך כלל מוגדר בעמודים לספר)
-      // נמיר את היעד לשורות לצורך חישוב מדויק
       int targetLines = project.targetDaily * linesPerPage;
       if (targetLines > 0) {
         progressPercent = totalLinesWritten / targetLines;
@@ -220,19 +222,18 @@ class _SummaryScreenState extends State<SummaryScreen> {
         }
       }
     } else {
-      // מזוזה / תפילין
-      profit = totalUnitsWritten * (project.price - project.expenses);
-
       if (project.type == ProjectType.mezuza) {
-        outputText = "$totalUnitsWritten מזוזות";
+        double mezuzotCount = totalMezuzaLines / 22.0;
+        profit = mezuzotCount * (project.price - project.expenses);
+        String displayAmount = mezuzotCount % 1 == 0
+            ? mezuzotCount.toInt().toString()
+            : mezuzotCount.toStringAsFixed(1);
+        outputText = "$displayAmount מזוזות";
       } else {
-        // לוגיקה מורכבת לתפילין
+        profit = totalUnitsWritten * (project.price - project.expenses);
         outputText = _generateTefillinSummary(sessions);
       }
 
-      // חישוב ממוצעים ויעדים למזוזה/תפילין
-      // הערה: בתפילין החישוב לפי "יחידות" גולמיות עשוי להיות לא מדויק אם מערבבים סטים ופרשיות,
-      // אך לצורך הסטטיסטיקה הכללית נשאיר זאת כך או נשפר בהמשך.
       if (project.type == ProjectType.tefillin) {
         if (totalParshiyotForAvg > 0) {
           double avgMinutes = totalDuration.inMinutes / totalParshiyotForAvg;
@@ -251,13 +252,19 @@ class _SummaryScreenState extends State<SummaryScreen> {
       }
 
       if (project.targetDaily > 0) {
-        progressPercent = totalUnitsWritten / project.targetDaily;
-        int left = project.targetDaily - totalUnitsWritten;
-        remainingText = left > 0 ? "נותרו $left ליעד" : "היעד הושלם!";
+        double currentAmount = totalUnitsWritten.toDouble();
+        if (project.type == ProjectType.mezuza) {
+          currentAmount = totalMezuzaLines / 22.0;
+        }
+
+        progressPercent = currentAmount / project.targetDaily;
+        double left = project.targetDaily - currentAmount;
+        String leftStr =
+            left % 1 == 0 ? left.toInt().toString() : left.toStringAsFixed(1);
+        remainingText = left > 0 ? "נותרו $leftStr ליעד" : "היעד הושלם!";
       }
     }
 
-    // עיצוב הכרטיס
     return Card(
       elevation: 4,
       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -266,14 +273,11 @@ class _SummaryScreenState extends State<SummaryScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // כותרת הפרויקט
             Text(
               project.name,
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const Divider(),
-
-            // נתונים
             _buildInfoRow(Icons.edit_note, "הספק:", outputText),
             _buildInfoRow(
                 Icons.timer, "זמן עבודה:", _formatDuration(totalDuration)),
@@ -281,9 +285,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
               _buildInfoRow(Icons.speed, "ממוצע:", avgTimeText),
             _buildInfoRow(Icons.monetization_on, "רווח נקי:",
                 "₪${profit.toStringAsFixed(2)}"),
-
             const SizedBox(height: 10),
-            // עמידה ביעד
             const Text("עמידה ביעד יומי:",
                 style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 5),
@@ -309,34 +311,29 @@ class _SummaryScreenState extends State<SummaryScreen> {
   }
 
   String _generateTefillinSummary(List<WorkSession> sessions) {
-    // מונים לכל אחת מ-8 הפרשיות (4 ראש, 4 יד)
-    // אינדקס 0-3: ראש 1-4. אינדקס 4-7: יד 1-4.
     List<int> counts = List.filled(8, 0);
     List<String> partials = [];
 
     for (var s in sessions) {
-      // 1. סט שלם (זוג)
       if (s.tefillinType == null && s.parshiya == null) {
-        for (int i = 0; i < 8; i++) counts[i] += s.amount;
-      }
-      // 2. סט ראש
-      else if (s.tefillinType == 'head' && s.parshiya == null) {
-        for (int i = 0; i < 4; i++) counts[i] += s.amount;
-      }
-      // 3. סט יד
-      else if (s.tefillinType == 'hand' && s.parshiya == null) {
-        for (int i = 4; i < 8; i++) counts[i] += s.amount;
-      }
-      // 4. פרשייה בודדת
-      else if (s.tefillinType != null && s.parshiya != null) {
+        for (int i = 0; i < 8; i++) {
+          counts[i] += s.amount;
+        }
+      } else if (s.tefillinType == 'head' && s.parshiya == null) {
+        for (int i = 0; i < 4; i++) {
+          counts[i] += s.amount;
+        }
+      } else if (s.tefillinType == 'hand' && s.parshiya == null) {
+        for (int i = 4; i < 8; i++) {
+          counts[i] += s.amount;
+        }
+      } else if (s.tefillinType != null && s.parshiya != null) {
         int maxLines = s.tefillinType == 'head' ? 4 : 7;
-        // אם נכתבו כל השורות או שהמשתמש לא הזין שורות (0) - נחשב כשלם
         if (s.endLine == 0 || s.endLine >= maxLines) {
           int baseIndex = s.tefillinType == 'head' ? 0 : 4;
           int pIndex = s.parshiya! - 1; // 0-3
-          counts[baseIndex + pIndex] += s.amount; // בדרך כלל 1
+          counts[baseIndex + pIndex] += s.amount;
         } else {
-          // פרשייה חלקית
           String type = s.tefillinType == 'head' ? "ראש" : "יד";
           String pName = _getParshiyaName(s.parshiya!);
           partials.add("$pName של $type (עד שורה ${s.endLine})");
@@ -344,22 +341,23 @@ class _SummaryScreenState extends State<SummaryScreen> {
       }
     }
 
-    // חישוב סטים שלמים
-    // זוגות (המינימום של כל ה-8)
     int pairs = counts.reduce((curr, next) => curr < next ? curr : next);
-    for (int i = 0; i < 8; i++) counts[i] -= pairs;
+    for (int i = 0; i < 8; i++) {
+      counts[i] -= pairs;
+    }
 
-    // תפילין של ראש (המינימום של 4 הראשונים)
     int headSets =
         counts.sublist(0, 4).reduce((curr, next) => curr < next ? curr : next);
-    for (int i = 0; i < 4; i++) counts[i] -= headSets;
+    for (int i = 0; i < 4; i++) {
+      counts[i] -= headSets;
+    }
 
-    // תפילין של יד (המינימום של 4 האחרונים)
     int handSets =
         counts.sublist(4, 8).reduce((curr, next) => curr < next ? curr : next);
-    for (int i = 4; i < 8; i++) counts[i] -= handSets;
+    for (int i = 4; i < 8; i++) {
+      counts[i] -= handSets;
+    }
 
-    // בניית הפלט
     List<String> parts = [];
     if (pairs > 0) {
       parts.add(pairs == 1 ? "זוג תפילין אחד" : "$pairs זוגות תפילין");
@@ -371,7 +369,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
       parts.add("$handSets תפילין של יד");
     }
 
-    // פרשיות בודדות שנותרו
     for (int i = 0; i < 8; i++) {
       if (counts[i] > 0) {
         String type = i < 4 ? "ראש" : "יד";
@@ -384,7 +381,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
       }
     }
 
-    // הוספת חלקיים
     parts.addAll(partials);
 
     if (parts.isEmpty) return "לא נרשמה כתיבה משמעותית";
@@ -510,7 +506,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                     value: years.contains(currentYear) ? currentYear : years[0],
                     items: years.map((y) {
                       return DropdownMenuItem(
-                          value: y, child: Text(_formatHebrewYear(y)));
+                          value: y, child: Text(formatHebrewYear(y)));
                     }).toList(),
                     onChanged: (val) {
                       if (val != null) {
@@ -524,7 +520,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                     items: months.map((m) {
                       return DropdownMenuItem(
                         value: m,
-                        child: Text(_getHebrewMonthName(m, isLeap)),
+                        child: Text(getHebrewMonthName(m, isLeap)),
                       );
                     }).toList(),
                     onChanged: (val) {
@@ -539,7 +535,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                       value: days.contains(currentDay) ? currentDay : 1,
                       items: days.map((d) {
                         return DropdownMenuItem(
-                            value: d, child: Text(_formatHebrewNumber(d)));
+                            value: d, child: Text(formatHebrewNumber(d)));
                       }).toList(),
                       onChanged: (val) {
                         if (val != null) {
@@ -575,11 +571,16 @@ class _SummaryScreenState extends State<SummaryScreen> {
   }
 
   String _getHebrewDate(DateTime date, [bool monthOnly = false]) {
+    if (widget.useGregorianDates) {
+      return monthOnly
+          ? formatDisplayDateMonth(date, true)
+          : formatDisplayDate(date, true);
+    }
     final jewishDate = JewishDate.fromDateTime(date);
     final formatter = HebrewDateFormatter()..hebrewFormat = true;
     if (monthOnly) {
       // Manually construct month year string or use formatter and strip day
-      return "${_getHebrewMonthName(jewishDate.getJewishMonth(), jewishDate.isJewishLeapYear())} ${_formatHebrewYear(jewishDate.getJewishYear())}";
+      return "${getHebrewMonthName(jewishDate.getJewishMonth(), jewishDate.isJewishLeapYear())} ${formatHebrewYear(jewishDate.getJewishYear())}";
     }
     return formatter.format(jewishDate);
   }
@@ -589,53 +590,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
     return "${twoDigits(d.inHours)}:${twoDigits(d.inMinutes.remainder(60))}";
   }
 
-  String _formatHebrewYear(int year) {
-    final formatter = HebrewDateFormatter()..hebrewFormat = true;
-    final tempDate = JewishDate();
-    tempDate.setJewishDate(year, 1, 1);
-    return formatter.format(tempDate).split(' ').last;
-  }
-
-  String _getHebrewMonthName(int monthIndex, bool isLeap) {
-    const months = [
-      "ניסן",
-      "אייר",
-      "סיון",
-      "תמוז",
-      "אב",
-      "אלול",
-      "תשרי",
-      "חשון",
-      "כסלו",
-      "טבת",
-      "שבט"
-    ];
-    if (monthIndex <= 6) return months[monthIndex - 1];
-    if (monthIndex >= 7 && monthIndex <= 11) return months[monthIndex - 1];
-    if (isLeap) {
-      if (monthIndex == 12) return "אדר א'";
-      if (monthIndex == 13) return "אדר ב'";
-    } else {
-      if (monthIndex == 12) return "אדר";
-    }
-    return "";
-  }
-
-  String _formatHebrewNumber(int n) {
-    if (n > 30) return n.toString();
-    const ones = ["", "א", "ב", "ג", "ד", "ה", "ו", "ז", "ח", "ט"];
-    if (n == 15) return "טו";
-    if (n == 16) return "טז";
-    if (n < 10) return ones[n];
-    if (n == 10) return "י";
-    if (n < 20) return "י${ones[n % 10]}";
-    if (n == 20) return "כ";
-    if (n < 30) return "כ${ones[n % 10]}";
-    if (n == 30) return "ל";
-    return n.toString();
-  }
-
-  // חישוב ימי עבודה (א-ה) בחודש העברי
   int _calculateWorkDaysInJewishMonth(DateTime date) {
     JewishDate jd = JewishDate.fromDateTime(date);
     int year = jd.getJewishYear();
@@ -647,7 +601,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
       JewishDate temp = JewishDate();
       temp.setJewishDate(year, month, d);
       DateTime gDate = temp.getGregorianCalendar();
-      // ימי עבודה: ראשון (7) עד חמישי (4). שישי (5) ושבת (6) לא נחשבים.
       if (gDate.weekday == DateTime.sunday ||
           gDate.weekday <= DateTime.thursday) {
         workDays++;
@@ -656,10 +609,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
     return workDays;
   }
 
-  // --- לוגיקה לסיכום חודשי ---
-
-  void _showMonthlySummary() {
-    // 1. סינון לפי חודש ושנה של התאריך הנבחר
+  Future<void> _showMonthlySummary() async {
     final monthSessions = widget.history.where((s) {
       return s.startTime.year == _selectedDate.year &&
           s.startTime.month == _selectedDate.month;
@@ -672,23 +622,18 @@ class _SummaryScreenState extends State<SummaryScreen> {
       return;
     }
 
-    // משתנים לצבירה
     Duration totalMonthTime = Duration.zero;
     double totalMonthlyProfit = 0;
     int workDays = _calculateWorkDaysInJewishMonth(_selectedDate);
 
-    // ממוצע שורות (ספר + מזוזה)
     Duration timeForLineAvg = Duration.zero;
     int totalLinesForAvg = 0;
 
-    // ממוצע פרשיות (תפילין)
     Duration timeForParshiyaAvg = Duration.zero;
     int totalParshiyotForAvg = 0;
 
-    // ווידג'טים לפלט
     List<Widget> projectWidgets = [];
 
-    // קיבוץ לפי פרויקטים לחישוב הספקים
     final grouped = _groupSessionsByProject(monthSessions);
 
     grouped.forEach((projId, sessions) {
@@ -704,11 +649,12 @@ class _SummaryScreenState extends State<SummaryScreen> {
             targetMonthly: 0),
       );
 
-      // צבירת זמן כללי
-      for (var s in sessions) totalMonthTime += s.duration;
+      for (var s in sessions) {
+        totalMonthTime += s.duration;
+      }
 
       double projectProfit = 0;
-      double actualForGoal = 0; // כמות לחישוב יעד (עמודים/מזוזות/יחידות)
+      double actualForGoal = 0;
       String projectText = "";
 
       if (project.type == ProjectType.sefer) {
@@ -719,7 +665,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
           projTime += s.duration;
         }
 
-        // הוספה לממוצע שורות כללי
         totalLinesForAvg += lines;
         timeForLineAvg += projTime;
 
@@ -728,7 +673,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
         projectText =
             "${project.name}: ${lines ~/ linesPerPage} עמודים ו-${lines % linesPerPage} שורות";
 
-        // חישוב רווח ויעד (לפי עמודים)
         double pages = lines / linesPerPage.toDouble();
         projectProfit = pages * (project.price - project.expenses);
         actualForGoal = pages;
@@ -739,57 +683,45 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
         for (var s in sessions) {
           projTime += s.duration;
-          // חישוב שורות לממוצע
           int linesInSession = 0;
           if (s.endLine > 0) {
-            // חלקי
             linesInSession =
                 (s.amount > 0 ? (s.amount - 1) * 22 : 0) + s.endLine;
           } else {
-            // שלם
             linesInSession = s.amount * 22;
           }
           linesForThisProj += linesInSession;
         }
 
-        // המרה למזוזות עשרוניות (למשל 3.5)
         totalMezuzot = linesForThisProj / 22.0;
 
-        // הוספה לממוצע שורות כללי
         totalLinesForAvg += linesForThisProj;
         timeForLineAvg += projTime;
 
-        // עיגול יפה (אם שלם הצג כשלם, אחרת כעשרוני עם ספרה אחת)
         String displayAmount = totalMezuzot % 1 == 0
             ? totalMezuzot.toInt().toString()
             : totalMezuzot.toStringAsFixed(1);
 
         projectText = "${project.name}: $displayAmount מזוזות";
 
-        // חישוב רווח ויעד (לפי מזוזות)
         projectProfit = totalMezuzot * (project.price - project.expenses);
         actualForGoal = totalMezuzot;
       } else if (project.type == ProjectType.tefillin) {
-        // שימוש בפונקציה הקיימת לסיכום טקסטואלי
         String tefillinText = _generateTefillinSummary(sessions);
         projectText = "${project.name}: $tefillinText";
 
-        // חישוב ממוצע לפרשייה (רק שלמות!)
         for (var s in sessions) {
           bool isWhole = false;
           int parshiyotCount = 0;
 
           if (s.tefillinType == null && s.parshiya == null) {
-            // זוג = 8
             isWhole = true;
             parshiyotCount = s.amount * 8;
           } else if ((s.tefillinType == 'head' || s.tefillinType == 'hand') &&
               s.parshiya == null) {
-            // סט = 4
             isWhole = true;
             parshiyotCount = s.amount * 4;
           } else if (s.tefillinType != null && s.parshiya != null) {
-            // בודדת
             int max = s.tefillinType == 'head' ? 4 : 7;
             if (s.endLine == 0 || s.endLine >= max) {
               isWhole = true;
@@ -803,16 +735,16 @@ class _SummaryScreenState extends State<SummaryScreen> {
           }
         }
 
-        // חישוב רווח ויעד (לפי יחידות גולמיות כרגע)
         int totalUnits = 0;
-        for (var s in sessions) totalUnits += s.amount;
+        for (var s in sessions) {
+          totalUnits += s.amount;
+        }
         projectProfit = totalUnits * (project.price - project.expenses);
         actualForGoal = totalUnits.toDouble();
       }
 
       totalMonthlyProfit += projectProfit;
 
-      // חישוב עמידה ביעד
       double target = 0;
       if (project.targetMonthly > 0) {
         target = project.targetMonthly.toDouble();
@@ -866,7 +798,17 @@ class _SummaryScreenState extends State<SummaryScreen> {
       ));
     });
 
-    // בניית הדיאלוג
+    double monthlyExpenses = 0;
+    final allExpenses = await _storage.loadExpenses();
+    for (var e in allExpenses) {
+      if (e.date.year == _selectedDate.year &&
+          e.date.month == _selectedDate.month) {
+        monthlyExpenses += e.amount;
+      }
+    }
+    final netAfterExpenses = totalMonthlyProfit - monthlyExpenses;
+
+    if (!mounted) return;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -878,9 +820,22 @@ class _SummaryScreenState extends State<SummaryScreen> {
             children: [
               Text("סה\"כ זמן: ${_formatDuration(totalMonthTime)}",
                   style: const TextStyle(fontWeight: FontWeight.bold)),
-              Text("רווח נקי חודשי: ₪${totalMonthlyProfit.toStringAsFixed(2)}",
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, color: Colors.green)),
+              const SizedBox(height: 6),
+              Text(
+                  "הכנסות כתיבה (חודש): ₪${totalMonthlyProfit.toStringAsFixed(2)}",
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              Text("הוצאות (חודש): ₪${monthlyExpenses.toStringAsFixed(2)}",
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              Text("נטו (לאחר הוצאות): ₪${netAfterExpenses.toStringAsFixed(2)}",
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color:
+                          netAfterExpenses >= 0 ? Colors.green : Colors.red)),
+              const Divider(),
+              SizedBox(
+                height: 200,
+                child: _buildMonthlyChart(monthSessions),
+              ),
               const Divider(),
               ...projectWidgets,
               const Divider(),
@@ -907,87 +862,307 @@ class _SummaryScreenState extends State<SummaryScreen> {
     );
   }
 
+  Widget _buildMonthlyChart(List<WorkSession> sessions) {
+    Map<int, Duration> dailyTotals = {};
+    int daysCount =
+        DateTime(_selectedDate.year, _selectedDate.month + 1, 0).day;
+
+    for (var s in sessions) {
+      int day = s.startTime.day;
+      dailyTotals[day] = (dailyTotals[day] ?? Duration.zero) + s.duration;
+    }
+
+    double maxMinutes = 0;
+    dailyTotals.forEach((key, value) {
+      if (value.inMinutes > maxMinutes) maxMinutes = value.inMinutes.toDouble();
+    });
+
+    if (maxMinutes == 0) maxMinutes = 60;
+
+    return Column(
+      children: [
+        const Text("התקדמות יומית (דקות)",
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 5),
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              double widthPerBar = constraints.maxWidth / daysCount;
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: List.generate(daysCount, (index) {
+                  int day = index + 1;
+                  double minutes = dailyTotals[day]?.inMinutes.toDouble() ?? 0;
+                  double heightFactor = minutes / maxMinutes;
+
+                  return SizedBox(
+                    width: widthPerBar,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        if (minutes > 0)
+                          TweenAnimationBuilder<double>(
+                            tween: Tween<double>(begin: 0, end: heightFactor),
+                            duration: const Duration(milliseconds: 1000),
+                            curve: Curves.elasticOut, // אפקט קפיצי
+                            builder: (context, value, child) {
+                              return Container(
+                                height: constraints.maxHeight * value,
+                                width: widthPerBar * 0.7,
+                                color: Colors.deepPurple.shade300,
+                                child: Tooltip(
+                                  message: "יום $day: ${minutes.toInt()} דקות",
+                                  child: Container(),
+                                ),
+                              );
+                            },
+                          ),
+                        Container(height: 1, color: Colors.grey.shade300),
+                        if (day % 5 == 0 || day == 1)
+                          Text("$day", style: const TextStyle(fontSize: 8)),
+                      ],
+                    ),
+                  );
+                }),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
   // --- עריכת היסטוריה ---
   void _showHistoryEditor() {
-    // מציג את כל ההיסטוריה של היום הנבחר (או החודש אם רוצים להרחיב)
-    // כרגע נציג את היום הנבחר כדי שיהיה קל להתמצא
     final sessions = _getSessionsForDate(_selectedDate);
+    final selectedIds = <String>{};
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => DraggableScrollableSheet(
-        expand: false,
-        builder: (context, scrollController) {
-          return Column(
-            children: [
-              AppBar(
-                title: const Text("עריכת רשומות"),
-                automaticallyImplyLeading: false,
-                actions: [
-                  IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.pop(context))
-                ],
-              ),
-              Expanded(
-                child: sessions.isEmpty
-                    ? const Center(child: Text("אין רשומות ליום זה"))
-                    : ListView.builder(
-                        controller: scrollController,
-                        itemCount: sessions.length,
-                        itemBuilder: (context, index) {
-                          final s = sessions[index];
-                          final p = widget.projects
-                              .firstWhere((proj) => proj.id == s.projectId,
-                                  orElse: () => Project(
-                                        id: 'deleted',
-                                        name: 'פרויקט נמחק',
-                                        type: ProjectType.sefer,
-                                        price: 0,
-                                        expenses: 0,
-                                        targetDaily: 0,
-                                        targetMonthly: 0,
-                                      ));
-
-                          return ListTile(
-                            title: Text(p.name),
-                            subtitle: Text(
-                                "${s.description}\n${_formatDuration(s.duration)}"),
-                            isThreeLine: true,
-                            trailing: IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red),
-                              onPressed: () => _deleteSession(s),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          return DraggableScrollableSheet(
+            expand: false,
+            builder: (context, scrollController) {
+              return Column(
+                children: [
+                  AppBar(
+                    title: const Text("עריכת רשומות"),
+                    automaticallyImplyLeading: false,
+                    actions: [
+                      IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(context)),
+                    ],
+                  ),
+                  if (sessions.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Row(
+                        children: [
+                          if (selectedIds.isNotEmpty)
+                            TextButton.icon(
+                              icon: const Icon(Icons.delete_sweep),
+                              label: Text("מחק נבחרים (${selectedIds.length})"),
+                              onPressed: () =>
+                                  _deleteSelected(ctx, selectedIds),
                             ),
-                          );
-                        },
+                        ],
                       ),
-              ),
-            ],
+                    ),
+                  Expanded(
+                    child: sessions.isEmpty
+                        ? const Center(child: Text("אין רשומות ליום זה"))
+                        : ListView.builder(
+                            controller: scrollController,
+                            itemCount: sessions.length,
+                            itemBuilder: (context, index) {
+                              final s = sessions[index];
+                              final p = widget.projects.firstWhere(
+                                  (proj) => proj.id == s.projectId,
+                                  orElse: () => Project(
+                                      id: 'deleted',
+                                      name: 'פרויקט נמחק',
+                                      type: ProjectType.sefer,
+                                      price: 0,
+                                      expenses: 0,
+                                      targetDaily: 0,
+                                      targetMonthly: 0));
+                              final isSelected = selectedIds.contains(s.id);
+                              return ListTile(
+                                leading: Checkbox(
+                                  value: isSelected,
+                                  onChanged: (v) {
+                                    setSheetState(() {
+                                      if (v == true) {
+                                        selectedIds.add(s.id);
+                                      } else {
+                                        selectedIds.remove(s.id);
+                                      }
+                                    });
+                                  },
+                                ),
+                                title: Text(p.name),
+                                subtitle: Text(
+                                    "${s.description}\n${_formatDuration(s.duration)}"),
+                                isThreeLine: true,
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.edit,
+                                          color: Colors.blue),
+                                      onPressed: () => _editSession(ctx, s),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete,
+                                          color: Colors.red),
+                                      onPressed: () => _deleteSession(ctx, s),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              );
+            },
           );
         },
       ),
     );
   }
 
-  void _deleteSession(WorkSession s) {
+  void _deleteSelected(BuildContext ctx, Set<String> selectedIds) {
+    if (selectedIds.isEmpty) return;
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text("מחיקת רשומות"),
+        content: Text("למחוק ${selectedIds.length} רשומות?"),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: const Text("ביטול")),
+          ElevatedButton(
+            onPressed: () {
+              final newHistory = widget.history
+                  .where((s) => !selectedIds.contains(s.id))
+                  .toList();
+              widget.onHistoryUpdated(newHistory);
+              Navigator.pop(dialogCtx);
+              Navigator.pop(ctx);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text("מחק"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _editSession(BuildContext ctx, WorkSession s) async {
+    final startCtrl = TextEditingController(
+        text:
+            "${s.startTime.hour.toString().padLeft(2, '0')}:${s.startTime.minute.toString().padLeft(2, '0')}");
+    final endCtrl = TextEditingController(
+        text:
+            "${s.endTime.hour.toString().padLeft(2, '0')}:${s.endTime.minute.toString().padLeft(2, '0')}");
+    final startLineCtrl = TextEditingController(text: s.startLine.toString());
+    final endLineCtrl = TextEditingController(text: s.endLine.toString());
+    final amountCtrl = TextEditingController(text: s.amount.toString());
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text("עריכת רשומה"),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text("שעת התחלה (HH:MM)"),
+              TextField(controller: startCtrl),
+              const SizedBox(height: 8),
+              const Text("שעת סיום (HH:MM)"),
+              TextField(controller: endCtrl),
+              const SizedBox(height: 8),
+              TextField(
+                controller: startLineCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: "שורה התחלה"),
+              ),
+              TextField(
+                controller: endLineCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: "שורה סיום"),
+              ),
+              TextField(
+                controller: amountCtrl,
+                keyboardType: TextInputType.number,
+                decoration:
+                    const InputDecoration(labelText: "כמות (עמוד/מזוזה)"),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogCtx, false),
+              child: const Text("ביטול")),
+          TextButton(
+              onPressed: () => Navigator.pop(dialogCtx, true),
+              child: const Text("שמור")),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    DateTime? parseTime(String t) {
+      final parts = t.split(':');
+      if (parts.length < 2) return null;
+      final h = int.tryParse(parts[0].trim());
+      final m = int.tryParse(parts[1].trim());
+      if (h == null || m == null) return null;
+      return DateTime(
+          s.startTime.year, s.startTime.month, s.startTime.day, h, m);
+    }
+
+    final startTime = parseTime(startCtrl.text) ?? s.startTime;
+    final endTime = parseTime(endCtrl.text) ?? s.endTime;
+    final startLine = int.tryParse(startLineCtrl.text) ?? s.startLine;
+    final endLine = int.tryParse(endLineCtrl.text) ?? s.endLine;
+    final amount = int.tryParse(amountCtrl.text) ?? s.amount;
+    final updated = s.copyWith(
+      startTime: startTime,
+      endTime: endTime,
+      startLine: startLine,
+      endLine: endLine,
+      amount: amount,
+    );
+    final newHistory =
+        widget.history.map((e) => e.id == s.id ? updated : e).toList();
+    widget.onHistoryUpdated(newHistory);
+    if (ctx.mounted) Navigator.pop(ctx);
+  }
+
+  void _deleteSession(BuildContext ctx, WorkSession s) {
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
         title: const Text("מחיקת רשומה"),
         content: const Text("האם אתה בטוח?"),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text("ביטול")),
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: const Text("ביטול")),
           ElevatedButton(
             onPressed: () {
               final newHistory = List<WorkSession>.from(widget.history)
                 ..removeWhere((item) => item.id == s.id);
               widget.onHistoryUpdated(newHistory);
-              Navigator.pop(ctx); // סגירת דיאלוג
-              Navigator.pop(
-                  context); // סגירת ה-Sheet כדי לרענן (או להשתמש ב-StatefulBuilder בתוך ה-Sheet)
-              _showHistoryEditor(); // פתיחה מחדש לרענון
+              Navigator.pop(dialogCtx);
+              Navigator.pop(ctx);
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text("מחק"),

@@ -43,3 +43,21 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Local / sensitive / generated – לא להעלות לגיטהאב
+ca-bundle.crt
+*.key
+.env
+.env.*
+
+# חבילות שהורדו כארכיון (הפרויקט משתמש בתיקיית kosher_dart)
+/packages/*.tar.gz
+
+# תיקייה כפולה – הקונפיג הרשמי ב־android/app/src/main/res/xml/
+/android/app/src/XML/
+
+# רשימות וקבצי פיתוח אישיים (אופציונלי – מחק את השורה אם אתה רוצה לכלול)
+GEMINI.MD
+
+# תמונה ללא שימוש במסמכים
+/docs/unnamed.jpg

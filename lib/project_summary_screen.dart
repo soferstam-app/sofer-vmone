@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'models.dart';
+import 'hebrew_utils.dart';
+import 'storage_service.dart';
+import 'work_days_calculator.dart';
 
 class ProjectSummaryScreen extends StatefulWidget {
   final List<Project> projects;
@@ -17,6 +21,8 @@ class ProjectSummaryScreen extends StatefulWidget {
 
 class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
   Project? _selectedProject;
+  bool _fridayMotzeiHalfDay = false;
+  final StorageService _storage = StorageService();
 
   @override
   void initState() {
@@ -24,6 +30,9 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
     if (widget.projects.isNotEmpty) {
       _selectedProject = widget.projects.first;
     }
+    _storage.getFridayMotzeiHalfDay().then((v) {
+      if (mounted) setState(() => _fridayMotzeiHalfDay = v);
+    });
   }
 
   @override
@@ -36,7 +45,7 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: DropdownButtonFormField<Project>(
-                value: _selectedProject,
+                initialValue: _selectedProject,
                 decoration: const InputDecoration(
                   labelText: "בחר פרויקט",
                   border: OutlineInputBorder(),
@@ -65,11 +74,17 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
     String avgTimeStr = "";
 
     Duration totalTime = Duration.zero;
-    for (var s in sessions) totalTime += s.duration;
+    for (var s in sessions) {
+      totalTime += s.duration;
+    }
 
+    int totalLinesWritten = 0;
     if (project.type == ProjectType.sefer) {
       int totalLines = 0;
-      for (var s in sessions) totalLines += (s.endLine - s.startLine + 1);
+      for (var s in sessions) {
+        totalLines += (s.endLine - s.startLine + 1);
+      }
+      totalLinesWritten = totalLines;
 
       int linesPerPage = project.linesPerPage ?? 42;
       if (linesPerPage == 0) linesPerPage = 42;
@@ -123,9 +138,78 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
       }
     }
 
+    String estimatedEndStr = "";
+    String targetLinesPerDayStr = "";
+    int remaining = 0;
+    if (project.type == ProjectType.sefer) {
+      int totalPages = project.totalPages ?? 245;
+      int linesPerPage = project.linesPerPage ?? 42;
+      if (linesPerPage == 0) linesPerPage = 42;
+      int totalLines = totalPages * linesPerPage;
+      remaining = totalLines - totalLinesWritten;
+      if (remaining > 0 && sessions.isNotEmpty) {
+        DateTime first = sessions
+            .map((s) => s.startTime)
+            .reduce((a, b) => a.isBefore(b) ? a : b);
+        DateTime last = sessions
+            .map((s) => s.endTime)
+            .reduce((a, b) => a.isAfter(b) ? a : b);
+        double workDaysInPeriod =
+            countWorkDays(first, last, _fridayMotzeiHalfDay);
+        double linesPerWorkDay = workDaysInPeriod > 0
+            ? totalLinesWritten / workDaysInPeriod
+            : (project.targetDaily > 0 ? project.targetDaily.toDouble() : 10);
+        if (linesPerWorkDay <= 0) linesPerWorkDay = 10;
+        DateTime from = DateTime.now();
+        DateTime est = estimatedCompletionDate(
+          fromDate: from,
+          remainingWorkUnits: remaining.toDouble(),
+          workUnitsPerDay: linesPerWorkDay,
+          fridayMotzeiHalfDay: _fridayMotzeiHalfDay,
+        );
+        estimatedEndStr = "${est.day}/${est.month}/${est.year}";
+      }
+      if (project.targetCompletionDate != null && remaining > 0) {
+        DateTime target = project.targetCompletionDate!;
+        DateTime today = DateTime.now();
+        if (target.isAfter(today)) {
+          double wd = countWorkDays(today, target, _fridayMotzeiHalfDay);
+          if (wd > 0) {
+            double perDay = remaining / wd;
+            targetLinesPerDayStr =
+                "${perDay.toStringAsFixed(1)} שורות ליום עבודה";
+          }
+        }
+      }
+    }
+
     return SingleChildScrollView(
       child: Column(
         children: [
+          if (project.clientEmail != null && project.clientEmail!.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    final body =
+                        "שלום,\nעדכון התקדמות בפרויקט ${project.name}.\n$totalWrittenStr\nבברכה";
+                    final uri = Uri(
+                      scheme: 'mailto',
+                      path: project.clientEmail,
+                      query:
+                          'subject=${Uri.encodeComponent('עדכון התקדמות - ${project.name}')}&body=${Uri.encodeComponent(body)}',
+                    );
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri);
+                    }
+                  },
+                  icon: const Icon(Icons.email),
+                  label: const Text("שלח עדכון ללקוח"),
+                ),
+              ),
+            ),
           Card(
             margin: const EdgeInsets.all(16),
             elevation: 4,
@@ -137,6 +221,11 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                   _statRow(
                       "סך הכל רווח:", "₪${totalProfit.toStringAsFixed(2)}"),
                   if (avgTimeStr.isNotEmpty) _statRow("ממוצע:", avgTimeStr),
+                  if (estimatedEndStr.isNotEmpty)
+                    _statRow("מתי אני אמור לסיים:", estimatedEndStr),
+                  if (targetLinesPerDayStr.isNotEmpty)
+                    _statRow("שורות ליום שנותר (לפי תאריך יעד):",
+                        targetLinesPerDayStr),
                 ],
               ),
             ),
@@ -200,15 +289,14 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
             child: Container(
               decoration: BoxDecoration(
                 border: Border.all(color: Colors.grey),
-                // שימוש בגרדיאנט למילוי חלקי (מלמעלה למטה)
                 gradient: progress > 0
                     ? LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: [
-                          Colors.green.shade300, // צבע החלק המלא
                           Colors.green.shade300,
-                          Colors.white, // צבע החלק הריק
+                          Colors.green.shade300,
+                          Colors.white,
                           Colors.white,
                         ],
                         stops: [0.0, progress, progress, 1.0],
@@ -218,7 +306,7 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
               ),
               alignment: Alignment.center,
               child: Text(
-                _formatHebrewNumber(pageNum),
+                formatHebrewNumber(pageNum),
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   color: Colors.black,
@@ -260,7 +348,7 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text("עמוד ${_formatHebrewNumber(page)}"),
+        title: Text("עמוד ${formatHebrewNumber(page)}"),
         content: Text(msg),
         actions: [
           TextButton(
@@ -275,11 +363,17 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
 
     for (var s in sessions) {
       if (s.tefillinType == null && s.parshiya == null) {
-        for (int i = 0; i < 8; i++) counts[i] += s.amount;
+        for (int i = 0; i < 8; i++) {
+          counts[i] += s.amount;
+        }
       } else if (s.tefillinType == 'head' && s.parshiya == null) {
-        for (int i = 0; i < 4; i++) counts[i] += s.amount;
+        for (int i = 0; i < 4; i++) {
+          counts[i] += s.amount;
+        }
       } else if (s.tefillinType == 'hand' && s.parshiya == null) {
-        for (int i = 4; i < 8; i++) counts[i] += s.amount;
+        for (int i = 4; i < 8; i++) {
+          counts[i] += s.amount;
+        }
       } else if (s.tefillinType != null && s.parshiya != null) {
         int max = s.tefillinType == 'head' ? 4 : 7;
         if (s.endLine == 0 || s.endLine >= max) {
@@ -351,19 +445,5 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
         ),
       ),
     );
-  }
-
-  String _formatHebrewNumber(int n) {
-    if (n > 30) return n.toString();
-    const ones = ["", "א", "ב", "ג", "ד", "ה", "ו", "ז", "ח", "ט"];
-    if (n == 15) return "טו";
-    if (n == 16) return "טז";
-    if (n < 10) return ones[n];
-    if (n == 10) return "י";
-    if (n < 20) return "י${ones[n % 10]}";
-    if (n == 20) return "כ";
-    if (n < 30) return "כ${ones[n % 10]}";
-    if (n == 30) return "ל";
-    return n.toString();
   }
 }

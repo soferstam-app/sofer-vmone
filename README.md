@@ -1,4 +1,4 @@
-# יומן סופר סת"ם (Stam Sofer Diary) 📜
+# סופר ומונה (Sofer v'Mone) 📜
 
 אפליקציה מתקדמת לניהול, מעקב ותיעוד עבודת סופר סת"ם.
 האפליקציה מאפשרת לסופרים לנהל פרויקטים של כתיבת ספרי תורה, תפילין ומזוזות, לעקוב אחר זמני עבודה, לחשב הספקים ורווחים, ולצפות בסטטיסטיקות מפורטות.
@@ -47,8 +47,8 @@
 ## 📥 הורדה והתקנה
 
 ניתן להוריד את הגרסה האחרונה מדף ה-Releases בגיטהאב:
-[קישור להורדות
-](https://github.com/soferstam-app/stam-sofer/releases/tag/APP)
+**[קישור להורדות]**
+> הערה: עליך לעדכן את הקישור לאחר שינוי שם המאגר (repository) בגיטהאב.
 ### אנדרואיד (Android)
 1.  הורד את קובץ ה-`apk`.
 2.  התקן אותו על המכשיר שלך (ייתכן שתצטרך לאשר התקנה ממקורות לא ידועים).
@@ -56,16 +56,16 @@
 ### ווינדוס (Windows)
 1.  הורד את קובץ ה-`zip`.
 2.  חלץ את התיקייה למחשב.
-3.  הפעל את הקובץ `stamsofer.exe` מתוך התיקייה.
+3.  הפעל את הקובץ `sofer_vmone.exe` מתוך התיקייה.
 
 ## 🤝 תרומה ופיתוח
 
 פרויקט זה הוא קוד פתוח. נשמח להצעות ייעול, דיווחי באגים ובקשות למשיכה (Pull Requests).
 
 כדי להריץ את הפרויקט אצלך:
-```bash
-git clone https://github.com/soferstam-app/stam-sofer.git
-cd stam-sofer
+```bash # TODO: עדכן את הקישור לאחר שינוי שם המאגר
+git clone https://github.com/YOUR_USERNAME/sofer-vmone.git
+cd sofer-vmone
 flutter pub get
 flutter run
 ```

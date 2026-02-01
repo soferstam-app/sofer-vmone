@@ -392,8 +392,8 @@ class ComplexZmanimCalendar extends ZmanimCalendar {
     "Ra'anana": -15,
   };
 
-  ComplexZmanimCalendar.intGeoLocation(GeoLocation location)
-      : super.intGeolocation(location);
+  ComplexZmanimCalendar.intGeoLocation(super.location)
+      : super.intGeolocation();
 
   /// Default constructor will set a default [GeoLocation], a default
   /// [AstronomicalCalculator.getDefault] AstronomicalCalculator and default the calendar to the current date.
@@ -3387,9 +3387,7 @@ class ComplexZmanimCalendar extends ZmanimCalendar {
     if (isAshkenaz) {
       return getMisheyakir10Point2Degrees();
     } else {
-      return getAlosHashachar() == null
-          ? null
-          : getAlosHashachar()!.add(const Duration(minutes: 6));
+      return getAlosHashachar()?.add(const Duration(minutes: 6));
     }
   }
 

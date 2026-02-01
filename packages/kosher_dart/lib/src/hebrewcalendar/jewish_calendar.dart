@@ -1224,7 +1224,7 @@ class JewishCalendar extends JewishDate {
   ///
   /// @param date
   ///            the <code>Date</code> to set the calendar to
-  JewishCalendar.fromDateTime(DateTime dateTime) : super.fromDateTime(dateTime);
+  JewishCalendar.fromDateTime(super.dateTime) : super.fromDateTime();
 
   /// Creates a Jewish date based on a Jewish date and whether in Israel
   ///

@@ -3,20 +3,662 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>סתם סופר - עורך טקסט לסופרי סת"ם</title>
+    <meta name="description" content="סופר ומונה - אפליקציית ניהול מתקדמת לסופרי סת״ם. מעקב זמן, חישוב רווחים, סטטיסטיקות מפורטות וגיבוי בענן.">
+    <meta name="keywords" content="סופר סתם, ניהול פרויקטים, ספר תורה, תפילין, מזוזה, טיימר כתיבה">
+    <title>סופר ומונה - הכלי המושלם לניהול עבודת סופר סת״ם</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts - Heebo for Hebrew -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
     <style>
-        body { font-family: sans-serif; text-align: center; padding: 50px; background-color: #f4f4f9; }
-        h1 { color: #333; }
-        .btn { background-color: #007bff; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-size: 18px; }
-        .footer { margin-top: 50px; font-size: 14px; color: #777; }
+        body {
+            font-family: 'Heebo', sans-serif;
+            background: url('unnamed.jpg') center/cover no-repeat fixed;
+            min-height: 100vh;
+        }
+        
+        .hero-bg {
+            background: linear-gradient(135deg, rgba(103, 58, 183, 0.85) 0%, rgba(149, 117, 205, 0.75) 100%);
+            background-attachment: fixed;
+        }
+        
+        .glass-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .feature-card {
+            transition: all 0.3s ease;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 40px rgba(103, 58, 183, 0.3);
+        }
+        
+        .animate-fade-in {
+            animation: fadeIn 0.8s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .animate-slide-in {
+            animation: slideIn 1s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(50px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        
+        .gradient-text {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .scroll-smooth {
+            scroll-behavior: smooth;
+        }
     </style>
-    </head>
-<body>
-    <h1>ברוכים הבאים ל"סתם סופר"</h1>
-    <p>אפליקציית עריכה וניהול מתקדמת לסופרי סת"ם, בקוד פתוח.</p>
-    <br>
-    <a href="https://github.com/soferstam-app/stam-sofer/releases/tag/APP" class="btn">להורדת האפליקציה (APK)</a>
-    <br><br><br>
-    <a href="privacy_policy.html">מדיניות פרטיות (Privacy Policy)</a>
+</head>
+<body class="scroll-smooth">
+
+    <!-- Hero Section with Background Image -->
+    <section class="hero-bg min-h-screen flex items-center justify-center relative overflow-hidden">
+        <div class="absolute inset-0 bg-gradient-to-b from-transparent to-purple-900/50"></div>
+        
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center animate-fade-in">
+            <!-- Logo/Icon -->
+            <div class="mb-8">
+                <div class="inline-block p-6 rounded-full bg-white/20 backdrop-blur-md">
+                    <svg class="w-20 h-20 text-white" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804V12a1 1 0 11-2 0V4.804z"/>
+                    </svg>
+                </div>
+            </div>
+            
+            <!-- Main Heading -->
+            <h1 class="text-5xl sm:text-6xl lg:text-7xl font-bold text-white mb-6 leading-tight">
+                סופר ומונה
+            </h1>
+            <p class="text-xl sm:text-2xl lg:text-3xl text-purple-100 mb-8 max-w-3xl mx-auto font-light">
+                הכלי המושלם לניהול, מעקב ותיעוד עבודת סופר סת״ם
+            </p>
+            
+            <!-- CTA Buttons -->
+            <div class="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
+                <a href="https://github.com/soferstam-app/sofer-vmone/releases/latest" 
+                   class="group px-8 py-4 bg-white text-purple-700 rounded-full font-bold text-lg shadow-2xl hover:shadow-purple-500/50 hover:scale-105 transition-all duration-300 flex items-center gap-3">
+                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                    </svg>
+                    הורד עכשיו
+                </a>
+                <a href="#features" 
+                   class="px-8 py-4 glass-card text-white rounded-full font-bold text-lg hover:bg-white/20 transition-all duration-300 flex items-center gap-3">
+                    למד עוד
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                    </svg>
+                </a>
+            </div>
+            
+            <!-- Platform Badges -->
+            <div class="flex flex-wrap justify-center gap-4 text-white/80 text-sm">
+                <div class="flex items-center gap-2 glass-card px-4 py-2 rounded-full">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.523 15.341c-.538-.586-.894-1.376-.894-2.341 0-.965.356-1.755.894-2.341.538-.586 1.277-.909 2.067-.909.79 0 1.529.323 2.067.909.538.586.894 1.376.894 2.341 0 .965-.356 1.755-.894 2.341-.538.586-1.277.909-2.067.909-.79 0-1.529-.323-2.067-.909zM12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></svg>
+                    אנדרואיד
+                </div>
+                <div class="flex items-center gap-2 glass-card px-4 py-2 rounded-full">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>
+                    ווינדוס
+                </div>
+                <div class="flex items-center gap-2 glass-card px-4 py-2 rounded-full">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z"/></svg>
+                    קוד פתוח
+                </div>
+            </div>
+        </div>
+        
+        <!-- Scroll Indicator -->
+        <div class="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-bounce">
+            <svg class="w-6 h-6 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+            </svg>
+        </div>
+    </section>
+
+    <!-- Main Content -->
+    <main class="bg-white/90 backdrop-blur-sm min-h-screen">
+        
+        <!-- About Section -->
+        <section class="py-20 px-4 sm:px-6 lg:px-8">
+            <div class="container mx-auto max-w-6xl">
+                <div class="text-center mb-16 animate-fade-in">
+                    <h2 class="text-4xl sm:text-5xl font-bold mb-6 gradient-text">
+                        אפליקציה מתקדמת לסופרי סת״ם
+                    </h2>
+                    <p class="text-xl text-gray-700 max-w-3xl mx-auto leading-relaxed">
+                        "סופר ומונה" היא אפליקציית קוד פתוח שפותחה במיוחד עבור סופרי סת"ם.
+                        מטרת האפליקציה היא לסייע לסופרים לנהל את הפרויקטים שלהם בצורה מסודרת, 
+                        לעקוב אחר זמני הכתיבה, ולחשב הספקים ורווחים בזמן אמת.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Features Section -->
+        <section id="features" class="py-20 px-4 sm:px-6 lg:px-8 bg-white/80 backdrop-blur-sm">
+            <div class="container mx-auto max-w-6xl">
+                <h2 class="text-4xl font-bold text-center mb-16 text-purple-900">
+                    ✨ תכונות עיקריות
+                </h2>
+                
+                <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    <!-- Feature 1 -->
+                    <div class="feature-card bg-white rounded-2xl p-8 shadow-lg border border-purple-100">
+                        <div class="text-5xl mb-4">⏱️</div>
+                        <h3 class="text-2xl font-bold mb-3 text-purple-900">טיימר חכם</h3>
+                        <p class="text-gray-600 leading-relaxed">
+                            מדידת זמן כתיבה מדויקת עם אפשרות לעצירה, המשך, הפסקות קפה ו-Lap למעקב אחר שורות.
+                            אנימציית קולמוס "כותב..." בזמן אמת.
+                        </p>
+                    </div>
+                    
+                    <!-- Feature 2 -->
+                    <div class="feature-card bg-white rounded-2xl p-8 shadow-lg border border-purple-100">
+                        <div class="text-5xl mb-4">📚</div>
+                        <h3 class="text-2xl font-bold mb-3 text-purple-900">ניהול פרויקטים</h3>
+                        <p class="text-gray-600 leading-relaxed">
+                            תמיכה מלאה בספרי תורה (עמודים ושורות), תפילין (סטים ופרשיות) ומזוזות.
+                            מסך ייעודי לניהול פרויקטים עם סל מחזור.
+                        </p>
+                    </div>
+                    
+                    <!-- Feature 3 -->
+                    <div class="feature-card bg-white rounded-2xl p-8 shadow-lg border border-purple-100">
+                        <div class="text-5xl mb-4">📊</div>
+                        <h3 class="text-2xl font-bold mb-3 text-purple-900">סטטיסטיקה ורווחים</h3>
+                        <p class="text-gray-600 leading-relaxed">
+                            חישוב אוטומטי של הספק יומי וחודשי, ממוצע זמן לשורה, רווח נקי בניכוי הוצאות,
+                            ותחזית "מתי אני אמור לסיים".
+                        </p>
+                    </div>
+                    
+                    <!-- Feature 4 -->
+                    <div class="feature-card bg-white rounded-2xl p-8 shadow-lg border border-purple-100">
+                        <div class="text-5xl mb-4">☁️</div>
+                        <h3 class="text-2xl font-bold mb-3 text-purple-900">גיבוי בענן</h3>
+                        <p class="text-gray-600 leading-relaxed">
+                            סנכרון אוטומטי ל-Google Drive בכל שמירה ובפתיחת האפליקציה.
+                            מיזוג חכם של נתונים ממספר מכשירים.
+                        </p>
+                    </div>
+                    
+                    <!-- Feature 5 -->
+                    <div class="feature-card bg-white rounded-2xl p-8 shadow-lg border border-purple-100">
+                        <div class="text-5xl mb-4">📧</div>
+                        <h3 class="text-2xl font-bold mb-3 text-purple-900">עדכון ללקוח</h3>
+                        <p class="text-gray-600 leading-relaxed">
+                            כפתור "שלח עדכון ללקוח" – פותח את תוכנת המייל עם כתובת הלקוח וטקסט מוכן.
+                            חסוך זמן ושמור על מקצועיות.
+                        </p>
+                    </div>
+                    
+                    <!-- Feature 6 -->
+                    <div class="feature-card bg-white rounded-2xl p-8 shadow-lg border border-purple-100">
+                        <div class="text-5xl mb-4">📅</div>
+                        <h3 class="text-2xl font-bold mb-3 text-purple-900">מחשבון ימי עבודה</h3>
+                        <p class="text-gray-600 leading-relaxed">
+                            חישוב תאריך סיום משוער בהתחשבות בשבתות, חגים וימי צום.
+                            תמיכה בשישי/מוצאי שבת כחצי יום עבודה.
+                        </p>
+                    </div>
+                    
+                    <!-- Feature 7 -->
+                    <div class="feature-card bg-white rounded-2xl p-8 shadow-lg border border-purple-100">
+                        <div class="text-5xl mb-4">🎯</div>
+                        <h3 class="text-2xl font-bold mb-3 text-purple-900">תאריך יעד</h3>
+                        <p class="text-gray-600 leading-relaxed">
+                            הגדרת תאריך יעד לסיום הפרויקט – האפליקציה תחשב כמה שורות ליום עבודה
+                            נדרשות כדי לעמוד ביעד.
+                        </p>
+                    </div>
+                    
+                    <!-- Feature 8 -->
+                    <div class="feature-card bg-white rounded-2xl p-8 shadow-lg border border-purple-100">
+                        <div class="text-5xl mb-4">⚡</div>
+                        <h3 class="text-2xl font-bold mb-3 text-purple-900">זרימת עבודה חכמה</h3>
+                        <p class="text-gray-600 leading-relaxed">
+                            מצב כתיבה בזמן אמת (כניסה/יציאה) עם מעקב אחר עמוד ושורה נוכחיים.
+                            אפשרות לערוך מיקום בכל רגע.
+                        </p>
+                    </div>
+                    
+                    <!-- Feature 9 -->
+                    <div class="feature-card bg-white rounded-2xl p-8 shadow-lg border border-purple-100">
+                        <div class="text-5xl mb-4">✏️</div>
+                        <h3 class="text-2xl font-bold mb-3 text-purple-900">עריכת רשומות</h3>
+                        <p class="text-gray-600 leading-relaxed">
+                            מחיקה מרובה של רשומות בפעם אחת, עריכת שעות ושורות במקרה של טעות בהזנה.
+                            ממשק נוח ומהיר.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- How It Works Section -->
+        <section class="py-20 px-4 sm:px-6 lg:px-8 bg-purple-50/90 backdrop-blur-sm">
+            <div class="container mx-auto max-w-5xl">
+                <h2 class="text-4xl font-bold text-center mb-16 text-purple-900">
+                    🔍 איך זה עובד?
+                </h2>
+                
+                <div class="space-y-12">
+                    <!-- Step 1 -->
+                    <div class="flex flex-col md:flex-row items-center gap-8 animate-slide-in">
+                        <div class="flex-shrink-0 w-16 h-16 bg-purple-600 text-white rounded-full flex items-center justify-center text-2xl font-bold shadow-lg">
+                            1
+                        </div>
+                        <div class="flex-1 bg-white rounded-xl p-6 shadow-lg">
+                            <h3 class="text-2xl font-bold mb-3 text-purple-900">צור פרויקט</h3>
+                            <p class="text-gray-700 leading-relaxed">
+                                הגדר פרויקט חדש (ספר תורה, תפילין או מזוזה) עם פרטי מחיר, הוצאות, יעדים יומיים וחודשיים.
+                                הוסף אימייל לקוח ותאריך יעד לסיום (אופציונלי).
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <!-- Step 2 -->
+                    <div class="flex flex-col md:flex-row items-center gap-8 animate-slide-in">
+                        <div class="flex-shrink-0 w-16 h-16 bg-purple-600 text-white rounded-full flex items-center justify-center text-2xl font-bold shadow-lg">
+                            2
+                        </div>
+                        <div class="flex-1 bg-white rounded-xl p-6 shadow-lg">
+                            <h3 class="text-2xl font-bold mb-3 text-purple-900">התחל לכתוב</h3>
+                            <p class="text-gray-700 leading-relaxed">
+                                הפעל את הטיימר ותתחיל לכתוב. האפליקציה תעקוב אחר הזמן, תאפשר הפסקות קפה,
+                                ותציג אנימציית קולמוס "כותב..." בזמן העבודה. במצב חכם – מעבר שורה אוטומטי.
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <!-- Step 3 -->
+                    <div class="flex flex-col md:flex-row items-center gap-8 animate-slide-in">
+                        <div class="flex-shrink-0 w-16 h-16 bg-purple-600 text-white rounded-full flex items-center justify-center text-2xl font-bold shadow-lg">
+                            3
+                        </div>
+                        <div class="flex-1 bg-white rounded-xl p-6 shadow-lg">
+                            <h3 class="text-2xl font-bold mb-3 text-purple-900">צפה בסיכומים</h3>
+                            <p class="text-gray-700 leading-relaxed">
+                                קבל סטטיסטיקות מפורטות: הספק יומי, זמן עבודה, רווח נקי, ממוצע זמן לשורה,
+                                ותחזית "מתי אני אמור לסיים" (בהתחשבות בשבתות וחגים).
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <!-- Step 4 -->
+                    <div class="flex flex-col md:flex-row items-center gap-8 animate-slide-in">
+                        <div class="flex-shrink-0 w-16 h-16 bg-purple-600 text-white rounded-full flex items-center justify-center text-2xl font-bold shadow-lg">
+                            4
+                        </div>
+                        <div class="flex-1 bg-white rounded-xl p-6 shadow-lg">
+                            <h3 class="text-2xl font-bold mb-3 text-purple-900">שלח עדכון ללקוח</h3>
+                            <p class="text-gray-700 leading-relaxed">
+                                בלחיצת כפתור אחת – פתח את תוכנת המייל עם עדכון מוכן ומקצועי ללקוח,
+                                כולל התקדמות ופרטי הפרויקט.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Screenshots Section -->
+        <section class="py-20 px-4 sm:px-6 lg:px-8 bg-white/80 backdrop-blur-sm">
+            <div class="container mx-auto max-w-6xl">
+                <h2 class="text-4xl font-bold text-center mb-16 text-purple-900">
+                    📱 צילומי מסך
+                </h2>
+                
+                <div class="grid md:grid-cols-2 gap-8">
+                    <!-- 1: Home - Regular -->
+                    <div class="bg-gradient-to-br from-purple-100 to-purple-200 rounded-2xl p-8 shadow-xl">
+                        <div class="bg-white rounded-lg overflow-hidden mb-4 shadow-inner">
+                            <video src="מסך הבית במצב רגיל.mp4" class="w-full h-auto object-contain max-h-80" autoplay loop muted playsinline title="מסך הבית במצב רגיל"></video>
+                        </div>
+                        <h4 class="font-bold text-lg mb-2 text-purple-900">מסך הבית (מצב רגיל)</h4>
+                        <p class="text-gray-600 text-sm">
+                            <strong>ערך מוסף:</strong> טיימר גדול וברור עם תאריך עברי, כפתורי שליטה נוחים,
+                            ואנימציית קולמוס בזמן כתיבה. הזנה ידנית לרשומות בדיעבד.
+                        </p>
+                    </div>
+                    
+                    <!-- 2: Home - Smart -->
+                    <div class="bg-gradient-to-br from-indigo-100 to-indigo-200 rounded-2xl p-8 shadow-xl">
+                        <div class="bg-white rounded-lg overflow-hidden mb-4 shadow-inner">
+                            <video src="מסך הבית במצב חכם.mp4" class="w-full h-auto object-contain max-h-80" autoplay loop muted playsinline title="מסך הבית במצב חכם"></video>
+                        </div>
+                        <h4 class="font-bold text-lg mb-2 text-indigo-900">מסך הבית (מצב חכם)</h4>
+                        <p class="text-gray-600 text-sm">
+                            <strong>ערך מוסף:</strong> זרימת עבודה חכמה – כניסה/יציאה עם מעקב עמוד ושורה,
+                            עריכת מיקום, והפסקות קפה.
+                        </p>
+                    </div>
+                    
+                    <!-- 3: Projects -->
+                    <div class="bg-gradient-to-br from-blue-100 to-blue-200 rounded-2xl p-8 shadow-xl">
+                        <div class="bg-white rounded-lg overflow-hidden mb-4 shadow-inner">
+                            <video src="מסך פרויקטים.mp4" class="w-full h-auto object-contain max-h-80" autoplay loop muted playsinline title="מסך פרויקטים"></video>
+                        </div>
+                        <h4 class="font-bold text-lg mb-2 text-blue-900">מסך פרויקטים</h4>
+                        <p class="text-gray-600 text-sm">
+                            <strong>ערך מוסף:</strong> רשימת פרויקטים מסודרת עם אפשרות הוספה, עריכה ומחיקה.
+                            שדות לאימייל לקוח ותאריך יעד. גישה לסל מחזור.
+                        </p>
+                    </div>
+                    
+                    <!-- 4: Summary -->
+                    <div class="bg-gradient-to-br from-green-100 to-green-200 rounded-2xl p-8 shadow-xl">
+                        <div class="bg-white rounded-lg overflow-hidden mb-4 shadow-inner">
+                            <video src="מסך סיכומים.mp4" class="w-full h-auto object-contain max-h-80" autoplay loop muted playsinline title="מסך סיכומים"></video>
+                        </div>
+                        <h4 class="font-bold text-lg mb-2 text-green-900">מסך סיכומים</h4>
+                        <p class="text-gray-600 text-sm">
+                            <strong>ערך מוסף:</strong> גרפים יומיים וחודשיים, ממוצעים, רווחים, ותחזית סיום.
+                            עריכת רשומות עם מחיקה מרובה ותיקון טעויות.
+                        </p>
+                    </div>
+                    
+                    <!-- 5: Settings -->
+                    <div class="bg-gradient-to-br from-orange-100 to-orange-200 rounded-2xl p-8 shadow-xl md:col-span-2 max-w-2xl mx-auto w-full">
+                        <div class="bg-white rounded-lg overflow-hidden mb-4 shadow-inner">
+                            <video src="מסך הגדרות.mp4" class="w-full h-auto object-contain max-h-80" autoplay loop muted playsinline title="מסך הגדרות"></video>
+                        </div>
+                        <h4 class="font-bold text-lg mb-2 text-orange-900">מסך הגדרות</h4>
+                        <p class="text-gray-600 text-sm">
+                            <strong>ערך מוסף:</strong> התראות יומיות, שעת מעבר יום (לסופרים שמסיימים מאוחר),
+                            הגדרת ימי עבודה, כניסה ל-Google Drive וסנכרון.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Documentation Section -->
+        <section class="py-20 px-4 sm:px-6 lg:px-8 bg-white/80 backdrop-blur-sm">
+            <div class="container mx-auto max-w-4xl">
+                <h2 class="text-4xl font-bold text-center mb-12 text-purple-900">
+                    📖 תיעוד מפורט
+                </h2>
+                
+                <div class="bg-gradient-to-br from-purple-50 to-white rounded-2xl p-8 shadow-xl border border-purple-100">
+                    <h3 class="text-2xl font-bold mb-6 text-purple-900">לוגיקה פנימית</h3>
+                    
+                    <div class="space-y-6 text-gray-700">
+                        <div>
+                            <h4 class="font-bold text-lg mb-2 text-purple-800">🧮 חישוב ימי עבודה</h4>
+                            <p class="leading-relaxed">
+                                האפליקציה משתמשת בספריית <code class="bg-purple-100 px-2 py-1 rounded">kosher_dart</code> 
+                                לזיהוי שבתות, חגים וימי צום. בחישוב תאריך סיום משוער, האפליקציה סופרת רק ימי עבודה 
+                                (ללא שבת וחגים). ניתן להגדיר בהגדרות שימי שישי ומוצאי שבת יחושבו כחצי יום עבודה כל אחד.
+                            </p>
+                        </div>
+                        
+                        <div>
+                            <h4 class="font-bold text-lg mb-2 text-purple-800">📊 חישוב הספק ממוצע</h4>
+                            <p class="leading-relaxed">
+                                הספק יומי מחושב על בסיס סך השורות שנכתבו חלקי ימי העבודה בפועל (מתאריך ההתחלה עד היום).
+                                ממוצע זמן לשורה מחושב על בסיס זמן עבודה נטו (ללא הפסקות) חלקי מספר השורות.
+                            </p>
+                        </div>
+                        
+                        <div>
+                            <h4 class="font-bold text-lg mb-2 text-purple-800">☁️ סנכרון Google Drive</h4>
+                            <p class="leading-relaxed">
+                                הסנכרון מתבצע אוטומטית בפתיחת האפליקציה ובכל שמירה (פרויקטים, היסטוריה, עדכונים).
+                                מנגנון מיזוג חכם מאפשר עבודה ממספר מכשירים בו-זמנית. נתונים נשמרים בקובץ JSON מוצפן 
+                                ב-Google Drive שלך בלבד.
+                            </p>
+                        </div>
+                        
+                        <div>
+                            <h4 class="font-bold text-lg mb-2 text-purple-800">🕐 שעת מעבר יום</h4>
+                            <p class="leading-relaxed">
+                                לטובת סופרים שמסיימים מאוחר בלילה, ניתן להגדיר שעת מעבר יום (למשל 02:00).
+                                כך, עבודה שמתבצעת בשעה 01:00 תירשם עדיין כ"אתמול" ולא כ"היום".
+                            </p>
+                        </div>
+                        
+                        <div>
+                            <h4 class="font-bold text-lg mb-2 text-purple-800">🗑️ מחיקה לוגית (Soft Delete)</h4>
+                            <p class="leading-relaxed">
+                                פרויקטים ורשומות שנמחקו עוברים לסל מחזור ונשמרים למשך 30 יום.
+                                לאחר מכן הם מנוקים אוטומטית בסנכרון. ניתן לשחזר או למחוק לצמיתות מסל המחזור.
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-8 text-center">
+                        <a href="https://github.com/soferstam-app/sofer-vmone" 
+                           class="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-full font-bold hover:bg-purple-700 transition-all duration-300 shadow-lg hover:shadow-xl">
+                            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                                <path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd"/>
+                            </svg>
+                            קוד המקור ב-GitHub
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Cross-Platform Section -->
+        <section class="py-20 px-4 sm:px-6 lg:px-8 bg-purple-900/95 backdrop-blur-sm text-white">
+            <div class="container mx-auto max-w-5xl text-center">
+                <h2 class="text-4xl font-bold mb-8">
+                    🚀 Cross-Platform ופרודוקטיביות גבוהה
+                </h2>
+                <p class="text-xl text-purple-100 mb-12 max-w-3xl mx-auto leading-relaxed">
+                    האפליקציה בנויה ב-Flutter – פלטפורמה אחת, קוד אחד, חוויה אחידה.
+                    עובדת על אנדרואיד, ווינדוס, macOS ו-Linux. הנתונים שלך מסונכרנים בענן
+                    ונגישים מכל מכשיר.
+                </p>
+                
+                <div class="grid md:grid-cols-3 gap-8 mt-12">
+                    <div class="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
+                        <div class="text-4xl mb-4">⚡</div>
+                        <h3 class="text-xl font-bold mb-2">מהיר ויעיל</h3>
+                        <p class="text-purple-100 text-sm">ביצועים מעולים גם במכשירים ישנים</p>
+                    </div>
+                    <div class="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
+                        <div class="text-4xl mb-4">🔒</div>
+                        <h3 class="text-xl font-bold mb-2">מאובטח</h3>
+                        <p class="text-purple-100 text-sm">הנתונים שלך נשמרים רק אצלך ב-Drive</p>
+                    </div>
+                    <div class="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
+                        <div class="text-4xl mb-4">🆓</div>
+                        <h3 class="text-xl font-bold mb-2">חינם לחלוטין</h3>
+                        <p class="text-purple-100 text-sm">קוד פתוח ללא עלויות נסתרות</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Privacy Policy Highlight -->
+        <section class="py-20 px-4 sm:px-6 lg:px-8 bg-yellow-50/95 backdrop-blur-sm border-t-4 border-yellow-400">
+            <div class="container mx-auto max-w-4xl">
+                <div class="flex items-start gap-6">
+                    <div class="flex-shrink-0">
+                        <svg class="w-12 h-12 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/>
+                        </svg>
+                    </div>
+                    <div class="flex-1">
+                        <h2 class="text-3xl font-bold mb-4 text-yellow-900">🔐 מדיניות פרטיות וגישה ל-Google Drive</h2>
+                        <div class="bg-white rounded-xl p-6 shadow-lg border border-yellow-200">
+                            <h3 class="font-bold text-xl mb-4 text-gray-900">איך אנחנו מטפלים בנתונים שלך:</h3>
+                            <ul class="space-y-3 text-gray-700">
+                                <li class="flex items-start gap-3">
+                                    <svg class="w-6 h-6 text-green-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                    </svg>
+                                    <span><strong>גישה:</strong> האפליקציה מבקשת גישה ל-Google Drive שלך רק כדי לשמור ולטעון את קובץ הגיבוי שלך (<code>sofer_vmone_backup.json</code>).</span>
+                                </li>
+                                <li class="flex items-start gap-3">
+                                    <svg class="w-6 h-6 text-green-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                    </svg>
+                                    <span><strong>אחסון:</strong> הנתונים נשמרים <u>רק</u> ב-Google Drive שלך. אין שרתים חיצוניים. כל העיבוד מתבצע מקומית במכשיר שלך.</span>
+                                </li>
+                                <li class="flex items-start gap-3">
+                                    <svg class="w-6 h-6 text-green-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                    </svg>
+                                    <span><strong>שיתוף:</strong> אנחנו <strong>לא</strong> משתפים, מוכרים או מעבירים את הנתונים שלך לצדדים שלישיים, כלי פרסום או כל גורם אחר.</span>
+                                </li>
+                                <li class="flex items-start gap-3">
+                                    <svg class="w-6 h-6 text-green-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                    </svg>
+                                    <span><strong>שימוש:</strong> הגישה משמשת אך ורק לסנכרון הנתונים שלך בין מכשירים ולגיבוי אוטומטי.</span>
+                                </li>
+                            </ul>
+                            
+                            <div class="mt-6 pt-6 border-t border-yellow-200">
+                                <p class="text-sm text-gray-600">
+                                    <strong>הערה חשובה:</strong> זוהי אפליקציית קוד פתוח. ניתן לבדוק את הקוד המקור בכל עת ולוודא 
+                                    שאין גישה לא מורשית לנתונים שלך.
+                                </p>
+                                <a href="privacy_policy.html" 
+                                   class="inline-block mt-4 text-purple-600 font-bold hover:text-purple-800 transition-colors">
+                                    קרא את מדיניות הפרטיות המלאה ←
+                                </a>
+                                <span class="mx-2 text-gray-400">|</span>
+                                <a href="privacy_policy_en.html" 
+                                   class="inline-block mt-4 text-purple-600 font-bold hover:text-purple-800 transition-colors">
+                                    Read in English
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Download Section -->
+        <section class="py-20 px-4 sm:px-6 lg:px-8 bg-purple-600/95 backdrop-blur-sm text-white">
+            <div class="container mx-auto max-w-4xl text-center">
+                <h2 class="text-4xl font-bold mb-6">
+                    מוכן להתחיל?
+                </h2>
+                <p class="text-xl text-purple-100 mb-10 max-w-2xl mx-auto">
+                    הורד את האפליקציה עכשיו והתחל לנהל את הפרויקטים שלך בצורה מקצועית ויעילה.
+                </p>
+                
+                <div class="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                    <a href="https://github.com/soferstam-app/sofer-vmone/releases/latest" 
+                       class="px-10 py-4 bg-green-500 hover:bg-green-600 text-white rounded-full font-bold text-lg shadow-2xl hover:scale-105 transition-all duration-300 flex items-center gap-3">
+                        🤖 הורדה לאנדרואיד (APK)
+                    </a>
+                    <a href="https://github.com/soferstam-app/sofer-vmone/releases/latest" 
+                       class="px-10 py-4 bg-blue-500 hover:bg-blue-600 text-white rounded-full font-bold text-lg shadow-2xl hover:scale-105 transition-all duration-300 flex items-center gap-3">
+                        💻 הורדה לווינדוס (ZIP)
+                    </a>
+                </div>
+                
+                <p class="text-sm text-purple-200 mt-6">
+                    * למשתמשי ווינדוס: יש לחלץ את התיקייה ולהפעיל את הקובץ <code class="bg-purple-700 px-2 py-1 rounded">sofer_vmone.exe</code>
+                </p>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-gray-300 py-12 px-4 sm:px-6 lg:px-8">
+        <div class="container mx-auto max-w-6xl">
+            <div class="grid md:grid-cols-3 gap-8 mb-8">
+                <div>
+                    <h3 class="text-xl font-bold text-white mb-4">סופר ומונה</h3>
+                    <p class="text-sm leading-relaxed">
+                        אפליקציית קוד פתוח לניהול עבודת סופרי סת״ם.
+                        נבנה באהבה עבור הקהילה.
+                    </p>
+                </div>
+                <div>
+                    <h3 class="text-xl font-bold text-white mb-4">קישורים</h3>
+                    <ul class="space-y-2 text-sm">
+                        <li><a href="https://github.com/soferstam-app/sofer-vmone" class="hover:text-purple-400 transition-colors">GitHub Repository</a></li>
+                        <li><a href="https://github.com/soferstam-app/sofer-vmone/releases" class="hover:text-purple-400 transition-colors">הורדות</a></li>
+                        <li><a href="https://github.com/soferstam-app/sofer-vmone/issues" class="hover:text-purple-400 transition-colors">דיווח על באג</a></li>
+                        <li><a href="privacy_policy.html" class="hover:text-purple-400 transition-colors">מדיניות פרטיות</a></li>
+                        <li><a href="privacy_policy_en.html" class="hover:text-purple-400 transition-colors">Privacy Policy (EN)</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="text-xl font-bold text-white mb-4">טכנולוגיות</h3>
+                    <div class="flex flex-wrap gap-2">
+                        <span class="px-3 py-1 bg-purple-600 rounded-full text-xs font-semibold">Flutter</span>
+                        <span class="px-3 py-1 bg-purple-600 rounded-full text-xs font-semibold">Dart</span>
+                        <span class="px-3 py-1 bg-purple-600 rounded-full text-xs font-semibold">Google Drive API</span>
+                        <span class="px-3 py-1 bg-purple-600 rounded-full text-xs font-semibold">kosher_dart</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="border-t border-gray-700 pt-8 text-center text-sm">
+                <p class="mb-2">
+                    © 2026 Sofer v'Mone. קוד פתוח תחת רישיון MIT.
+                </p>
+                <p class="text-gray-500">
+                    נבנה באהבה עבור סופרי הסת״ם ✍️
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Smooth Scroll Script -->
+    <script>
+        // Smooth scroll for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        });
+        
+        // Intersection Observer for fade-in animations
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -100px 0px'
+        };
+        
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('animate-fade-in');
+                }
+            });
+        }, observerOptions);
+        
+        document.querySelectorAll('.feature-card, .animate-slide-in').forEach(el => {
+            observer.observe(el);
+        });
+    </script>
 </body>
 </html>

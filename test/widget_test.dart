@@ -8,7 +8,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:stamsofer/main.dart';
+import 'package:sofer_vmone/main.dart';
 
 void main() {
   testWidgets('Counter increments smoke test', (WidgetTester tester) async {
@@ -18,7 +18,7 @@ void main() {
     // Verify that the app title exists.
     // Note: This assumes the app starts with SoferHome which has this title.
     // If there is a login screen or splash screen, this might need adjustment.
-    expect(find.text('יומן סופר סת"ם'), findsOneWidget);
+    expect(find.text('סופר ומונה'), findsOneWidget);
     expect(find.byIcon(Icons.play_arrow), findsOneWidget);
   });
 }
