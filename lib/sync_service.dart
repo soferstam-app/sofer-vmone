@@ -9,10 +9,26 @@ import 'package:url_launcher/url_launcher.dart';
 import 'models.dart';
 import 'storage_service.dart';
 
+/// Outcome of a [SyncService.syncData] call, so callers can report to the user
+/// instead of failing silently.
+enum SyncStatus { success, notSignedIn, failed }
+
 class SyncService {
   // Singleton pattern
   static final SyncService instance = SyncService._internal();
   SyncService._internal();
+
+  /// Guards against overlapping sync cycles. syncData() is called from many UI
+  /// paths; two concurrent cycles could each upload a merge result computed
+  /// from stale data and clobber the other.
+  bool _isSyncing = false;
+
+  /// Set when a sync is requested while another is already running, so the
+  /// latest local changes still reach Drive once the current cycle ends.
+  bool _resyncQueued = false;
+
+  DateTime? lastSyncTime;
+  String? lastSyncError;
 
   // Scopes
   static const _scopes = [
@@ -20,11 +36,53 @@ class SyncService {
     googleapis.DriveApi.driveFileScope,
   ];
 
-  // Windows Config – מוגדר ב-build: --dart-define=GOOGLE_OAUTH_CLIENT_ID=... --dart-define=GOOGLE_OAUTH_CLIENT_SECRET=...
-  static const String _windowsClientId =
-      String.fromEnvironment('GOOGLE_OAUTH_CLIENT_ID', defaultValue: '');
-  static const String _windowsClientSecret =
-      String.fromEnvironment('GOOGLE_OAUTH_CLIENT_SECRET', defaultValue: '');
+  // Windows Config – קורא מ-oauth_credentials.json (בתיקיית הפרויקט או ליד ה-exe) או מ--dart-define
+  static (String, String)? _cachedWindowsCredentials;
+  static String get _windowsClientId => _loadWindowsCredentials().$1;
+  static String get _windowsClientSecret => _loadWindowsCredentials().$2;
+
+  static (String, String) _loadWindowsCredentials() {
+    final cached = _cachedWindowsCredentials;
+    if (cached != null) return cached;
+    final result = _loadWindowsCredentialsImpl();
+    _cachedWindowsCredentials = result;
+    return result;
+  }
+
+  static (String, String) _loadWindowsCredentialsImpl() {
+    final String fromEnvId =
+        String.fromEnvironment('GOOGLE_OAUTH_CLIENT_ID', defaultValue: '');
+    final String fromEnvSecret =
+        String.fromEnvironment('GOOGLE_OAUTH_CLIENT_SECRET', defaultValue: '');
+    if (fromEnvId.isNotEmpty && fromEnvSecret.isNotEmpty) {
+      return (fromEnvId, fromEnvSecret);
+    }
+    final file = _oauthCredentialsFile();
+    if (file == null || !file.existsSync()) return (fromEnvId, fromEnvSecret);
+    try {
+      final json = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>?;
+      if (json == null) return (fromEnvId, fromEnvSecret);
+      final idRaw = json['GOOGLE_OAUTH_CLIENT_ID'];
+      final secretRaw = json['GOOGLE_OAUTH_CLIENT_SECRET'];
+      final String id = (idRaw is String ? idRaw.trim() : '');
+      final String secret = (secretRaw is String ? secretRaw.trim() : '');
+      if (id.isNotEmpty && secret.isNotEmpty) return (id, secret);
+    } catch (_) {}
+    return (fromEnvId, fromEnvSecret);
+  }
+
+  static File? _oauthCredentialsFile() {
+    const name = 'oauth_credentials.json';
+    final current = File(name);
+    if (current.existsSync()) return current;
+    try {
+      final exePath = Platform.resolvedExecutable;
+      final dir = File(exePath).parent;
+      final nextToExe = File('${dir.path}/$name');
+      if (nextToExe.existsSync()) return nextToExe;
+    } catch (_) {}
+    return null;
+  }
 
   // State
   GoogleSignInAccount? _currentUser;
@@ -64,12 +122,14 @@ class SyncService {
   }
 
   Future<void> _signInWindows() async {
-    if (_windowsClientId.isEmpty || _windowsClientSecret.isEmpty) {
+    final clientId = _windowsClientId;
+    final clientSecret = _windowsClientSecret;
+    if (clientId.isEmpty || clientSecret.isEmpty) {
       debugPrint(
-          'Windows OAuth: לא הוגדרו GOOGLE_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_SECRET. השתמש ב--dart-define בבנייה.');
+          'Windows OAuth: לא נמצאו מפתחות. שים oauth_credentials.json בתיקיית הפרויקט או ליד ה-exe, או השתמש ב--dart-define בבנייה.');
       return;
     }
-    final id = ClientId(_windowsClientId, _windowsClientSecret);
+    final id = ClientId(clientId, clientSecret);
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     final redirectUrl = 'http://localhost:${server.port}';
 
@@ -117,12 +177,20 @@ class SyncService {
 
   // --- Sync Logic ---
 
-  Future<void> syncData() async {
-    if (!isSignedIn) return;
+  Future<SyncStatus> syncData() async {
+    if (!isSignedIn) return SyncStatus.notSignedIn;
+
+    if (_isSyncing) {
+      // Coalesce: let the in-flight cycle finish, then run once more so this
+      // request's local changes are not lost.
+      _resyncQueued = true;
+      return SyncStatus.success;
+    }
+    _isSyncing = true;
 
     try {
       final client = await _getAuthClient();
-      if (client == null) return;
+      if (client == null) return SyncStatus.notSignedIn;
 
       final driveApi = googleapis.DriveApi(client);
       const fileName = 'sofer_vmone_backup.json';
@@ -179,22 +247,26 @@ class SyncService {
       final mergedHistory = _mergeLists<WorkSession>(
           localHistory, cloudHistory, (s) => s.id, (s) => s.lastUpdated);
 
+      // Merge on lastUpdated, not on the expense date: editing an expense does
+      // not change its date, so the edit would never win the merge.
       final mergedExpenses = _mergeLists<Expense>(
-          localExpenses, cloudExpenses, (e) => e.id, (e) => e.date);
+          localExpenses, cloudExpenses, (e) => e.id, (e) => e.lastUpdated);
 
       final cleanProjects = _purgeOldDeleted(
           mergedProjects, (p) => p.isDeleted, (p) => p.lastUpdated);
       final cleanHistory = _purgeOldDeleted(
           mergedHistory, (s) => s.isDeleted, (s) => s.lastUpdated);
+      final cleanExpenses = _purgeOldDeleted(
+          mergedExpenses, (e) => e.isDeleted, (e) => e.lastUpdated);
 
       await _storage.saveProjects(cleanProjects);
       await _storage.saveHistory(cleanHistory);
-      await _storage.saveExpenses(mergedExpenses);
+      await _storage.saveExpenses(cleanExpenses);
 
       final Map<String, dynamic> exportData = {
         'projects': cleanProjects.map((p) => p.toJson()).toList(),
         'history': cleanHistory.map((h) => h.toJson()).toList(),
-        'expenses': mergedExpenses.map((e) => e.toJson()).toList(),
+        'expenses': cleanExpenses.map((e) => e.toJson()).toList(),
         'lastSync': DateTime.now().toIso8601String(),
       };
 
@@ -216,9 +288,20 @@ class SyncService {
         await driveApi.files.create(driveFile, uploadMedia: uploadMedia);
       }
 
+      lastSyncTime = DateTime.now();
+      lastSyncError = null;
       debugPrint("Sync completed successfully.");
+      return SyncStatus.success;
     } catch (e) {
+      lastSyncError = e.toString();
       debugPrint("Sync failed: $e");
+      return SyncStatus.failed;
+    } finally {
+      _isSyncing = false;
+      if (_resyncQueued) {
+        _resyncQueued = false;
+        await syncData();
+      }
     }
   }
 

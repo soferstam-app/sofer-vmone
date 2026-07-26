@@ -85,6 +85,7 @@ class _RecycleBinScreenState extends State<RecycleBinScreen> {
           expenses: project.expenses,
           targetDaily: project.targetDaily,
           targetMonthly: project.targetMonthly,
+          dailyGoalInLines: project.dailyGoalInLines,
           totalPages: project.totalPages,
           linesPerPage: project.linesPerPage,
           isDeleted: true,

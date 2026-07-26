@@ -106,3 +106,34 @@ install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
 install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   CONFIGURATIONS Profile;Release
   COMPONENT Runtime)
+
+# === VC++ Runtime (avoid requiring users to install Redistributable) ===
+# Bundle vcruntime/msvcp DLLs next to the exe so the app runs without
+# "Microsoft Visual C++ 2015-2022 Redistributable" installed.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+  get_filename_component(CMAKE_CXX_COMPILER_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
+  # From .../VC/Tools/MSVC/14.xx/bin/Hostx64/x64 go up to VC (5 levels)
+  get_filename_component(VC_DIR "${CMAKE_CXX_COMPILER_DIR}/../../../../.." ABSOLUTE)
+  set(VC_REDIST_MSVC "${VC_DIR}/Redist/MSVC")
+  file(GLOB VC_CRT_DIRS "${VC_REDIST_MSVC}/*/x64/Microsoft.VC*.CRT")
+  if(VC_CRT_DIRS)
+    list(SORT VC_CRT_DIRS)
+    list(GET VC_CRT_DIRS -1 VC_CRT_DIR)
+    set(VC_CRT_DLLS
+      "${VC_CRT_DIR}/vcruntime140.dll"
+      "${VC_CRT_DIR}/vcruntime140_1.dll"
+      "${VC_CRT_DIR}/msvcp140.dll"
+    )
+    set(VC_CRT_DLLS_TO_INSTALL "")
+    foreach(DLL ${VC_CRT_DLLS})
+      if(EXISTS "${DLL}")
+        list(APPEND VC_CRT_DLLS_TO_INSTALL "${DLL}")
+      endif()
+    endforeach()
+    if(VC_CRT_DLLS_TO_INSTALL)
+      install(FILES ${VC_CRT_DLLS_TO_INSTALL}
+        DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+        COMPONENT Runtime)
+    endif()
+  endif()
+endif()

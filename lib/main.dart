@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:window_manager/window_manager.dart';
 import 'home_screen.dart';
 import 'netfree_cert.dart';
@@ -52,6 +53,10 @@ void main() async {
   HttpOverrides.global = MyHttpOverrides();
   await NotificationService().init();
 
+  if (Platform.isAndroid) {
+    FlutterForegroundTask.initCommunicationPort();
+  }
+
   if (Platform.isWindows) {
     await windowManager.ensureInitialized();
     await windowManager.waitUntilReadyToShow(
@@ -67,11 +72,11 @@ void main() async {
     );
   }
 
-  runApp(MyApp());
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  MyApp({super.key});
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {

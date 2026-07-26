@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:auto_updater/auto_updater.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:window_manager/window_manager.dart';
 import 'models.dart';
@@ -14,6 +15,7 @@ import 'expenses_screen.dart';
 import 'sync_service.dart';
 import 'notification_service.dart';
 import 'hebrew_utils.dart';
+import 'timer_foreground_task.dart';
 
 class SoferHome extends StatefulWidget {
   const SoferHome({super.key, this.windowsFloatingMode});
@@ -25,12 +27,13 @@ class SoferHome extends StatefulWidget {
 }
 
 class _SoferHomeState extends State<SoferHome>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   final Stopwatch _stopwatch = Stopwatch();
   Timer? _timer;
   DateTime? _timerStartTime;
   DateTime? _timerEndTime;
   final Stopwatch _breakStopwatch = Stopwatch();
+  int _accumulatedElapsedSeconds = 0;
 
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
@@ -39,6 +42,14 @@ class _SoferHomeState extends State<SoferHome>
   bool _isSmartWorkflow = false;
   Duration _lastLapTime = Duration.zero;
 
+  Duration _effectiveElapsed() {
+    final sec = _accumulatedElapsedSeconds +
+        (_timerStartTime != null
+            ? DateTime.now().difference(_timerStartTime!).inSeconds
+            : 0);
+    return Duration(seconds: sec);
+  }
+
   List<Project> projects = [];
   List<WorkSession> history = [];
   Duration _lastSessionTime = Duration.zero;
@@ -46,6 +57,7 @@ class _SoferHomeState extends State<SoferHome>
 
   Project? _selectedProject;
   final _pageCtrl = TextEditingController();
+  final _pageToCtrl = TextEditingController();
   final _lineFromCtrl = TextEditingController();
   final _lineToCtrl = TextEditingController();
   final _amountCtrl = TextEditingController();
@@ -65,6 +77,9 @@ class _SoferHomeState extends State<SoferHome>
   int _smartStartPage = 0;
   int _smartStartLine = 0;
 
+  /// Total break duration during current smart session (not counted in writing average).
+  Duration _sessionBreakDuration = Duration.zero;
+
   int _dayRolloverHour = 0;
   bool _useGregorianDates = false;
 
@@ -75,6 +90,7 @@ class _SoferHomeState extends State<SoferHome>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     widget.windowsFloatingMode?.addListener(_onWindowsFloatingModeChanged);
     SyncService.instance.init().then((_) {
       SyncService.instance.syncData().then((_) => _loadData());
@@ -86,6 +102,8 @@ class _SoferHomeState extends State<SoferHome>
       if (mounted) setState(() => _useGregorianDates = v);
     });
     NotificationService().scheduleDailyReminder();
+
+    if (Platform.isAndroid) _initTimerForegroundService();
 
     _pulseController = AnimationController(
       vsync: this,
@@ -127,10 +145,12 @@ class _SoferHomeState extends State<SoferHome>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     widget.windowsFloatingMode?.removeListener(_onWindowsFloatingModeChanged);
     _pulseController.dispose();
     _timer?.cancel();
     _pageCtrl.dispose();
+    _pageToCtrl.dispose();
     _lineFromCtrl.dispose();
     _lineToCtrl.dispose();
     _amountCtrl.dispose();
@@ -153,6 +173,7 @@ class _SoferHomeState extends State<SoferHome>
         history = activeHistory;
         _isSmartWorkflow = smartEnabled;
       });
+      _restoreTimerState();
     } catch (e) {
       debugPrint("Error loading data: $e");
     }
@@ -188,22 +209,29 @@ class _SoferHomeState extends State<SoferHome>
     setState(() {
       _isPaused = false;
       if (!_stopwatch.isRunning) {
-        _stopwatch.start();
         if (_breakStopwatch.isRunning) {
+          _sessionBreakDuration += _breakStopwatch.elapsed;
           _breakStopwatch.stop();
           _breakStopwatch.reset();
         }
+        _stopwatch.start();
         _pulseController.repeat(reverse: true);
         _timerStartTime ??= DateTime.now();
         _timer = Timer.periodic(const Duration(seconds: 1), (t) {
           if (mounted) setState(() {});
         });
+        _storageService.clearTimerState();
       }
     });
   }
 
   void _pauseTimer() {
     setState(() {
+      if (_timerStartTime != null) {
+        _accumulatedElapsedSeconds +=
+            DateTime.now().difference(_timerStartTime!).inSeconds;
+        _timerStartTime = null;
+      }
       _stopwatch.stop();
       _timer?.cancel();
       _pulseController.stop();
@@ -211,9 +239,12 @@ class _SoferHomeState extends State<SoferHome>
       _isPaused = true;
       _breakStopwatch.start();
     });
+    _persistTimerState();
   }
 
   void _stopTimer() {
+    _lastSessionTime = _effectiveElapsed();
+    final breakDuration = _sessionBreakDuration;
     setState(() {
       _stopwatch.stop();
       _timer?.cancel();
@@ -223,21 +254,135 @@ class _SoferHomeState extends State<SoferHome>
       _breakStopwatch.reset();
       _isPaused = false;
       _timerEndTime = DateTime.now();
-      _lastSessionTime = _stopwatch.elapsed;
       _stopwatch.reset();
       _lastLapTime = Duration.zero;
-
-      if (_isSmartWorkflow) {
-        _finishSmartSession();
-      } else {
-        _openEntryDialog(isManual: false);
-      }
       _timerStartTime = null;
+      _accumulatedElapsedSeconds = 0;
+      _sessionBreakDuration = Duration.zero;
+    });
+    _storageService.clearTimerState();
+    if (Platform.isAndroid) _stopTimerForegroundService();
+    NotificationService().cancelBreakReminder();
+    if (_isSmartWorkflow) {
+      _finishSmartSession(breakDuration: breakDuration);
+    } else {
+      _openEntryDialog(isManual: false);
+    }
+  }
+
+  Future<void> _persistTimerState() async {
+    await _storageService.saveTimerState({
+      'isPaused': _isPaused,
+      'sessionStartTime': _timerStartTime?.toIso8601String(),
+      'accumulatedElapsedSeconds': _accumulatedElapsedSeconds,
+      'isSmart': _isSmartWorkflow,
+      'projectId': _selectedProject?.id,
+      'smartCurrentPage': _smartCurrentPage,
+      'smartCurrentLine': _smartCurrentLine,
+      'smartStartPage': _smartStartPage,
+      'smartStartLine': _smartStartLine,
     });
   }
 
+  Future<void> _restoreTimerState() async {
+    final state = await _storageService.getTimerState();
+    if (state.isEmpty) return;
+    final isPaused = state['isPaused'] == true;
+    final accumulated =
+        (state['accumulatedElapsedSeconds'] as num?)?.toInt() ?? 0;
+    final sessionStart = state['sessionStartTime'] as String?;
+    final isSmart = state['isSmart'] == true;
+    final projectId = state['projectId'] as String?;
+    if (projectId == null && isSmart) return;
+    if (!mounted) return;
+    setState(() {
+      _accumulatedElapsedSeconds = accumulated;
+      _timerStartTime = sessionStart != null && !isPaused
+          ? DateTime.tryParse(sessionStart)
+          : null;
+      _isPaused = isPaused;
+      _isSmartWorkflow = isSmart;
+      if (projectId != null) {
+        _selectedProject = projects.cast<Project?>().firstWhere(
+              (p) => p?.id == projectId,
+              orElse: () => null,
+            );
+        _smartCurrentPage = (state['smartCurrentPage'] as num?)?.toInt() ?? 1;
+        _smartCurrentLine = (state['smartCurrentLine'] as num?)?.toInt() ?? 1;
+        _smartStartPage = (state['smartStartPage'] as num?)?.toInt() ?? 1;
+        _smartStartLine = (state['smartStartLine'] as num?)?.toInt() ?? 1;
+      }
+      if (_timerStartTime != null) {
+        _stopwatch.start();
+        _pulseController.repeat(reverse: true);
+        _timer = Timer.periodic(const Duration(seconds: 1), (t) {
+          if (mounted) setState(() {});
+        });
+      }
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      if (_timerStartTime != null || _isPaused) _persistTimerState();
+      if (Platform.isAndroid && _timerStartTime != null) {
+        _startTimerForegroundService();
+      }
+    } else if (state == AppLifecycleState.resumed) {
+      if (Platform.isAndroid) _stopTimerForegroundService();
+    }
+  }
+
+  Future<void> _initTimerForegroundService() async {
+    final perm = await FlutterForegroundTask.checkNotificationPermission();
+    if (perm != NotificationPermission.granted) {
+      await FlutterForegroundTask.requestNotificationPermission();
+    }
+    FlutterForegroundTask.init(
+      androidNotificationOptions: AndroidNotificationOptions(
+        channelId: 'sofer_vmone_timer',
+        channelName: 'טיימר סופר ומונה',
+        channelDescription: 'התראה כשהטיימר רץ ברקע',
+        onlyAlertOnce: true,
+      ),
+      iosNotificationOptions: const IOSNotificationOptions(
+        showNotification: false,
+        playSound: false,
+      ),
+      foregroundTaskOptions: ForegroundTaskOptions(
+        eventAction: ForegroundTaskEventAction.repeat(1000),
+        autoRunOnBoot: false,
+        allowWakeLock: true,
+      ),
+    );
+  }
+
+  Future<void> _startTimerForegroundService() async {
+    if (_timerStartTime == null) return;
+    await FlutterForegroundTask.saveData(
+      key: 'timerSessionStartTime',
+      value: _timerStartTime!.toIso8601String(),
+    );
+    await FlutterForegroundTask.saveData(
+      key: 'timerAccumulatedSeconds',
+      value: _accumulatedElapsedSeconds,
+    );
+    await FlutterForegroundTask.startService(
+      serviceId: 256,
+      notificationTitle: 'סופר ומונה – טיימר פעיל',
+      notificationText: _formatTime(_effectiveElapsed()),
+      callback: startTimerForegroundCallback,
+    );
+  }
+
+  Future<void> _stopTimerForegroundService() async {
+    await FlutterForegroundTask.stopService();
+  }
+
   void _recordLap() {
-    final currentElapsed = _stopwatch.elapsed;
+    final currentElapsed = _effectiveElapsed();
     final lapDuration = currentElapsed - _lastLapTime;
     _lastLapTime = currentElapsed;
 
@@ -265,9 +410,62 @@ class _SoferHomeState extends State<SoferHome>
       }
       _smartStartPage = _smartCurrentPage;
       _smartStartLine = _smartCurrentLine;
+      _sessionBreakDuration = Duration.zero;
     });
 
     _startTimer();
+  }
+
+  void _onBreakTap() {
+    if (!_isSmartWorkflow) {
+      _pauseTimer();
+      return;
+    }
+    _showBreakStartDialog();
+  }
+
+  Future<void> _showBreakStartDialog() async {
+    final minutesCtrl = TextEditingController();
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("הפסקת קפה"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text("הזמן בהפסקה לא ייכנס בממוצע לכתיבה."),
+            const SizedBox(height: 16),
+            TextField(
+              controller: minutesCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: "התראה אחרי X דקות (אופציונלי – השאר ריק)",
+                hintText: "למשל 10",
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("ביטול"),
+          ),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.pop(ctx, true),
+            icon: const Icon(Icons.coffee),
+            label: const Text("התחל הפסקה"),
+          ),
+        ],
+      ),
+    );
+    final minutes = int.tryParse(minutesCtrl.text.trim());
+    minutesCtrl.dispose();
+    if (result != true || !mounted) return;
+    if (minutes != null && minutes > 0) {
+      await NotificationService().scheduleBreakReminder(minutes);
+    }
+    _pauseTimer();
   }
 
   void _smartNextLine() {
@@ -342,11 +540,13 @@ class _SoferHomeState extends State<SoferHome>
         ],
       ),
     );
-    if (ok != true || !mounted) return;
     final page = isMezuza
         ? (int.tryParse(pageCtrl.text) ?? _smartCurrentPage)
         : parseHebrewPageToNumber(pageCtrl.text);
     final line = int.tryParse(lineCtrl.text) ?? _smartCurrentLine;
+    pageCtrl.dispose();
+    lineCtrl.dispose();
+    if (ok != true || !mounted) return;
     final p = (page <= 0 ? _smartCurrentPage : page).clamp(1, maxPages);
     final l = line.clamp(1, maxLines);
     setState(() {
@@ -360,7 +560,7 @@ class _SoferHomeState extends State<SoferHome>
     await _storageService.saveLastPosition(_selectedProject!.id, p, l);
   }
 
-  void _finishSmartSession() {
+  void _finishSmartSession({Duration breakDuration = Duration.zero}) {
     if (_selectedProject == null) return;
 
     // --- Logic for Mezuza Projects ---
@@ -469,7 +669,10 @@ class _SoferHomeState extends State<SoferHome>
       SyncService.instance.syncData();
 
       _showSuccess(
-          context, "הסשן נשמר בהצלחה! סה\"כ נכתבו $totalLinesWritten שורות.");
+          context,
+          breakDuration > Duration.zero
+              ? "הסשן נשמר בהצלחה! סה\"כ נכתבו $totalLinesWritten שורות.\nזמן כתיבה נטו: ${_formatTime(_lastSessionTime)}, זמן הפסקה: ${_formatTime(breakDuration)}"
+              : "הסשן נשמר בהצלחה! סה\"כ נכתבו $totalLinesWritten שורות.");
     } else {
       // --- Logic for Sefer Torah Projects ---
       int linesPerPage = _selectedProject!.linesPerPage ?? 42;
@@ -557,18 +760,22 @@ class _SoferHomeState extends State<SoferHome>
       SyncService.instance.syncData();
 
       _showSuccess(
-          context, "הסשן נשמר בהצלחה! נכתבו $totalLinesWritten שורות.");
+          context,
+          breakDuration > Duration.zero
+              ? "הסשן נשמר בהצלחה! נכתבו $totalLinesWritten שורות.\nזמן כתיבה נטו: ${_formatTime(_lastSessionTime)}, זמן הפסקה: ${_formatTime(breakDuration)}"
+              : "הסשן נשמר בהצלחה! נכתבו $totalLinesWritten שורות.");
     }
   }
 
   void _openEntryDialog({required bool isManual}) {
     _selectedProject = null;
     _pageCtrl.clear();
+    _pageToCtrl.clear();
     _lineFromCtrl.clear();
     _lineToCtrl.clear();
     _amountCtrl.clear();
     _mezuzaLineCtrl.clear();
-    _manualDate = _effectiveDate(DateTime.now());
+    _manualDate = isManual ? null : _effectiveDate(DateTime.now());
     _manualStartTime = const TimeOfDay(hour: 9, minute: 0);
     _manualEndTime = const TimeOfDay(hour: 10, minute: 0);
     _manualIncludeTime = true;
@@ -689,8 +896,9 @@ class _SoferHomeState extends State<SoferHome>
   }
 
   Widget _buildManualTimePicker(StateSetter setDialogState) {
+    final bool hasDate = _manualDate != null;
     String durationText = "";
-    if (_manualIncludeTime) {
+    if (hasDate && _manualIncludeTime) {
       final now = DateTime.now();
       DateTime start = DateTime(now.year, now.month, now.day,
           _manualStartTime.hour, _manualStartTime.minute);
@@ -705,17 +913,40 @@ class _SoferHomeState extends State<SoferHome>
     }
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (!hasDate)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: Text(
+              "ללא תאריך = גיבוי להספק בלבד (לא ייכנס בממוצעים, רווח או יעד יומי).",
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.blueGrey.shade700,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ),
         SwitchListTile(
           title: const Text("חישוב זמן כתיבה"),
-          value: _manualIncludeTime,
-          onChanged: (val) {
-            setDialogState(() => _manualIncludeTime = val);
-          },
+          value: hasDate && _manualIncludeTime,
+          onChanged: hasDate
+              ? (val) {
+                  setDialogState(() => _manualIncludeTime = val);
+                }
+              : null,
           contentPadding: EdgeInsets.zero,
           dense: true,
         ),
-        if (_manualIncludeTime)
+        if (!hasDate)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: Text(
+              "שעות כתיבה זמינות רק לאחר בחירת תאריך.",
+              style: TextStyle(fontSize: 12, color: Colors.orange.shade800),
+            ),
+          ),
+        if (hasDate && _manualIncludeTime)
           Row(
             children: [
               const Text("התחלה: "),
@@ -904,13 +1135,33 @@ class _SoferHomeState extends State<SoferHome>
     if (p.type == ProjectType.sefer) {
       return Column(
         children: [
-          TextField(
-            controller: _pageCtrl,
-            decoration: const InputDecoration(
-              labelText: "עמוד (למשל: יא)",
-              prefixIcon: Icon(Icons.auto_stories),
-              hintText: "אותיות או מספרים",
-            ),
+          const Text(
+              "מעמוד (אותיות או מספר) עד עמוד (אופציונלי – ריק = עמוד בודד)",
+              style: TextStyle(fontSize: 12, color: Colors.grey)),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _pageCtrl,
+                  decoration: const InputDecoration(
+                    labelText: "מעמוד",
+                    prefixIcon: Icon(Icons.auto_stories),
+                    hintText: "למשל: א או 1",
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextField(
+                  controller: _pageToCtrl,
+                  decoration: const InputDecoration(
+                    labelText: "עד עמוד",
+                    hintText: "ריק = עמוד בודד",
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 10),
           Row(
@@ -1066,30 +1317,36 @@ class _SoferHomeState extends State<SoferHome>
     DateTime sessionEnd;
 
     if (isManual) {
-      final date = _manualDate ?? DateTime.now();
-      if (_manualIncludeTime) {
-        sessionStart = DateTime(
-          date.year,
-          date.month,
-          date.day,
-          _manualStartTime.hour,
-          _manualStartTime.minute,
-        );
-        sessionEnd = DateTime(
-          date.year,
-          date.month,
-          date.day,
-          _manualEndTime.hour,
-          _manualEndTime.minute,
-        );
-        if (sessionEnd.isBefore(sessionStart)) {
-          sessionEnd = sessionEnd.add(
-            const Duration(days: 1),
-          );
-        }
-      } else {
-        sessionStart = DateTime(date.year, date.month, date.day, 12, 0);
+      final bool noDate = _manualDate == null;
+      if (noDate) {
+        sessionStart = DateTime(2000, 1, 1, 12, 0);
         sessionEnd = sessionStart;
+      } else {
+        final date = _manualDate!;
+        if (_manualIncludeTime) {
+          sessionStart = DateTime(
+            date.year,
+            date.month,
+            date.day,
+            _manualStartTime.hour,
+            _manualStartTime.minute,
+          );
+          sessionEnd = DateTime(
+            date.year,
+            date.month,
+            date.day,
+            _manualEndTime.hour,
+            _manualEndTime.minute,
+          );
+          if (sessionEnd.isBefore(sessionStart)) {
+            sessionEnd = sessionEnd.add(
+              const Duration(days: 1),
+            );
+          }
+        } else {
+          sessionStart = DateTime(date.year, date.month, date.day, 12, 0);
+          sessionEnd = sessionStart;
+        }
       }
     } else {
       sessionEnd = _timerEndTime ?? DateTime.now();
@@ -1097,6 +1354,8 @@ class _SoferHomeState extends State<SoferHome>
     }
 
     if (_selectedProject == null) return false;
+
+    final bool backlogOnly = isManual && _manualDate == null;
 
     int amount = 0;
     int startLine = 0;
@@ -1106,30 +1365,108 @@ class _SoferHomeState extends State<SoferHome>
     int? parshiya;
 
     if (_selectedProject!.type == ProjectType.sefer) {
-      String pageInput = _pageCtrl.text.trim();
-      int pageNum =
-          int.tryParse(pageInput) ?? parseHebrewPageToNumber(pageInput);
-      startLine = int.tryParse(_lineFromCtrl.text) ?? 0;
-      endLine = int.tryParse(_lineToCtrl.text) ?? 0;
+      final int? totalPages = _selectedProject!.totalPages;
+      final int linesPerPage = _selectedProject!.linesPerPage ?? 42;
 
-      if (pageNum == 0 || startLine == 0 || endLine == 0) {
-        _showError(dialogContext, "יש להזין עמוד ושורות תקינים");
+      int pageFrom = int.tryParse(_pageCtrl.text.trim()) ??
+          parseHebrewPageToNumber(_pageCtrl.text.trim());
+      String pageToStr = _pageToCtrl.text.trim();
+      int? pageToParsed = pageToStr.isEmpty
+          ? null
+          : (int.tryParse(pageToStr) ?? parseHebrewPageToNumber(pageToStr));
+      if (pageToParsed != null && pageToParsed == 0) pageToParsed = null;
+
+      final bool isRange = pageToParsed != null &&
+          pageToParsed >= pageFrom &&
+          pageToParsed != pageFrom;
+
+      if (pageFrom == 0) {
+        _showError(dialogContext, "יש להזין לפחות עמוד התחלה תקין");
         return false;
       }
-      if (_selectedProject!.totalPages != null &&
-          pageNum > _selectedProject!.totalPages!) {
+      if (totalPages != null && pageFrom > totalPages) {
         _showError(
           dialogContext,
-          "מספר העמוד חורג מהגדרת הספר (${_selectedProject!.totalPages})",
+          "מספר העמוד חורג מהגדרת הספר ($totalPages)",
         );
         return false;
       }
-      if (_selectedProject!.linesPerPage != null &&
-          (startLine > _selectedProject!.linesPerPage! ||
-              endLine > _selectedProject!.linesPerPage!)) {
+
+      if (isRange) {
+        if (totalPages != null && pageToParsed > totalPages) {
+          _showError(
+            dialogContext,
+            "עמוד הסיום חורג מהגדרת הספר ($totalPages)",
+          );
+          return false;
+        }
+        bool hasOverlap = false;
+        final int pageTo = pageToParsed;
+        for (int p = pageFrom; p <= pageTo; p++) {
+          if (_checkOverlap(_selectedProject!.id, p, 1, linesPerPage)) {
+            hasOverlap = true;
+            break;
+          }
+        }
+        if (hasOverlap) {
+          final bool confirm = await showDialog(
+                context: dialogContext,
+                builder: (c) => AlertDialog(
+                  title: const Text("שים לב: כפילות"),
+                  content: const Text(
+                    "חלק מהשורות בטווח העמודים כבר נכתבו בעבר. האם לשמור בכל זאת?",
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(c, false),
+                      child: const Text("ביטול"),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(c, true),
+                      child: const Text("שמור בכל זאת"),
+                    ),
+                  ],
+                ),
+              ) ??
+              false;
+          if (!confirm) return false;
+        }
+        final List<WorkSession> rangeSessions = [];
+        for (int p = pageFrom; p <= pageTo; p++) {
+          rangeSessions.add(WorkSession(
+            id: "${DateTime.now().millisecondsSinceEpoch}_$p",
+            projectId: _selectedProject!.id,
+            startTime: sessionStart,
+            endTime: sessionEnd,
+            amount: p,
+            startLine: 1,
+            endLine: linesPerPage,
+            description: "עמוד ${formatHebrewNumber(p)} (1-$linesPerPage)",
+            isManual: isManual,
+            backlogOnly: backlogOnly,
+          ));
+        }
+        setState(() {
+          history.addAll(rangeSessions);
+          _storageService.saveHistory(history);
+        });
+        SyncService.instance.syncData();
+        if (Platform.isAndroid && _checkDailyGoalMet(_selectedProject!)) {
+          NotificationService().cancelDailyReminder();
+        }
+        return true;
+      }
+
+      startLine = int.tryParse(_lineFromCtrl.text) ?? 0;
+      endLine = int.tryParse(_lineToCtrl.text) ?? 0;
+      if (startLine == 0 || endLine == 0) {
+        _showError(dialogContext, "יש להזין שורות תקינות (משורה, עד שורה)");
+        return false;
+      }
+      if (startLine > linesPerPage || endLine > linesPerPage) {
         _showError(
           dialogContext,
-          "מספר השורות חורג מהגדרת העמוד (${_selectedProject!.linesPerPage})",
+          "מספר השורות חורג מהגדרת העמוד ($linesPerPage)",
         );
         return false;
       }
@@ -1140,7 +1477,7 @@ class _SoferHomeState extends State<SoferHome>
 
       bool hasOverlap = _checkOverlap(
         _selectedProject!.id,
-        pageNum,
+        pageFrom,
         startLine,
         endLine,
       );
@@ -1168,8 +1505,10 @@ class _SoferHomeState extends State<SoferHome>
         if (!confirm) return false;
       }
 
-      amount = pageNum;
-      desc = "עמוד ${formatHebrewNumber(pageNum)} ($startLine-$endLine)";
+      amount = pageFrom;
+      startLine = startLine;
+      endLine = endLine;
+      desc = "עמוד ${formatHebrewNumber(pageFrom)} ($startLine-$endLine)";
     } else {
       if (_selectedProject!.type == ProjectType.tefillin &&
           _tefillinMode == 'parshiya') {
@@ -1255,6 +1594,7 @@ class _SoferHomeState extends State<SoferHome>
           parshiya: parshiya,
           description: desc,
           isManual: isManual,
+          backlogOnly: backlogOnly,
         ),
       );
       _storageService.saveHistory(history);
@@ -1293,16 +1633,20 @@ class _SoferHomeState extends State<SoferHome>
         .toList();
 
     int totalDone = 0;
+    int target = project.targetDaily;
     for (var s in todaySessions) {
       if (project.type == ProjectType.sefer) {
         int linesPerPage = project.linesPerPage ?? 42;
         totalDone += (s.endLine - s.startLine + 1);
-        if (totalDone >= project.targetDaily * linesPerPage) return true;
+        target = project.dailyGoalInLines
+            ? project.targetDaily
+            : (project.targetDaily * linesPerPage);
+        if (totalDone >= target) return true;
       } else {
         totalDone += s.amount;
       }
     }
-    return totalDone >= project.targetDaily;
+    return totalDone >= target;
   }
 
   void _showSuccess(BuildContext ctx, String msg) {
@@ -1434,7 +1778,7 @@ class _SoferHomeState extends State<SoferHome>
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                _formatTime(_stopwatch.elapsed),
+                _formatTime(_effectiveElapsed()),
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 42,
@@ -1566,7 +1910,7 @@ class _SoferHomeState extends State<SoferHome>
                           child: FadeTransition(
                             opacity: _pulseAnimation,
                             child: Text(
-                              _formatTime(_stopwatch.elapsed),
+                              _formatTime(_effectiveElapsed()),
                               style: const TextStyle(
                                   fontSize: 80, fontWeight: FontWeight.w200),
                             ),
@@ -1586,14 +1930,14 @@ class _SoferHomeState extends State<SoferHome>
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 14, vertical: 10),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFFF5E6),
+                                    color: const Color(0xFFFFF5E6),
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
                                         color: Colors.brown.shade300,
                                         width: 1.5),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.brown.withOpacity(0.2),
+                                        color: Colors.brown.withValues(alpha: 0.2),
                                         blurRadius: 4,
                                         offset: const Offset(0, 2),
                                       ),
@@ -1852,7 +2196,7 @@ class _SoferHomeState extends State<SoferHome>
                   child: FadeTransition(
                     opacity: _pulseAnimation,
                     child: Text(
-                      _formatTime(_stopwatch.elapsed),
+                      _formatTime(_effectiveElapsed()),
                       style: const TextStyle(
                           fontSize: 80, fontWeight: FontWeight.w200),
                     ),
@@ -1871,13 +2215,13 @@ class _SoferHomeState extends State<SoferHome>
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 14, vertical: 10),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF5E6),
+                              color: const Color(0xFFFFF5E6),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
                                   color: Colors.brown.shade300, width: 1.5),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.brown.withOpacity(0.2),
+                                  color: Colors.brown.withValues(alpha: 0.2),
                                   blurRadius: 4,
                                   offset: const Offset(0, 2),
                                 ),
@@ -1910,17 +2254,43 @@ class _SoferHomeState extends State<SoferHome>
                         fontSize: 20),
                   )
                 else if (_stopwatch.isRunning)
-                  Text(
-                    "זמן שורה נוכחית: ${_formatTime(_stopwatch.elapsed - _lastLapTime)}",
-                    style:
-                        const TextStyle(fontSize: 18, color: Colors.blueGrey),
+                  Container(
+                    margin: const EdgeInsets.only(top: 12),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: Colors.blueGrey.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border:
+                          Border.all(color: Colors.blueGrey.shade200, width: 1),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          "הקפה שורה נוכחית",
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.blueGrey.shade700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _formatTime(_effectiveElapsed() - _lastLapTime),
+                          style: const TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blueGrey,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 const SizedBox(height: 40),
                 if (!_stopwatch.isRunning && !_isPaused)
                   ElevatedButton.icon(
                     onPressed: _initSmartSession,
                     icon: const Icon(Icons.login),
-                    label: const Text("כניסה (התחל כתיבה)"),
+                    label: const Text("כניסה"),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 40, vertical: 20),
@@ -1947,11 +2317,10 @@ class _SoferHomeState extends State<SoferHome>
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           ElevatedButton.icon(
-                            onPressed: _isPaused ? _startTimer : _pauseTimer,
+                            onPressed: _isPaused ? _startTimer : _onBreakTap,
                             icon: Icon(
                                 _isPaused ? Icons.play_arrow : Icons.coffee),
-                            label:
-                                Text(_isPaused ? "חזרה לכתיבה" : "הפסקת קפה"),
+                            label: Text(_isPaused ? "המשך כתיבה" : "הפסקת קפה"),
                             style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.orange,
                                 foregroundColor: Colors.white),
@@ -1960,7 +2329,7 @@ class _SoferHomeState extends State<SoferHome>
                           ElevatedButton.icon(
                             onPressed: _stopTimer,
                             icon: const Icon(Icons.logout),
-                            label: const Text("יציאה (סיכום)"),
+                            label: const Text("יציאה"),
                             style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.red,
                                 foregroundColor: Colors.white),

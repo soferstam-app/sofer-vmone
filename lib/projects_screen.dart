@@ -383,6 +383,7 @@ class _ProjectDialogState extends State<ProjectDialog> {
 
   ProjectType _type = ProjectType.sefer;
   DateTime? _targetCompletionDate;
+  bool _dailyGoalInLines = false;
 
   @override
   void initState() {
@@ -390,6 +391,7 @@ class _ProjectDialogState extends State<ProjectDialog> {
     final p = widget.existingProject;
     _type = p?.type ?? ProjectType.sefer;
     _targetCompletionDate = p?.targetCompletionDate;
+    _dailyGoalInLines = p?.dailyGoalInLines ?? false;
 
     _nameCtrl = TextEditingController(text: p?.name ?? "");
     _priceCtrl = TextEditingController(text: p?.price.toString() ?? "");
@@ -593,7 +595,9 @@ class _ProjectDialogState extends State<ProjectDialog> {
                 decoration: InputDecoration(
                   labelText: _type == ProjectType.tefillin
                       ? "פרשיות ליום (עד 8)"
-                      : "יעד יומי",
+                      : (_dailyGoalInLines
+                          ? "יעד יומי (שורות)"
+                          : "יעד יומי (עמודים)"),
                 ),
                 validator: (v) {
                   if (_type == ProjectType.tefillin &&
@@ -616,6 +620,19 @@ class _ProjectDialogState extends State<ProjectDialog> {
             ),
           ],
         ),
+        if (_type == ProjectType.sefer) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Text("יעד יומי בשורות (במקום עמודים):"),
+              const SizedBox(width: 8),
+              Switch(
+                value: _dailyGoalInLines,
+                onChanged: (v) => setState(() => _dailyGoalInLines = v),
+              ),
+            ],
+          ),
+        ],
       ],
     );
   }
@@ -643,6 +660,8 @@ class _ProjectDialogState extends State<ProjectDialog> {
         expenses: double.tryParse(_expensesCtrl.text) ?? 0,
         targetDaily: int.tryParse(_dailyCtrl.text) ?? 0,
         targetMonthly: int.tryParse(_monthlyCtrl.text) ?? 0,
+        dailyGoalInLines:
+            _type == ProjectType.sefer ? _dailyGoalInLines : false,
         totalPages:
             _type == ProjectType.sefer ? int.tryParse(_pagesCtrl.text) : null,
         linesPerPage:
