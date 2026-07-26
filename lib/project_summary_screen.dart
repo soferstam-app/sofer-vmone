@@ -68,13 +68,15 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
   Widget _buildProjectContent(Project project) {
     final sessions =
         widget.history.where((s) => s.projectId == project.id).toList();
+    final sessionsForStats =
+        sessions.where((s) => !s.backlogOnly).toList();
 
     String totalWrittenStr = "";
     double totalProfit = 0;
     String avgTimeStr = "";
 
     Duration totalTime = Duration.zero;
-    for (var s in sessions) {
+    for (var s in sessionsForStats) {
       totalTime += s.duration;
     }
 
@@ -92,11 +94,15 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
       totalWrittenStr =
           "${totalLines ~/ linesPerPage} עמודים ו-${totalLines % linesPerPage} שורות";
 
-      double pages = totalLines / linesPerPage.toDouble();
+      int linesForStats = 0;
+      for (var s in sessionsForStats) {
+        linesForStats += (s.endLine - s.startLine + 1);
+      }
+      double pages = linesForStats / linesPerPage.toDouble();
       totalProfit = pages * (project.price - project.expenses);
 
-      if (totalLines > 0) {
-        double avg = totalTime.inMinutes / totalLines;
+      if (linesForStats > 0 && totalTime.inSeconds > 0) {
+        double avg = totalTime.inMinutes / linesForStats;
         avgTimeStr = "${avg.toStringAsFixed(2)} דקות לשורה";
       }
     } else if (project.type == ProjectType.mezuza) {
@@ -111,10 +117,19 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
       }
       double mezuzot = totalMezuzotLines / 22.0;
       totalWrittenStr = "${mezuzot.toStringAsFixed(1)} מזוזות";
-      totalProfit = mezuzot * (project.price - project.expenses);
+      int mezuzaLinesForStats = 0;
+      for (var s in sessionsForStats) {
+        if (s.endLine > 0) {
+          mezuzaLinesForStats +=
+              (s.amount > 0 ? (s.amount - 1) * 22 : 0) + s.endLine;
+        } else {
+          mezuzaLinesForStats += s.amount * 22;
+        }
+      }
+      totalProfit = (mezuzaLinesForStats / 22.0) * (project.price - project.expenses);
 
-      if (totalMezuzotLines > 0) {
-        double avg = totalTime.inMinutes / totalMezuzotLines;
+      if (mezuzaLinesForStats > 0 && totalTime.inSeconds > 0) {
+        double avg = totalTime.inMinutes / mezuzaLinesForStats;
         avgTimeStr = "${avg.toStringAsFixed(2)} דקות לשורה";
       }
     } else {
@@ -129,11 +144,20 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
         }
       }
       totalWrittenStr = "$totalParshiyot פרשיות (סה\"כ)";
-      double sets = totalParshiyot / 8.0;
-      totalProfit = sets * (project.price - project.expenses);
+      int parshiyotForStats = 0;
+      for (var s in sessionsForStats) {
+        if (s.tefillinType == null && s.parshiya == null) {
+          parshiyotForStats += s.amount * 8;
+        } else if (s.parshiya == null) {
+          parshiyotForStats += s.amount * 4;
+        } else {
+          parshiyotForStats += s.amount;
+        }
+      }
+      totalProfit = (parshiyotForStats / 8.0) * (project.price - project.expenses);
 
-      if (totalParshiyot > 0) {
-        double avg = totalTime.inMinutes / totalParshiyot;
+      if (parshiyotForStats > 0 && totalTime.inSeconds > 0) {
+        double avg = totalTime.inMinutes / parshiyotForStats;
         avgTimeStr = "${avg.toStringAsFixed(2)} דקות לפרשייה";
       }
     }

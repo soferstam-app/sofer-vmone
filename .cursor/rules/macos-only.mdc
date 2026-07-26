@@ -1,0 +1,21 @@
+---
+description: When developing on Mac – build and run for macOS only; ignore Windows/Android unless asked
+alwaysApply: true
+---
+
+# פיתוח למק בלבד (macOS-only development)
+
+כשעובדים על הפרויקט **ממחשב מק**, ההנחה היא שהמטרה היא **רק macOS**.
+
+## בנייה והרצה
+- **בנייה:** השתמש ב-`flutter build macos --release` (לא `build apk` או `build windows`).
+- **הרצה:** השתמש ב-`flutter run -d macos` (או בחר את מכשיר ה-macOS אם יש כמה).
+
+## קבצים ותיקיות שלא רלוונטיים למק
+- **אל תציע שינויים** בתיקיות `windows/` ו-`android/` אלא אם המשתמש ביקש במפורש תמיכה ב-Windows או באנדרואיד.
+- **אל תכלול** קבצים מ-`windows/` או `android/` בהקשר כשעונים על שאלות כלליות על בנייה, הרצה או באגים במק.
+- תיקיית `lib/` משותפת – רלוונטית תמיד. תיקיות `macos/`, `ios/` רלוונטיות לפלטפורמת Apple.
+
+## כשהמשתמש שואל במפורש אחרת
+- אם המשתמש מבקש במפורש בנייה ל-Windows או לאנדרואיד, או עזרה בקבצים ב-`windows/` או `android/` – לפעול לפי בקשתו ולהתייחס לקבצים האלה כרגיל.
+- כלל זה מתאים לעבודה **ממחשב מק**. אם אתה עובד על Windows ומבקש בנייה ל-Windows/Android – התעלם מההנחה "מק בלבד".

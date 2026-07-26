@@ -49,9 +49,15 @@ ca-bundle.crt
 *.key
 .env
 .env.*
+oauth_credentials.json
 
 # חבילות שהורדו כארכיון (הפרויקט משתמש בתיקיית kosher_dart)
 /packages/*.tar.gz
+
+# תוצרי בנייה לשחרור – מקומם ב-GitHub Releases ולא במאגר
+*.apk
+*.aab
+sofer_vmone_*_windows.zip
 
 # תיקייה כפולה – הקונפיג הרשמי ב־android/app/src/main/res/xml/
 /android/app/src/XML/

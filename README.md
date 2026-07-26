@@ -33,6 +33,7 @@
 
 ### ⚙️ הגדרות וגיבוי
 *   שמירת נתונים מקומית ומאובטחת.
+*   **גיבוי ל-Google Drive** – סנכרון פרויקטים, היסטוריה והוצאות (בהתחברות Google).
 *   אפשרות לאיפוס נתונים מלא.
 *   ממשק נקי ונוח לשימוש בעברית.
 
@@ -56,7 +57,16 @@
 ### ווינדוס (Windows)
 1.  הורד את קובץ ה-`zip`.
 2.  חלץ את התיקייה למחשב.
-3.  הפעל את הקובץ `sofer_vmone.exe` מתוך התיקייה.
+3.  הפעל את הקובץ `sofer_vmone.exe` מתוך התיקייה.  
+    **החבילה כוללת את ספריות ה-VC++ Runtime** – אין צורך בהתקנת "Microsoft Visual C++ 2015–2022 Redistributable" בנפרד.
+
+## 🔑 גיבוי ל-Google Drive (סנכרון)
+
+*   **אנדרואיד:** הגיבוי עובד "מהקופסה". האימות מתבצע מול Google (חתימת האפליקציה מוגדרת ב-Google Cloud Console) – אין צורך להכניס מפתחות לקוד. קמפול רגיל (`flutter build apk`) כולל גיבוי.
+*   **ווינדוס:** הגיבוי קורא מפתחות OAuth מאחד מהמקורות הבאים (בסדר עדיפות):
+    1. **קובץ מקומי (מומלץ):** שים קובץ `oauth_credentials.json` בתיקיית הפרויקט (שורש המאגר) או **ליד ה-exe** (בתיקיית `build\windows\x64\runner\Release\` אחרי בנייה). הקובץ לא עולה לגיטהאב (מופיע ב-.gitignore). יש קובץ דוגמה `oauth_credentials.json.example` – העתק ל-`oauth_credentials.json` ומלא את המפתחות.
+    2. **בעת הקמפול:** `flutter build windows --dart-define=GOOGLE_OAUTH_CLIENT_ID=... --dart-define=GOOGLE_OAUTH_CLIENT_SECRET=...`  
+    אם אין קובץ ואין dart-define, כפתור "Sign In Google" לא יבצע התחברות. מפתחות יוצרים ב-[Google Cloud Console](https://console.cloud.google.com/) – סוג לקוח: "Desktop app".
 
 ## 🤝 תרומה ופיתוח
 

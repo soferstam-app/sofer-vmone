@@ -78,6 +78,43 @@ class NotificationService {
     await flutterLocalNotificationsPlugin.cancel(0);
   }
 
+  /// Schedules a one-time notification "סיום הפסקה – חזור לכתיבה" after [minutes].
+  /// Uses notification id 1 (daily reminder uses 0).
+  Future<void> scheduleBreakReminder(int minutes) async {
+    if (!Platform.isAndroid || minutes < 1) return;
+    cancelBreakReminder();
+    try {
+      final tz.TZDateTime when = tz.TZDateTime.now(tz.local).add(
+        Duration(minutes: minutes),
+      );
+      await flutterLocalNotificationsPlugin.zonedSchedule(
+        1,
+        'סיום הפסקה ☕',
+        'הזמן שהקצבת להפסקה הסתיים – חזור לכתיבה',
+        when,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'break_reminder_channel',
+            'תזכורת הפסקה',
+            channelDescription: 'תזכורת כשזמן ההפסקה שהקצבת הסתיים',
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+        ),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+      );
+    } catch (e) {
+      debugPrint("Error scheduling break reminder: $e");
+    }
+  }
+
+  Future<void> cancelBreakReminder() async {
+    if (!Platform.isAndroid) return;
+    await flutterLocalNotificationsPlugin.cancel(1);
+  }
+
   tz.TZDateTime _nextInstanceOfTime(TimeOfDay time) {
     final tz.TZDateTime now = tz.TZDateTime.now(tz.local);
     tz.TZDateTime scheduledDate = tz.TZDateTime(

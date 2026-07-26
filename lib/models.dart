@@ -8,6 +8,9 @@ class Project {
   final double expenses;
   final int targetDaily;
   final int targetMonthly;
+
+  /// For sefer: when true, [targetDaily] is in lines; when false, in pages.
+  final bool dailyGoalInLines;
   final int? totalPages;
   final int? linesPerPage;
   final DateTime lastUpdated;
@@ -23,6 +26,7 @@ class Project {
     required this.expenses,
     required this.targetDaily,
     required this.targetMonthly,
+    this.dailyGoalInLines = false,
     this.totalPages,
     this.linesPerPage,
     DateTime? lastUpdated,
@@ -40,6 +44,7 @@ class Project {
       'expenses': expenses,
       'targetDaily': targetDaily,
       'targetMonthly': targetMonthly,
+      'dailyGoalInLines': dailyGoalInLines,
       'totalPages': totalPages,
       'linesPerPage': linesPerPage,
       'lastUpdated': lastUpdated.toIso8601String(),
@@ -58,6 +63,7 @@ class Project {
       expenses: (json['expenses'] as num).toDouble(),
       targetDaily: json['targetDaily'],
       targetMonthly: json['targetMonthly'],
+      dailyGoalInLines: json['dailyGoalInLines'] ?? false,
       totalPages: json['totalPages'],
       linesPerPage: json['linesPerPage'],
       lastUpdated: json['lastUpdated'] != null
@@ -77,6 +83,7 @@ class Project {
     double? expenses,
     int? targetDaily,
     int? targetMonthly,
+    bool? dailyGoalInLines,
     int? totalPages,
     int? linesPerPage,
     bool? isDeleted,
@@ -91,6 +98,7 @@ class Project {
       expenses: expenses ?? this.expenses,
       targetDaily: targetDaily ?? this.targetDaily,
       targetMonthly: targetMonthly ?? this.targetMonthly,
+      dailyGoalInLines: dailyGoalInLines ?? this.dailyGoalInLines,
       totalPages: totalPages ?? this.totalPages,
       linesPerPage: linesPerPage ?? this.linesPerPage,
       lastUpdated: DateTime.now(),
@@ -121,6 +129,8 @@ class WorkSession {
   final int? parshiya; // 1-4
   final String description;
   final bool isManual;
+  /// When true: counts only for project total written (הספק); excluded from profit, averages, daily goal.
+  final bool backlogOnly;
   final DateTime lastUpdated;
   final bool isDeleted;
 
@@ -136,6 +146,7 @@ class WorkSession {
     this.parshiya,
     required this.description,
     required this.isManual,
+    this.backlogOnly = false,
     DateTime? lastUpdated,
     this.isDeleted = false,
   }) : lastUpdated = lastUpdated ?? DateTime.now();
@@ -155,6 +166,7 @@ class WorkSession {
       'parshiya': parshiya,
       'description': description,
       'isManual': isManual,
+      'backlogOnly': backlogOnly,
       'lastUpdated': lastUpdated.toIso8601String(),
       'isDeleted': isDeleted,
     };
@@ -173,6 +185,7 @@ class WorkSession {
       parshiya: json['parshiya'],
       description: json['description'],
       isManual: json['isManual'],
+      backlogOnly: json['backlogOnly'] ?? false,
       lastUpdated: json['lastUpdated'] != null
           ? DateTime.parse(json['lastUpdated'])
           : DateTime.now(),
@@ -187,6 +200,7 @@ class WorkSession {
     int? startLine,
     int? endLine,
     String? description,
+    bool? backlogOnly,
   }) {
     return WorkSession(
       id: id,
@@ -200,6 +214,7 @@ class WorkSession {
       parshiya: parshiya,
       description: description ?? this.description,
       isManual: isManual,
+      backlogOnly: backlogOnly ?? this.backlogOnly,
       lastUpdated: DateTime.now(),
       isDeleted: isDeleted,
     );
@@ -211,13 +226,17 @@ class Expense {
   final String product;
   final DateTime date;
   final double amount;
+  final DateTime lastUpdated;
+  final bool isDeleted;
 
   Expense({
     required this.id,
     required this.product,
     required this.date,
     required this.amount,
-  });
+    DateTime? lastUpdated,
+    this.isDeleted = false,
+  }) : lastUpdated = lastUpdated ?? DateTime.now();
 
   Map<String, dynamic> toJson() {
     return {
@@ -225,6 +244,8 @@ class Expense {
       'product': product,
       'date': date.toIso8601String(),
       'amount': amount,
+      'lastUpdated': lastUpdated.toIso8601String(),
+      'isDeleted': isDeleted,
     };
   }
 
@@ -235,6 +256,30 @@ class Expense {
       date:
           json['date'] != null ? DateTime.parse(json['date']) : DateTime.now(),
       amount: (json['amount'] as num?)?.toDouble() ?? 0,
+      // Older backups have no lastUpdated: fall back to the expense date so
+      // merging still has a deterministic timestamp.
+      lastUpdated: json['lastUpdated'] != null
+          ? DateTime.parse(json['lastUpdated'])
+          : (json['date'] != null
+              ? DateTime.parse(json['date'])
+              : DateTime.now()),
+      isDeleted: json['isDeleted'] ?? false,
+    );
+  }
+
+  Expense copyWith({
+    String? product,
+    DateTime? date,
+    double? amount,
+    bool? isDeleted,
+  }) {
+    return Expense(
+      id: id,
+      product: product ?? this.product,
+      date: date ?? this.date,
+      amount: amount ?? this.amount,
+      lastUpdated: DateTime.now(),
+      isDeleted: isDeleted ?? this.isDeleted,
     );
   }
 }

@@ -113,21 +113,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
       const SnackBar(content: Text("מבצע סנכרון...")),
     );
 
-    try {
-      await SyncService.instance.syncData();
-      if (mounted) {
-        setState(() {});
+    final status = await SyncService.instance.syncData();
+    if (!mounted) return;
+    setState(() {});
+
+    switch (status) {
+      case SyncStatus.success:
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("הסנכרון הושלם בהצלחה!")),
+          const SnackBar(
+            content: Text("הסנכרון הושלם בהצלחה!"),
+            backgroundColor: Colors.green,
+          ),
         );
-      }
-    } catch (e) {
-      debugPrint("Sync error: $e");
-      if (mounted) {
+      case SyncStatus.notSignedIn:
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("שגיאה בסנכרון: $e")),
+          const SnackBar(content: Text("יש להתחבר לחשבון Google תחילה")),
         );
-      }
+      case SyncStatus.failed:
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                "הסנכרון נכשל: ${SyncService.instance.lastSyncError ?? 'שגיאה לא ידועה'}"),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 6),
+          ),
+        );
     }
   }
 
@@ -224,6 +234,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(displayName),
+                  if (SyncService.instance.lastSyncTime != null)
+                    Text(
+                      "סונכרן לאחרונה: ${TimeOfDay.fromDateTime(SyncService.instance.lastSyncTime!).format(context)}",
+                      style:
+                          TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                    ),
                   ElevatedButton(
                     onPressed: _handleSignOut,
                     child: const Text("Sign Out Google"),

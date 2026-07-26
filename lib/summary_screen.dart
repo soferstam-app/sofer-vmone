@@ -30,6 +30,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
   List<WorkSession> _getSessionsForDate(DateTime date) {
     return widget.history.where((session) {
+      if (session.backlogOnly) return false;
       if (_viewByMonth) {
         return session.startTime.year == date.year &&
             session.startTime.month == date.month;
@@ -155,34 +156,50 @@ class _SummaryScreenState extends State<SummaryScreen> {
   }
 
   Widget _buildProjectSummaryCard(Project project, List<WorkSession> sessions) {
+    final sessionsForStats = sessions.where((s) => !s.backlogOnly).toList();
     Duration totalDuration = Duration.zero;
     int totalLinesWritten = 0;
-    int totalUnitsWritten = 0;
-    int totalParshiyotForAvg = 0;
     int totalMezuzaLines = 0;
 
     for (var s in sessions) {
-      totalDuration += s.duration;
       if (project.type == ProjectType.sefer) {
         totalLinesWritten += (s.endLine - s.startLine + 1);
+      } else if (project.type == ProjectType.mezuza) {
+        if (s.endLine > 0) {
+          totalMezuzaLines +=
+              (s.amount > 0 ? (s.amount - 1) * 22 : 0) + s.endLine;
+        } else {
+          totalMezuzaLines += s.amount * 22;
+        }
+      }
+    }
+    for (var s in sessionsForStats) {
+      totalDuration += s.duration;
+    }
+    int linesForStats = 0;
+    int unitsForStats = 0;
+    int parshiyotForStats = 0;
+    int mezuzaLinesForStats = 0;
+    for (var s in sessionsForStats) {
+      if (project.type == ProjectType.sefer) {
+        linesForStats += (s.endLine - s.startLine + 1);
       } else {
-        totalUnitsWritten += s.amount;
-
+        unitsForStats += s.amount;
         if (project.type == ProjectType.tefillin) {
           if (s.tefillinType == null && s.parshiya == null) {
-            totalParshiyotForAvg += s.amount * 8;
+            parshiyotForStats += s.amount * 8;
           } else if ((s.tefillinType == 'head' || s.tefillinType == 'hand') &&
               s.parshiya == null) {
-            totalParshiyotForAvg += s.amount * 4;
+            parshiyotForStats += s.amount * 4;
           } else {
-            totalParshiyotForAvg += s.amount;
+            parshiyotForStats += s.amount;
           }
         } else if (project.type == ProjectType.mezuza) {
           if (s.endLine > 0) {
-            totalMezuzaLines +=
+            mezuzaLinesForStats +=
                 (s.amount > 0 ? (s.amount - 1) * 22 : 0) + s.endLine;
           } else {
-            totalMezuzaLines += s.amount * 22;
+            mezuzaLinesForStats += s.amount * 22;
           }
         }
       }
@@ -203,18 +220,20 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
       outputText = "$pages עמודים ו-$lines שורות";
 
-      double pagesDecimal = totalLinesWritten / linesPerPage;
-      profit = pagesDecimal * (project.price - project.expenses);
+      double pagesDecimalForProfit = linesForStats / linesPerPage;
+      profit = pagesDecimalForProfit * (project.price - project.expenses);
 
-      if (totalLinesWritten > 0) {
-        double avgMinutes = totalDuration.inMinutes / totalLinesWritten;
+      if (linesForStats > 0 && totalDuration.inSeconds > 0) {
+        double avgMinutes = totalDuration.inMinutes / linesForStats;
         avgTimeText = "${avgMinutes.toStringAsFixed(2)} דקות לשורה";
       }
 
-      int targetLines = project.targetDaily * linesPerPage;
+      int targetLines = project.dailyGoalInLines
+          ? project.targetDaily
+          : (project.targetDaily * linesPerPage);
       if (targetLines > 0) {
-        progressPercent = totalLinesWritten / targetLines;
-        int linesLeft = targetLines - totalLinesWritten;
+        progressPercent = linesForStats / targetLines;
+        int linesLeft = targetLines - linesForStats;
         if (linesLeft > 0) {
           remainingText = "נותרו $linesLeft שורות ליעד";
         } else {
@@ -223,38 +242,38 @@ class _SummaryScreenState extends State<SummaryScreen> {
       }
     } else {
       if (project.type == ProjectType.mezuza) {
-        double mezuzotCount = totalMezuzaLines / 22.0;
-        profit = mezuzotCount * (project.price - project.expenses);
-        String displayAmount = mezuzotCount % 1 == 0
-            ? mezuzotCount.toInt().toString()
-            : mezuzotCount.toStringAsFixed(1);
-        outputText = "$displayAmount מזוזות";
+        double mezuzotForProfit = mezuzaLinesForStats / 22.0;
+        profit = mezuzotForProfit * (project.price - project.expenses);
+        double displayAmount = totalMezuzaLines / 22.0;
+        outputText = displayAmount % 1 == 0
+            ? "${displayAmount.toInt()} מזוזות"
+            : "${displayAmount.toStringAsFixed(1)} מזוזות";
       } else {
-        profit = totalUnitsWritten * (project.price - project.expenses);
+        profit = unitsForStats * (project.price - project.expenses);
         outputText = _generateTefillinSummary(sessions);
       }
 
       if (project.type == ProjectType.tefillin) {
-        if (totalParshiyotForAvg > 0) {
-          double avgMinutes = totalDuration.inMinutes / totalParshiyotForAvg;
+        if (parshiyotForStats > 0 && totalDuration.inSeconds > 0) {
+          double avgMinutes = totalDuration.inMinutes / parshiyotForStats;
           avgTimeText = "${avgMinutes.toStringAsFixed(2)} דקות לפרשייה";
         }
       } else if (project.type == ProjectType.mezuza) {
-        if (totalMezuzaLines > 0) {
-          double avgMinutes = totalDuration.inMinutes / totalMezuzaLines;
+        if (mezuzaLinesForStats > 0 && totalDuration.inSeconds > 0) {
+          double avgMinutes = totalDuration.inMinutes / mezuzaLinesForStats;
           avgTimeText = "${avgMinutes.toStringAsFixed(2)} דקות לשורה";
         }
       } else {
-        if (totalUnitsWritten > 0) {
-          double avgMinutes = totalDuration.inMinutes / totalUnitsWritten;
+        if (unitsForStats > 0 && totalDuration.inSeconds > 0) {
+          double avgMinutes = totalDuration.inMinutes / unitsForStats;
           avgTimeText = "${avgMinutes.toStringAsFixed(2)} דקות ליחידה";
         }
       }
 
       if (project.targetDaily > 0) {
-        double currentAmount = totalUnitsWritten.toDouble();
+        double currentAmount = unitsForStats.toDouble();
         if (project.type == ProjectType.mezuza) {
-          currentAmount = totalMezuzaLines / 22.0;
+          currentAmount = mezuzaLinesForStats / 22.0;
         }
 
         progressPercent = currentAmount / project.targetDaily;
@@ -611,7 +630,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
   Future<void> _showMonthlySummary() async {
     final monthSessions = widget.history.where((s) {
-      return s.startTime.year == _selectedDate.year &&
+      return !s.backlogOnly &&
+          s.startTime.year == _selectedDate.year &&
           s.startTime.month == _selectedDate.month;
     }).toList();
 
@@ -675,7 +695,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
         double pages = lines / linesPerPage.toDouble();
         projectProfit = pages * (project.price - project.expenses);
-        actualForGoal = pages;
+        actualForGoal = project.dailyGoalInLines ? lines.toDouble() : pages;
       } else if (project.type == ProjectType.mezuza) {
         double totalMezuzot = 0;
         Duration projTime = Duration.zero;
@@ -1117,7 +1137,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
         ],
       ),
     );
-    if (ok != true || !mounted) return;
     DateTime? parseTime(String t) {
       final parts = t.split(':');
       if (parts.length < 2) return null;
@@ -1133,6 +1152,12 @@ class _SummaryScreenState extends State<SummaryScreen> {
     final startLine = int.tryParse(startLineCtrl.text) ?? s.startLine;
     final endLine = int.tryParse(endLineCtrl.text) ?? s.endLine;
     final amount = int.tryParse(amountCtrl.text) ?? s.amount;
+    startCtrl.dispose();
+    endCtrl.dispose();
+    startLineCtrl.dispose();
+    endLineCtrl.dispose();
+    amountCtrl.dispose();
+    if (ok != true || !mounted) return;
     final updated = s.copyWith(
       startTime: startTime,
       endTime: endTime,

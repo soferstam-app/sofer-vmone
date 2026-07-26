@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'models.dart';
 import 'storage_service.dart';
+import 'sync_service.dart';
 import 'hebrew_utils.dart';
 
 const List<String> _expenseCategories = [
@@ -34,9 +35,16 @@ class ExpensesScreen extends StatefulWidget {
 
 class _ExpensesScreenState extends State<ExpensesScreen> {
   final StorageService _storage = StorageService();
-  List<Expense> _expenses = [];
+
+  /// All expenses including soft-deleted ones. Deleted entries must stay in the
+  /// list so the Drive merge sees the deletion instead of restoring the row.
+  List<Expense> _all = [];
   bool _useGregorianDates = false;
   bool _loading = true;
+
+  /// Expenses shown to the user (soft-deleted ones filtered out).
+  List<Expense> get _expenses =>
+      _all.where((e) => !e.isDeleted).toList();
 
   @override
   void initState() {
@@ -50,14 +58,15 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     if (mounted) {
       setState(() {
         _useGregorianDates = useGregorian;
-        _expenses = list;
+        _all = list;
         _loading = false;
       });
     }
   }
 
   Future<void> _save() async {
-    await _storage.saveExpenses(_expenses);
+    await _storage.saveExpenses(_all);
+    await SyncService.instance.syncData();
   }
 
   double get _totalExpenses => _expenses.fold(0, (sum, e) => sum + e.amount);
@@ -79,7 +88,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<String>(
-                  value: _expenseCategories.contains(productCtrl.text)
+                  initialValue: _expenseCategories.contains(productCtrl.text)
                       ? productCtrl.text
                       : '',
                   decoration: const InputDecoration(
@@ -162,17 +171,17 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                   return;
                 }
                 if (isEdit) {
-                  final idx = _expenses.indexWhere((e) => e.id == existing.id);
+                  final idx = _all.indexWhere((e) => e.id == existing.id);
                   if (idx >= 0) {
-                    _expenses[idx] = Expense(
-                      id: existing.id,
+                    // copyWith refreshes lastUpdated so the edit wins the merge.
+                    _all[idx] = existing.copyWith(
                       product: product,
                       date: pickedDate,
                       amount: amount,
                     );
                   }
                 } else {
-                  _expenses.add(Expense(
+                  _all.add(Expense(
                     id: DateTime.now().millisecondsSinceEpoch.toString(),
                     product: product,
                     date: pickedDate,
@@ -188,7 +197,10 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
           ],
         ),
       ),
-    );
+    ).then((_) {
+      productCtrl.dispose();
+      amountCtrl.dispose();
+    });
   }
 
   void _confirmDelete(Expense e) {
@@ -204,7 +216,10 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () {
-              _expenses.removeWhere((x) => x.id == e.id);
+              // Soft delete: keep the row so the Drive merge propagates the
+              // deletion instead of restoring it from the cloud copy.
+              final idx = _all.indexWhere((x) => x.id == e.id);
+              if (idx >= 0) _all[idx] = e.copyWith(isDeleted: true);
               _save();
               setState(() {});
               Navigator.pop(ctx);
@@ -332,8 +347,8 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
       floatingActionButton: _expenses.isNotEmpty
           ? FloatingActionButton(
               onPressed: () => _showAddOrEdit(),
-              child: const Icon(Icons.add),
               tooltip: "הוסף הוצאה",
+              child: const Icon(Icons.add),
             )
           : null,
     );

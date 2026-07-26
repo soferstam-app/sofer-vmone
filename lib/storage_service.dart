@@ -10,6 +10,7 @@ class StorageService {
   static const String _keyNotificationTime = 'notification_time';
   static const String _keySmartWorkflowEnabled = 'smart_workflow_enabled';
   static const String _keyLastPositions = 'last_positions';
+  static const String _keyTimerState = 'timer_state';
   static const String _keyDayRolloverHour = 'day_rollover_hour';
   static const String _keyFridayMotzeiHalfDay = 'friday_motzei_half_day';
   static const String _keyUseGregorianDates = 'use_gregorian_dates';
@@ -101,6 +102,27 @@ class StorageService {
     Map<String, dynamic> allPositions = data != null ? jsonDecode(data) : {};
     allPositions[projectId] = {'page': page, 'line': line};
     await prefs.setString(_keyLastPositions, jsonEncode(allPositions));
+  }
+
+  Future<void> saveTimerState(Map<String, dynamic> state) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyTimerState, jsonEncode(state));
+  }
+
+  Future<Map<String, dynamic>> getTimerState() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? data = prefs.getString(_keyTimerState);
+    if (data == null) return {};
+    try {
+      return Map<String, dynamic>.from(jsonDecode(data));
+    } catch (_) {
+      return {};
+    }
+  }
+
+  Future<void> clearTimerState() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keyTimerState);
   }
 
   Future<int> getDayRolloverHour() async {
