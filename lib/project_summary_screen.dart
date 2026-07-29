@@ -194,6 +194,11 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
       }
     }
 
+    // Backlog sessions are excluded from both sides of this ratio: they carry
+    // no earnings and their time is a placeholder.
+    final hourlyRate =
+        ProfitCalculator.profitPerHour(project, sessionsForStats, totalTime);
+
     String estimatedEndStr = "";
     String targetLinesPerDayStr = "";
     int remaining = 0;
@@ -292,6 +297,9 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                   _statRow("סך הכל נכתב:", totalWrittenStr),
                   _statRow(
                       "סך הכל רווח:", "₪${totalProfit.toStringAsFixed(2)}"),
+                  if (hourlyRate != null)
+                    _statRow("שכר לשעה:",
+                        "₪${hourlyRate.toStringAsFixed(0)} לשעה"),
                   if (avgTimeStr.isNotEmpty) _statRow("ממוצע:", avgTimeStr),
                   if (estimatedEndStr.isNotEmpty)
                     _statRow("מתי אני אמור לסיים:", estimatedEndStr),

@@ -208,6 +208,11 @@ class _SummaryScreenState extends State<SummaryScreen> {
     String remainingText = "";
     String avgTimeText = "";
 
+    // The number that actually says whether the work is worth the time: a high
+    // price per page written slowly can pay less than a low price written fast.
+    final hourlyRate = ProfitCalculator.profitPerHour(
+        project, sessionsForStats, totalDuration);
+
     if (project.type == ProjectType.sefer) {
       final int linesPerPage = ProductionCalculator.linesPerPageOf(project);
 
@@ -300,6 +305,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
               _buildInfoRow(Icons.speed, "ממוצע:", avgTimeText),
             _buildInfoRow(Icons.monetization_on, "רווח נקי:",
                 "₪${profit.toStringAsFixed(2)}"),
+            if (hourlyRate != null)
+              _buildInfoRow(Icons.trending_up, "שכר לשעה:",
+                  "₪${hourlyRate.toStringAsFixed(0)} לשעה"),
             const SizedBox(height: 10),
             const Text("עמידה ביעד יומי:",
                 style: TextStyle(fontWeight: FontWeight.bold)),
@@ -818,6 +826,12 @@ class _SummaryScreenState extends State<SummaryScreen> {
               Text(
                   "הכנסות כתיבה (חודש): ₪${totalMonthlyProfit.toStringAsFixed(2)}",
                   style: const TextStyle(fontWeight: FontWeight.bold)),
+              if (totalMonthTime.inSeconds > 0)
+                Text(
+                    "שכר לשעה (חודש): ₪${(totalMonthlyProfit / (totalMonthTime.inSeconds / 3600)).toStringAsFixed(0)}",
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.deepPurple.shade700)),
               Text("הוצאות (חודש): ₪${monthlyExpenses.toStringAsFixed(2)}",
                   style: const TextStyle(fontWeight: FontWeight.bold)),
               Text("נטו (לאחר הוצאות): ₪${netAfterExpenses.toStringAsFixed(2)}",
