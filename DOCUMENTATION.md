@@ -422,6 +422,8 @@ Singleton מעל `flutter_local_notifications`. אזור זמן קבוע: `Asia/
 
 ## 15. מסמכים נוספים בפרויקט
 
+- [SUGGESTIONS.md](SUGGESTIONS.md) – **התנגשויות שאותרו בסקירת קוד + הצעות שיפור**, ממוינות לפי עדיפות.
+- [DESIGN_PLAN.md](DESIGN_PLAN.md) – **תכנון ארכיטקטורה וממשק**: מסלול שיפור בארבעה גלים, פריסות דסקטופ/מובייל, מערכת אייקונים.
 - [README.md](README.md) – תיאור למשתמש, הוראות התקנה והגדרת OAuth.
 - [CHANGELOG.md](CHANGELOG.md) – יומן שינויים לפי גרסאות.
 - [docs/GIT_UPLOAD.md](docs/GIT_UPLOAD.md) – הוראות העלאה לגיטהאב.
