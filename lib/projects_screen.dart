@@ -3,6 +3,7 @@ import 'logic/id_generator.dart';
 import 'models.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'storage_service.dart';
+import 'expenses_screen.dart';
 import 'recycle_bin_screen.dart';
 import 'hebrew_utils.dart';
 
@@ -233,6 +234,15 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
       appBar: AppBar(
         title: const Text("ניהול פרויקטים"),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.receipt_long),
+            tooltip: "הוצאות",
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => ExpensesScreen(projects: widget.projects)),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.auto_delete),
             tooltip: "סל מחזור",

@@ -260,11 +260,43 @@ class WorkSession {
   }
 }
 
+/// How an expense is charged against the work.
+///
+/// The right answer differs by what was bought: parchment is consumed by a
+/// specific project, a delivery may serve several at once, ink and tools are
+/// used up gradually over a stretch of time, and rent for a writing room
+/// belongs to the month it covers.
+enum ExpenseAllocation {
+  /// Charged to one or more specific projects.
+  project,
+
+  /// Spread over a date range the user chooses.
+  period,
+
+  /// Charged to the calendar month of the expense date.
+  month,
+}
+
 class Expense {
   final String id;
   final String product;
   final DateTime date;
   final double amount;
+
+  /// How this expense is attributed. Defaults to [ExpenseAllocation.month],
+  /// which is how every expense behaved before allocation existed.
+  final ExpenseAllocation allocation;
+
+  /// Projects this expense belongs to, when [allocation] is
+  /// [ExpenseAllocation.project]. Splitting across several divides the cost
+  /// evenly between them — a delivery serving three projects is a third each.
+  final List<String> projectIds;
+
+  /// Range this expense is spread over, when [allocation] is
+  /// [ExpenseAllocation.period].
+  final DateTime? periodStart;
+  final DateTime? periodEnd;
+
   final DateTime lastUpdated;
   final bool isDeleted;
 
@@ -273,9 +305,17 @@ class Expense {
     required this.product,
     required this.date,
     required this.amount,
+    this.allocation = ExpenseAllocation.month,
+    this.projectIds = const [],
+    this.periodStart,
+    this.periodEnd,
     DateTime? lastUpdated,
     this.isDeleted = false,
   }) : lastUpdated = lastUpdated ?? DateTime.now();
+
+  /// Share of this expense borne by one project, when split across several.
+  double get amountPerProject =>
+      projectIds.isEmpty ? amount : amount / projectIds.length;
 
   Map<String, dynamic> toJson() {
     return {
@@ -283,6 +323,10 @@ class Expense {
       'product': product,
       'date': date.toIso8601String(),
       'amount': amount,
+      'allocation': allocation.index,
+      'projectIds': projectIds,
+      'periodStart': periodStart?.toIso8601String(),
+      'periodEnd': periodEnd?.toIso8601String(),
       'lastUpdated': lastUpdated.toIso8601String(),
       'isDeleted': isDeleted,
     };
@@ -303,6 +347,21 @@ class Expense {
               ? DateTime.parse(json['date'])
               : DateTime.now()),
       isDeleted: json['isDeleted'] ?? false,
+      // Expenses saved before allocation existed behave as they did then:
+      // charged to the month of their date.
+      allocation: json['allocation'] != null &&
+              (json['allocation'] as int) < ExpenseAllocation.values.length
+          ? ExpenseAllocation.values[json['allocation']]
+          : ExpenseAllocation.month,
+      projectIds: json['projectIds'] is List
+          ? List<String>.from(json['projectIds'])
+          : const [],
+      periodStart: json['periodStart'] != null
+          ? DateTime.tryParse(json['periodStart'])
+          : null,
+      periodEnd: json['periodEnd'] != null
+          ? DateTime.tryParse(json['periodEnd'])
+          : null,
     );
   }
 
@@ -310,6 +369,10 @@ class Expense {
     String? product,
     DateTime? date,
     double? amount,
+    ExpenseAllocation? allocation,
+    List<String>? projectIds,
+    DateTime? periodStart,
+    DateTime? periodEnd,
     bool? isDeleted,
   }) {
     return Expense(
@@ -317,6 +380,10 @@ class Expense {
       product: product ?? this.product,
       date: date ?? this.date,
       amount: amount ?? this.amount,
+      allocation: allocation ?? this.allocation,
+      projectIds: projectIds ?? this.projectIds,
+      periodStart: periodStart ?? this.periodStart,
+      periodEnd: periodEnd ?? this.periodEnd,
       lastUpdated: DateTime.now(),
       isDeleted: isDeleted ?? this.isDeleted,
     );

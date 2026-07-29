@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sofer_vmone/backup_service.dart';
 import 'package:sofer_vmone/hebrew_utils.dart';
 import 'package:sofer_vmone/logic/date_logic.dart';
+import 'package:sofer_vmone/logic/expense_logic.dart';
 import 'package:sofer_vmone/logic/id_generator.dart';
 import 'package:sofer_vmone/logic/merge_service.dart';
 import 'package:sofer_vmone/logic/production_calculator.dart';
@@ -915,6 +916,147 @@ void main() {
               timePerUnit: const Duration(hours: 2),
               expensesPerUnit: 30),
           35);
+    });
+  });
+
+  group('ExpenseLogic', () {
+    Expense exp({
+      required double amount,
+      ExpenseAllocation allocation = ExpenseAllocation.month,
+      List<String> projectIds = const [],
+      DateTime? date,
+      DateTime? start,
+      DateTime? end,
+    }) =>
+        Expense(
+          id: 'e${amount}_${allocation.index}',
+          product: 'x',
+          date: date ?? DateTime(2026, 5, 10),
+          amount: amount,
+          allocation: allocation,
+          projectIds: projectIds,
+          periodStart: start,
+          periodEnd: end,
+        );
+
+    test('categories carry sensible default allocations', () {
+      expect(ExpenseLogic.defaultAllocationFor('קלף מזוזות'),
+          ExpenseAllocation.project);
+      expect(ExpenseLogic.defaultAllocationFor('תיקון סופרים'),
+          ExpenseAllocation.project);
+      expect(ExpenseLogic.defaultAllocationFor('דיו, מי קלף, ציוד'),
+          ExpenseAllocation.period);
+      expect(ExpenseLogic.defaultAllocationFor('חדר סופרים'),
+          ExpenseAllocation.month);
+      expect(ExpenseLogic.defaultAllocationFor('שונות'),
+          ExpenseAllocation.month);
+      // Anything typed freehand falls back to monthly
+      expect(ExpenseLogic.defaultAllocationFor('משהו אחר'),
+          ExpenseAllocation.month);
+    });
+
+    test('a project expense is charged to that project', () {
+      final expenses = [
+        exp(amount: 300, allocation: ExpenseAllocation.project, projectIds: ['p1']),
+        exp(amount: 500, allocation: ExpenseAllocation.project, projectIds: ['p2']),
+      ];
+      expect(ExpenseLogic.totalForProject('p1', expenses), 300);
+      expect(ExpenseLogic.totalForProject('p2', expenses), 500);
+      expect(ExpenseLogic.totalForProject('p3', expenses), 0);
+    });
+
+    test('an expense split across projects divides evenly', () {
+      // One delivery serving three projects
+      final expenses = [
+        exp(
+            amount: 300,
+            allocation: ExpenseAllocation.project,
+            projectIds: ['p1', 'p2', 'p3']),
+      ];
+      expect(ExpenseLogic.totalForProject('p1', expenses), 100);
+      expect(ExpenseLogic.totalForProject('p2', expenses), 100);
+    });
+
+    test('project expenses do not also land in the monthly total', () {
+      // Otherwise the same money would be counted twice.
+      final expenses = [
+        exp(amount: 300, allocation: ExpenseAllocation.project, projectIds: ['p1']),
+      ];
+      expect(ExpenseLogic.totalForMonth(DateTime(2026, 5), expenses), 0);
+    });
+
+    test('a monthly expense counts in its own month only', () {
+      final expenses = [exp(amount: 800, date: DateTime(2026, 5, 3))];
+      expect(ExpenseLogic.totalForMonth(DateTime(2026, 5), expenses), 800);
+      expect(ExpenseLogic.totalForMonth(DateTime(2026, 6), expenses), 0);
+    });
+
+    test('a period expense is spread across the months it covers', () {
+      // 1200 over roughly four months, bought on 1 May
+      final expenses = [
+        exp(
+          amount: 1200,
+          allocation: ExpenseAllocation.period,
+          date: DateTime(2026, 5, 1),
+          start: DateTime(2026, 5, 1),
+          end: DateTime(2026, 8, 31),
+        ),
+      ];
+      final may = ExpenseLogic.totalForMonth(DateTime(2026, 5), expenses);
+      final june = ExpenseLogic.totalForMonth(DateTime(2026, 6), expenses);
+      final october = ExpenseLogic.totalForMonth(DateTime(2026, 10), expenses);
+
+      expect(may, greaterThan(0));
+      expect(may, lessThan(1200)); // not charged entirely to the first month
+      expect(june, greaterThan(0));
+      expect(october, 0); // outside the range
+
+      // The whole cost is accounted for across the range it covers
+      final total = [5, 6, 7, 8]
+          .map((m) => ExpenseLogic.totalForMonth(DateTime(2026, m), expenses))
+          .reduce((a, b) => a + b);
+      expect(total, closeTo(1200, 0.01));
+    });
+
+    test('deleted expenses are ignored everywhere', () {
+      final deleted = Expense(
+        id: 'd',
+        product: 'x',
+        date: DateTime(2026, 5, 1),
+        amount: 999,
+        allocation: ExpenseAllocation.project,
+        projectIds: const ['p1'],
+        isDeleted: true,
+      );
+      expect(ExpenseLogic.totalForProject('p1', [deleted]), 0);
+      expect(ExpenseLogic.totalForMonth(DateTime(2026, 5), [deleted]), 0);
+    });
+
+    test('project expenses with no project chosen are flagged', () {
+      final orphan =
+          exp(amount: 100, allocation: ExpenseAllocation.project);
+      expect(ExpenseLogic.unassigned([orphan]), hasLength(1));
+      // One that is assigned is not flagged
+      expect(
+          ExpenseLogic.unassigned([
+            exp(
+                amount: 100,
+                allocation: ExpenseAllocation.project,
+                projectIds: ['p1'])
+          ]),
+          isEmpty);
+    });
+
+    test('older expenses load as monthly, preserving previous behaviour', () {
+      final legacy = Expense.fromJson({
+        'id': 'old',
+        'product': 'דיו',
+        'date': DateTime(2026, 5, 5).toIso8601String(),
+        'amount': 200,
+      });
+      expect(legacy.allocation, ExpenseAllocation.month);
+      expect(legacy.projectIds, isEmpty);
+      expect(ExpenseLogic.totalForMonth(DateTime(2026, 5), [legacy]), 200);
     });
   });
 
