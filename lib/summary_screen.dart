@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:kosher_dart/kosher_dart.dart';
+import 'logic/production_calculator.dart';
 import 'models.dart';
 import 'project_summary_screen.dart';
 import 'hebrew_utils.dart';
@@ -165,12 +166,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
       if (project.type == ProjectType.sefer) {
         totalLinesWritten += (s.endLine - s.startLine + 1);
       } else if (project.type == ProjectType.mezuza) {
-        if (s.endLine > 0) {
-          totalMezuzaLines +=
-              (s.amount > 0 ? (s.amount - 1) * 22 : 0) + s.endLine;
-        } else {
-          totalMezuzaLines += s.amount * 22;
-        }
+        totalMezuzaLines += ProductionCalculator.mezuzaLinesInSession(s);
       }
     }
     for (var s in sessionsForStats) {
@@ -195,12 +191,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
             parshiyotForStats += s.amount;
           }
         } else if (project.type == ProjectType.mezuza) {
-          if (s.endLine > 0) {
-            mezuzaLinesForStats +=
-                (s.amount > 0 ? (s.amount - 1) * 22 : 0) + s.endLine;
-          } else {
-            mezuzaLinesForStats += s.amount * 22;
-          }
+          mezuzaLinesForStats += ProductionCalculator.mezuzaLinesInSession(s);
         }
       }
     }
@@ -242,9 +233,11 @@ class _SummaryScreenState extends State<SummaryScreen> {
       }
     } else {
       if (project.type == ProjectType.mezuza) {
-        double mezuzotForProfit = mezuzaLinesForStats / 22.0;
+        double mezuzotForProfit =
+            mezuzaLinesForStats / ProductionCalculator.linesPerMezuza;
         profit = mezuzotForProfit * (project.price - project.expenses);
-        double displayAmount = totalMezuzaLines / 22.0;
+        double displayAmount =
+            totalMezuzaLines / ProductionCalculator.linesPerMezuza;
         outputText = displayAmount % 1 == 0
             ? "${displayAmount.toInt()} מזוזות"
             : "${displayAmount.toStringAsFixed(1)} מזוזות";
@@ -273,7 +266,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
       if (project.targetDaily > 0) {
         double currentAmount = unitsForStats.toDouble();
         if (project.type == ProjectType.mezuza) {
-          currentAmount = mezuzaLinesForStats / 22.0;
+          currentAmount =
+              mezuzaLinesForStats / ProductionCalculator.linesPerMezuza;
         }
 
         progressPercent = currentAmount / project.targetDaily;
@@ -703,17 +697,10 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
         for (var s in sessions) {
           projTime += s.duration;
-          int linesInSession = 0;
-          if (s.endLine > 0) {
-            linesInSession =
-                (s.amount > 0 ? (s.amount - 1) * 22 : 0) + s.endLine;
-          } else {
-            linesInSession = s.amount * 22;
-          }
-          linesForThisProj += linesInSession;
+          linesForThisProj += ProductionCalculator.mezuzaLinesInSession(s);
         }
 
-        totalMezuzot = linesForThisProj / 22.0;
+        totalMezuzot = linesForThisProj / ProductionCalculator.linesPerMezuza;
 
         totalLinesForAvg += linesForThisProj;
         timeForLineAvg += projTime;

@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sofer_vmone/backup_service.dart';
 import 'package:sofer_vmone/hebrew_utils.dart';
+import 'package:sofer_vmone/logic/production_calculator.dart';
 import 'package:sofer_vmone/models.dart';
 
 void main() {
@@ -115,6 +116,76 @@ void main() {
       expect(deleted.id, original.id);
       expect(deleted.isDeleted, isTrue);
       expect(deleted.lastUpdated.isAfter(original.lastUpdated), isTrue);
+    });
+  });
+
+  group('ProductionCalculator – mezuza', () {
+    WorkSession session({required int amount, required int endLine}) =>
+        WorkSession(
+          id: 'x',
+          projectId: 'p',
+          startTime: DateTime(2026, 1, 1, 9),
+          endTime: DateTime(2026, 1, 1, 10),
+          amount: amount,
+          startLine: 0,
+          endLine: endLine,
+          description: '',
+          isManual: false,
+        );
+
+    test('whole mezuzot when no partial line is recorded', () {
+      expect(
+          ProductionCalculator.mezuzaLinesInSession(
+              session(amount: 3, endLine: 0)),
+          66);
+      expect(
+          ProductionCalculator.mezuzaLinesInSession(
+              session(amount: 1, endLine: 0)),
+          22);
+    });
+
+    test('partial last mezuza counts completed ones plus the lines', () {
+      // 2 complete (44) + 10 lines into the third
+      expect(
+          ProductionCalculator.mezuzaLinesInSession(
+              session(amount: 3, endLine: 10)),
+          54);
+      // First mezuza, 10 lines in
+      expect(
+          ProductionCalculator.mezuzaLinesInSession(
+              session(amount: 1, endLine: 10)),
+          10);
+    });
+
+    test('edge cases behave exactly as the original inline formula', () {
+      // amount 0 with a line recorded: the guard keeps this from going negative
+      expect(
+          ProductionCalculator.mezuzaLinesInSession(
+              session(amount: 0, endLine: 5)),
+          5);
+      expect(
+          ProductionCalculator.mezuzaLinesInSession(
+              session(amount: 0, endLine: 0)),
+          0);
+      // A full last mezuza expressed as a partial
+      expect(
+          ProductionCalculator.mezuzaLinesInSession(
+              session(amount: 2, endLine: 22)),
+          44);
+    });
+
+    test('totals sum across sessions', () {
+      final sessions = [
+        session(amount: 3, endLine: 0), // 66
+        session(amount: 1, endLine: 11), // 11
+      ];
+      expect(ProductionCalculator.mezuzaLinesTotal(sessions), 77);
+      expect(ProductionCalculator.mezuzotTotal(sessions), 3.5);
+    });
+
+    test('empty input is zero, not an error', () {
+      expect(ProductionCalculator.mezuzaLinesTotal(const []), 0);
+      expect(ProductionCalculator.mezuzotTotal(const []), 0.0);
     });
   });
 

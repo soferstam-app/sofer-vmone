@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'logic/production_calculator.dart';
 import 'models.dart';
 import 'hebrew_utils.dart';
 import 'storage_service.dart';
@@ -106,27 +107,14 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
         avgTimeStr = "${avg.toStringAsFixed(2)} דקות לשורה";
       }
     } else if (project.type == ProjectType.mezuza) {
-      int totalMezuzotLines = 0;
-      for (var s in sessions) {
-        if (s.endLine > 0) {
-          totalMezuzotLines +=
-              (s.amount > 0 ? (s.amount - 1) * 22 : 0) + s.endLine;
-        } else {
-          totalMezuzotLines += s.amount * 22;
-        }
-      }
-      double mezuzot = totalMezuzotLines / 22.0;
+      final int totalMezuzotLines =
+          ProductionCalculator.mezuzaLinesTotal(sessions);
+      double mezuzot = totalMezuzotLines / ProductionCalculator.linesPerMezuza;
       totalWrittenStr = "${mezuzot.toStringAsFixed(1)} מזוזות";
-      int mezuzaLinesForStats = 0;
-      for (var s in sessionsForStats) {
-        if (s.endLine > 0) {
-          mezuzaLinesForStats +=
-              (s.amount > 0 ? (s.amount - 1) * 22 : 0) + s.endLine;
-        } else {
-          mezuzaLinesForStats += s.amount * 22;
-        }
-      }
-      totalProfit = (mezuzaLinesForStats / 22.0) * (project.price - project.expenses);
+      final int mezuzaLinesForStats =
+          ProductionCalculator.mezuzaLinesTotal(sessionsForStats);
+      totalProfit = (mezuzaLinesForStats / ProductionCalculator.linesPerMezuza) *
+          (project.price - project.expenses);
 
       if (mezuzaLinesForStats > 0 && totalTime.inSeconds > 0) {
         double avg = totalTime.inMinutes / mezuzaLinesForStats;
