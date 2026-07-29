@@ -1166,6 +1166,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
         page: amount,
         startLine: startLine,
         endLine: endLine,
+        projectType: project.type,
         // Without this the session would always clash with itself.
         excludeSessionId: s.id,
       );

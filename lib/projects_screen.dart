@@ -39,12 +39,22 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
     });
   }
 
-  void _openProjectDialog({Project? project}) {
+  Future<void> _openProjectDialog({Project? project}) async {
+    // Needed to warn before changing page geometry that past work depends on.
+    var hasRecordedWork = false;
+    if (project != null) {
+      final history = await _storage.loadHistory();
+      hasRecordedWork = history
+          .any((s) => s.projectId == project.id && !s.isDeleted);
+    }
+    if (!mounted) return;
+
     showDialog(
       context: context,
       builder: (context) => ProjectDialog(
         existingProject: project,
         useGregorianDates: _useGregorianDates,
+        hasRecordedWork: hasRecordedWork,
         onSave: (p) {
           if (mounted) {
             setState(() {
@@ -357,12 +367,17 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
 class ProjectDialog extends StatefulWidget {
   final Project? existingProject;
   final bool useGregorianDates;
+
+  /// Whether the project already has work recorded against it. Changing page
+  /// geometry then affects how past sessions are counted, so it is confirmed.
+  final bool hasRecordedWork;
   final Function(Project) onSave;
 
   const ProjectDialog({
     super.key,
     this.existingProject,
     this.useGregorianDates = false,
+    this.hasRecordedWork = false,
     required this.onSave,
   });
 
@@ -535,6 +550,7 @@ class _ProjectDialogState extends State<ProjectDialog> {
                   controller: _pagesCtrl,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(labelText: 'סה"כ עמודים'),
+                  validator: (v) => _validatePositiveInt(v, 'סה"כ עמודים'),
                 ),
               ),
               const SizedBox(width: 10),
@@ -543,6 +559,7 @@ class _ProjectDialogState extends State<ProjectDialog> {
                   controller: _linesCtrl,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(labelText: 'שורות לעמוד'),
+                  validator: (v) => _validatePositiveInt(v, 'שורות לעמוד'),
                 ),
               ),
             ],
@@ -565,6 +582,7 @@ class _ProjectDialogState extends State<ProjectDialog> {
                   decimal: true,
                 ),
                 decoration: const InputDecoration(labelText: "מחיר"),
+                validator: (v) => _validateMoney(v, "מחיר"),
               ),
             ),
             const SizedBox(width: 10),
@@ -575,6 +593,7 @@ class _ProjectDialogState extends State<ProjectDialog> {
                   decimal: true,
                 ),
                 decoration: const InputDecoration(labelText: "הוצאות"),
+                validator: (v) => _validateMoney(v, "הוצאות", allowEmpty: true),
               ),
             ),
           ],
@@ -638,6 +657,34 @@ class _ProjectDialogState extends State<ProjectDialog> {
     );
   }
 
+  /// Rejects text that would silently become 0.
+  ///
+  /// The form used to fall back to `tryParse(...) ?? 0`, so a typo in the
+  /// price produced a project that reported zero earnings forever, with
+  /// nothing on screen explaining why.
+  String? _validateMoney(String? value, String label,
+      {bool allowEmpty = false}) {
+    final text = (value ?? '').trim();
+    if (text.isEmpty) {
+      return allowEmpty ? null : "יש להזין $label";
+    }
+    final parsed = double.tryParse(text.replaceAll(',', '.'));
+    if (parsed == null) return "$label חייב להיות מספר";
+    if (parsed < 0) return "$label לא יכול להיות שלילי";
+    return null;
+  }
+
+  String? _validatePositiveInt(String? value, String label) {
+    final text = (value ?? '').trim();
+    if (text.isEmpty) return "יש להזין $label";
+    final parsed = int.tryParse(text);
+    if (parsed == null) return "$label חייב להיות מספר שלם";
+    // Zero used to be accepted here and then broke line validation and the
+    // daily goal downstream.
+    if (parsed <= 0) return "$label חייב להיות גדול מאפס";
+    return null;
+  }
+
   String _getPriceLabel() {
     if (_type == ProjectType.sefer) return "כספים (לעמוד)";
     if (_type == ProjectType.tefillin) return "כספים (ליחידה: ראש+יד)";
@@ -650,8 +697,51 @@ class _ProjectDialogState extends State<ProjectDialog> {
     return "יעדים (מזוזות)";
   }
 
-  void _submit() {
+  /// Page geometry feeds both production and profit, so changing it on a
+  /// project with recorded work shifts how that work is counted. Sessions
+  /// recorded from now on carry their own snapshot; older ones do not.
+  Future<bool> _confirmGeometryChange() async {
+    final existing = widget.existingProject;
+    if (existing == null || !widget.hasRecordedWork) return true;
+    if (existing.type != ProjectType.sefer) return true;
+
+    final newLines = int.tryParse(_linesCtrl.text);
+    final newPages = int.tryParse(_pagesCtrl.text);
+    final linesChanged =
+        newLines != null && newLines != (existing.linesPerPage ?? newLines);
+    final pagesChanged =
+        newPages != null && newPages != (existing.totalPages ?? newPages);
+    if (!linesChanged && !pagesChanged) return true;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("שינוי הגדרות הספר"),
+        content: Text(
+          linesChanged
+              ? "שינית את מספר השורות לעמוד מ-${existing.linesPerPage} ל-$newLines.\n\n"
+                  "רשומות שנכתבו מכאן ואילך יחושבו לפי הערך החדש. רשומות ישנות שנשמרו לפני עדכון זה עשויות להיות מחושבות מחדש – מה שישנה את ההספק והרווח המוצגים עבורן.\n\n"
+                  "להמשיך?"
+              : "שינית את מספר העמודים בספר מ-${existing.totalPages} ל-$newPages.\n\n"
+                  "שינוי זה משפיע על אחוזי ההתקדמות ועל צפי הסיום.\n\nלהמשיך?",
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text("ביטול")),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text("המשך")),
+        ],
+      ),
+    );
+    return confirmed ?? false;
+  }
+
+  Future<void> _submit() async {
     if (_formKey.currentState!.validate()) {
+      if (!await _confirmGeometryChange()) return;
+      if (!mounted) return;
       final email = _clientEmailCtrl.text.trim();
       final p = Project(
         id: widget.existingProject?.id ?? IdGenerator.generate(),

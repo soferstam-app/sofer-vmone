@@ -90,6 +90,12 @@ class SessionLogic {
   /// Whether the given sefer line range overlaps work already recorded on the
   /// same page of the same project.
   ///
+  /// **Sefer projects only.** This reads `amount` as a page number, which is
+  /// what it means for sefer and nothing like what it means for mezuza or
+  /// tefillin, where it is a count. Passing a project of another type would
+  /// compare a page number against a quantity and report nonsense — pass
+  /// [projectType] so that is caught rather than silently wrong.
+  ///
   /// [excludeSessionId] skips one session — required when editing, so a
   /// session is not reported as overlapping itself.
   static bool hasSeferOverlap({
@@ -98,8 +104,16 @@ class SessionLogic {
     required int page,
     required int startLine,
     required int endLine,
+    ProjectType projectType = ProjectType.sefer,
     String? excludeSessionId,
   }) {
+    assert(
+      projectType == ProjectType.sefer,
+      'hasSeferOverlap called for a $projectType project; `amount` is a count '
+      'there, not a page number',
+    );
+    if (projectType != ProjectType.sefer) return false;
+
     for (final session in history) {
       if (session.isDeleted) continue;
       if (session.id == excludeSessionId) continue;

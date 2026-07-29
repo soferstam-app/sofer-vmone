@@ -19,8 +19,9 @@ class ProfitCalculator {
   static double billableUnits(Project project, Iterable<WorkSession> sessions) {
     switch (project.type) {
       case ProjectType.sefer:
-        return ProductionCalculator.seferLinesTotal(sessions) /
-            ProductionCalculator.linesPerPageOf(project);
+        // Per-session page size, so editing the project setting does not
+        // retroactively change what past work was worth.
+        return ProductionCalculator.seferPages(sessions, project);
       case ProjectType.mezuza:
         return ProductionCalculator.mezuzaLinesTotal(sessions) /
             ProductionCalculator.linesPerMezuza;

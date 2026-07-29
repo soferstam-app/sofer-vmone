@@ -68,12 +68,33 @@ class ProductionCalculator {
   /// against a stored zero, which would otherwise divide by zero.
   static int linesPerPageOf(Project project) {
     final value = project.linesPerPage ?? defaultLinesPerPage;
-    return value == 0 ? defaultLinesPerPage : value;
+    return value <= 0 ? defaultLinesPerPage : value;
+  }
+
+  /// Lines per page that applied when [session] was recorded.
+  ///
+  /// Prefers the value snapshotted on the session, so changing the project
+  /// setting later does not rewrite what past work was worth. Sessions
+  /// recorded before the snapshot existed fall back to the project setting,
+  /// which is the old behaviour.
+  static int linesPerPageForSession(Project project, WorkSession session) {
+    final snapshot = session.linesPerPageAtEntry;
+    if (snapshot != null && snapshot > 0) return snapshot;
+    return linesPerPageOf(project);
   }
 
   /// Written lines expressed as a (fractional) number of pages.
-  static double seferPages(Iterable<WorkSession> sessions, Project project) =>
-      seferLinesTotal(sessions) / linesPerPageOf(project);
+  ///
+  /// Each session is converted using the page size that applied to it, so a
+  /// project whose geometry changed mid-way still totals correctly.
+  static double seferPages(Iterable<WorkSession> sessions, Project project) {
+    var pages = 0.0;
+    for (final session in sessions) {
+      pages += seferLinesInSession(session) /
+          linesPerPageForSession(project, session);
+    }
+    return pages;
+  }
 
   // --- Tefillin ---
 

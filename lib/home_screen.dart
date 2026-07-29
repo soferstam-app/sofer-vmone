@@ -719,6 +719,7 @@ class _SoferHomeState extends State<SoferHome>
             endLine: end,
             description: "כתיבה רציפה (עמוד ${formatHebrewNumber(p)})",
             isManual: false,
+            linesPerPageAtEntry: linesPerPage,
           ));
         }
       }
@@ -1467,6 +1468,7 @@ class _SoferHomeState extends State<SoferHome>
             description: "עמוד ${formatHebrewNumber(p)} (1-$linesPerPage)",
             isManual: isManual,
             backlogOnly: backlogOnly,
+            linesPerPageAtEntry: linesPerPage,
           ));
         }
         setState(() {
@@ -1618,6 +1620,10 @@ class _SoferHomeState extends State<SoferHome>
           description: desc,
           isManual: isManual,
           backlogOnly: backlogOnly,
+          linesPerPageAtEntry:
+              _selectedProject!.type == ProjectType.sefer
+                  ? ProductionCalculator.linesPerPageOf(_selectedProject!)
+                  : null,
         ),
       );
       _storageService.saveHistory(history);
@@ -1695,6 +1701,7 @@ class _SoferHomeState extends State<SoferHome>
         page: page,
         startLine: start,
         endLine: end,
+        projectType: _selectedProject?.type ?? ProjectType.sefer,
       );
 
   bool _checkDailyGoalMet(Project project) {
