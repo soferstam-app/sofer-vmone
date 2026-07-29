@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 import 'logic/date_logic.dart';
+import 'logic/expense_logic.dart';
 import 'logic/production_calculator.dart';
 import 'logic/profit_calculator.dart';
 import 'logic/session_logic.dart';
@@ -814,14 +815,13 @@ class _SummaryScreenState extends State<SummaryScreen> {
       ));
     });
 
-    double monthlyExpenses = 0;
+    // Monthly expenses count in full; period expenses contribute only the
+    // share of their range falling in this month; project expenses are charged
+    // to their projects and deliberately excluded here, so no money is counted
+    // twice.
     final allExpenses = await _storage.loadExpenses();
-    for (var e in allExpenses) {
-      if (e.date.year == _selectedDate.year &&
-          e.date.month == _selectedDate.month) {
-        monthlyExpenses += e.amount;
-      }
-    }
+    final monthlyExpenses =
+        ExpenseLogic.totalForMonth(_selectedDate, allExpenses);
     final netAfterExpenses = totalMonthlyProfit - monthlyExpenses;
 
     if (!mounted) return;

@@ -15,7 +15,6 @@ import 'projects_screen.dart';
 import 'storage_service.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 import 'summary_screen.dart';
-import 'expenses_screen.dart';
 import 'features_screen.dart';
 import 'notification_service.dart';
 import 'hebrew_utils.dart';
@@ -2139,29 +2138,17 @@ class _SoferHomeState extends State<SoferHome>
             label: "פרויקטים",
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.receipt_long_rounded),
-            label: "הוצאות",
-          ),
-          BottomNavigationBarItem(
             icon: Icon(Icons.settings_rounded),
             label: "הגדרות",
           ),
         ],
         onTap: (index) {
           if (index == 0) _navigateToSummary();
+          // Expenses moved into the projects screen: costs are attributed to
+          // the work they belong to, so that is where they are managed.
           if (index == 1) _navigateToProjects();
-          if (index == 2) _navigateToExpenses();
-          if (index == 3) _navigateToSettings();
+          if (index == 2) _navigateToSettings();
         },
-      ),
-    );
-  }
-
-  void _navigateToExpenses() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const ExpensesScreen(),
       ),
     );
   }
@@ -2421,19 +2408,16 @@ class _SoferHomeState extends State<SoferHome>
             label: "פרויקטים",
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.receipt_long_rounded),
-            label: "הוצאות",
-          ),
-          BottomNavigationBarItem(
             icon: Icon(Icons.settings_rounded),
             label: "הגדרות",
           ),
         ],
         onTap: (index) {
           if (index == 0) _navigateToSummary();
+          // Expenses moved into the projects screen: costs are attributed to
+          // the work they belong to, so that is where they are managed.
           if (index == 1) _navigateToProjects();
-          if (index == 2) _navigateToExpenses();
-          if (index == 3) _navigateToSettings();
+          if (index == 2) _navigateToSettings();
         },
       ),
     );

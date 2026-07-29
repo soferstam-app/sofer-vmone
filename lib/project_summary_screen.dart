@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'logic/expense_logic.dart';
 import 'logic/production_calculator.dart';
 import 'logic/profit_calculator.dart';
 import 'models.dart';
@@ -26,6 +27,10 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
   bool _fridayMotzeiHalfDay = false;
   bool _useGregorianDates = false;
   String _soferName = '';
+
+  /// Expenses charged directly to projects, loaded once so the summary can show
+  /// what a project actually cost.
+  List<Expense> _expenses = [];
   final StorageService _storage = StorageService();
 
   @override
@@ -42,6 +47,9 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
     });
     _storage.getSoferName().then((v) {
       if (mounted) setState(() => _soferName = v);
+    });
+    _storage.loadExpenses().then((v) {
+      if (mounted) setState(() => _expenses = v);
     });
   }
 
@@ -198,6 +206,8 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
     // no earnings and their time is a placeholder.
     final hourlyRate =
         ProfitCalculator.profitPerHour(project, sessionsForStats, totalTime);
+    final projectExpenses =
+        ExpenseLogic.totalForProject(project.id, _expenses);
 
     String estimatedEndStr = "";
     String targetLinesPerDayStr = "";
@@ -297,6 +307,12 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                   _statRow("סך הכל נכתב:", totalWrittenStr),
                   _statRow(
                       "סך הכל רווח:", "₪${totalProfit.toStringAsFixed(2)}"),
+                  if (projectExpenses > 0) ...[
+                    _statRow("הוצאות משויכות:",
+                        "₪${projectExpenses.toStringAsFixed(2)}"),
+                    _statRow("נטו (לאחר הוצאות):",
+                        "₪${(totalProfit - projectExpenses).toStringAsFixed(2)}"),
+                  ],
                   if (hourlyRate != null)
                     _statRow("שכר לשעה:",
                         "₪${hourlyRate.toStringAsFixed(0)} לשעה"),
