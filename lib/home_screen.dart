@@ -16,6 +16,7 @@ import 'storage_service.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 import 'summary_screen.dart';
 import 'expenses_screen.dart';
+import 'features_screen.dart';
 import 'notification_service.dart';
 import 'hebrew_utils.dart';
 import 'timer_foreground_task.dart';
@@ -171,28 +172,6 @@ class _SoferHomeState extends State<SoferHome>
       _restoreTimerState();
     } catch (e) {
       debugPrint("Error loading data: $e");
-    }
-  }
-
-  Future<void> _testConnection() async {
-    try {
-      final client = HttpClient();
-      final request = await client
-          .getUrl(Uri.parse('https://netfree.link/'))
-          .timeout(const Duration(seconds: 5));
-      final response = await request.close();
-
-      if (!mounted) return;
-      if (response.statusCode == 200) {
-        _showSuccess(context, "החיבור הצליח! תעודת האבטחה נטענה כראוי.");
-      } else {
-        _showError(context, "התקבל קוד שגיאה מהשרת: ${response.statusCode}");
-      }
-    } catch (e) {
-      if (!mounted) return;
-      debugPrint("Connection test failed: $e");
-      _showError(context,
-          "שגיאת חיבור: וודא שאתה מחובר לאינטרנט ושתוכן התעודה תקין.\n($e)");
     }
   }
 
@@ -1817,6 +1796,16 @@ class _SoferHomeState extends State<SoferHome>
     await _refreshSettingsFromStorage();
   }
 
+  void _navigateToFeatures() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) =>
+            FeaturesScreen(projects: projects, history: history),
+      ),
+    );
+  }
+
   void _navigateToSummary() {
     Navigator.push(
       context,
@@ -1928,6 +1917,11 @@ class _SoferHomeState extends State<SoferHome>
         title: const Text('סופר ומונה'),
         centerTitle: true,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.auto_awesome_mosaic),
+            tooltip: "כלים",
+            onPressed: _navigateToFeatures,
+          ),
           if (Platform.isWindows)
             Padding(
               padding: const EdgeInsets.only(left: 8.0),
@@ -1942,11 +1936,6 @@ class _SoferHomeState extends State<SoferHome>
                 },
               ),
             ),
-          IconButton(
-            icon: const Icon(Icons.network_check),
-            onPressed: _testConnection,
-            tooltip: "בדוק חיבור נטפרי",
-          ),
         ],
       ),
       body: LayoutBuilder(
