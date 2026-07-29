@@ -50,6 +50,9 @@ dependencies:
   auto_updater: ^0.2.0
   window_manager: ^0.4.3
   flutter_foreground_task: ^9.2.0
+  # גיבוי וייצוא: שמירה מקומית (כל הפלטפורמות) ושיתוף דרך מערכת ההפעלה
+  file_picker: ^8.1.7
+  share_plus: ^10.1.4
 
 dev_dependencies:
   flutter_test:

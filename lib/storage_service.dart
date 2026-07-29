@@ -44,11 +44,49 @@ class StorageService {
     return jsonList.map((json) => WorkSession.fromJson(json)).toList();
   }
 
-  Future<String> getRawExport() async {
+  /// Every user-owned value in one map: the three data lists plus all
+  /// settings. This is the payload of a backup file — nothing else in the app
+  /// holds state worth restoring (timer_state is deliberately excluded, it is
+  /// per-device and transient).
+  Future<Map<String, dynamic>> exportAll() async {
     final prefs = await SharedPreferences.getInstance();
-    final projects = prefs.getString(_keyProjects) ?? "[]";
-    final history = prefs.getString(_keyHistory) ?? "[]";
-    return '{"projects": $projects, "history": $history}';
+
+    // Decoded rather than embedded as raw strings so the backup file is one
+    // well-formed document that an importer can validate field by field.
+    List<dynamic> decodeList(String? raw) {
+      if (raw == null || raw.isEmpty) return const [];
+      try {
+        final decoded = jsonDecode(raw);
+        return decoded is List ? decoded : const [];
+      } catch (_) {
+        return const [];
+      }
+    }
+
+    Map<String, dynamic> decodeMap(String? raw) {
+      if (raw == null || raw.isEmpty) return const {};
+      try {
+        final decoded = jsonDecode(raw);
+        return decoded is Map ? Map<String, dynamic>.from(decoded) : const {};
+      } catch (_) {
+        return const {};
+      }
+    }
+
+    return {
+      'projects': decodeList(prefs.getString(_keyProjects)),
+      'history': decodeList(prefs.getString(_keyHistory)),
+      'expenses': decodeList(prefs.getString(_keyExpenses)),
+      'lastPositions': decodeMap(prefs.getString(_keyLastPositions)),
+      'settings': {
+        _keyNotificationEnabled: prefs.getBool(_keyNotificationEnabled),
+        _keyNotificationTime: prefs.getString(_keyNotificationTime),
+        _keySmartWorkflowEnabled: prefs.getBool(_keySmartWorkflowEnabled),
+        _keyDayRolloverHour: prefs.getInt(_keyDayRolloverHour),
+        _keyFridayMotzeiHalfDay: prefs.getBool(_keyFridayMotzeiHalfDay),
+        _keyUseGregorianDates: prefs.getBool(_keyUseGregorianDates),
+      },
+    };
   }
 
   Future<bool> getNotificationEnabled() async {
