@@ -14,6 +14,8 @@ import 'package:sofer_vmone/logic/id_generator.dart';
 import 'package:sofer_vmone/logic/merge_service.dart';
 import 'package:sofer_vmone/logic/production_calculator.dart';
 import 'package:sofer_vmone/logic/profit_calculator.dart';
+import 'package:sofer_vmone/logic/project_analytics.dart';
+import 'package:sofer_vmone/logic/quote_calculator.dart';
 import 'package:sofer_vmone/logic/session_logic.dart';
 import 'package:sofer_vmone/models.dart';
 
@@ -705,6 +707,214 @@ void main() {
           ProfitCalculator.profitPerHour(
               project(ProjectType.mezuza), [s(amount: 3)], Duration.zero),
           isNull);
+    });
+  });
+
+  group('ProjectAnalytics', () {
+    Project proj(String id, ProjectType type,
+            {double price = 100, double exp = 0}) =>
+        Project(
+          id: id,
+          name: id,
+          type: type,
+          price: price,
+          expenses: exp,
+          targetDaily: 1,
+          targetMonthly: 20,
+          linesPerPage: type == ProjectType.sefer ? 42 : null,
+        );
+
+    WorkSession sess(String projectId,
+            {required int hours,
+            int startLine = 1,
+            int endLine = 42,
+            int amount = 1,
+            bool backlog = false}) =>
+        WorkSession(
+          id: '$projectId-$startLine-$endLine-$amount-$hours',
+          projectId: projectId,
+          startTime: DateTime(2026, 5, 1, 8),
+          endTime: DateTime(2026, 5, 1, 8 + hours),
+          amount: amount,
+          startLine: startLine,
+          endLine: endLine,
+          description: '',
+          isManual: false,
+          backlogOnly: backlog,
+        );
+
+    test('measures rate and pay for a project', () {
+      // One full 42-line page in 2 hours, net 100 per page
+      final perf = ProjectAnalytics.measure(
+          proj('a', ProjectType.sefer), [sess('a', hours: 2)]);
+
+      expect(perf.units, 1.0);
+      expect(perf.profit, 100);
+      expect(perf.profitPerHour, 50);
+      expect(perf.timePerUnit, const Duration(hours: 2));
+      expect(perf.hasEnoughData, isTrue);
+    });
+
+    test('backlog work is excluded from the rate', () {
+      // The backlog session would otherwise add units with placeholder time
+      final perf = ProjectAnalytics.measure(proj('a', ProjectType.sefer),
+          [sess('a', hours: 2), sess('a', hours: 0, amount: 9, backlog: true)]);
+      expect(perf.units, 1.0);
+      expect(perf.profitPerHour, 50);
+    });
+
+    test('a project with no timed work is flagged, not ranked', () {
+      final perf = ProjectAnalytics.measure(
+          proj('a', ProjectType.mezuza), [sess('a', hours: 0, amount: 3)]);
+      expect(perf.hasEnoughData, isFalse);
+      expect(perf.profitPerHour, isNull);
+    });
+
+    test('ranking puts the best payer first and unmeasured projects last', () {
+      final projects = [
+        proj('slow', ProjectType.sefer, price: 100), // 100 over 4h = 25/h
+        proj('fast', ProjectType.mezuza, price: 80), // 80 over 1h  = 80/h
+        proj('untimed', ProjectType.mezuza),
+      ];
+      final history = [
+        sess('slow', hours: 4),
+        sess('fast', hours: 1, amount: 1, startLine: 0, endLine: 22),
+        sess('untimed', hours: 0, amount: 5),
+      ];
+
+      final ranked = ProjectAnalytics.rankByHourlyRate(projects, history);
+      expect(ranked.first.project.id, 'fast');
+      expect(ranked.last.project.id, 'untimed');
+      expect(ranked.last.hasEnoughData, isFalse);
+    });
+
+    test('typical pace averages across projects of the same type', () {
+      final projects = [
+        proj('a', ProjectType.sefer),
+        proj('b', ProjectType.sefer),
+      ];
+      // One page in 2h and one page in 4h → 3h per page
+      final history = [sess('a', hours: 2), sess('b', hours: 4)];
+      expect(ProjectAnalytics.typicalTimePerUnit(
+              ProjectType.sefer, projects, history),
+          const Duration(hours: 3));
+    });
+
+    test('typical pace is null for a type never worked on', () {
+      expect(
+          ProjectAnalytics.typicalTimePerUnit(
+              ProjectType.tefillin, [proj('a', ProjectType.sefer)], const []),
+          isNull);
+    });
+  });
+
+  group('QuoteCalculator', () {
+    test('prices a job to reach the target hourly rate', () {
+      final q = QuoteCalculator.estimate(
+        units: 10,
+        timePerUnit: const Duration(hours: 2), // 20 hours total
+        targetHourlyRate: 50,
+        hoursPerDay: 5, // 4 working days
+        fridayMotzeiHalfDay: false,
+      )!;
+
+      expect(q.totalTime, const Duration(hours: 20));
+      expect(q.workDays, 4);
+      expect(q.suggestedPrice, 1000); // 20h x 50
+      expect(q.pricePerUnit, 100);
+    });
+
+    test('materials are added on top of the labour rate', () {
+      final q = QuoteCalculator.estimate(
+        units: 10,
+        timePerUnit: const Duration(hours: 1),
+        targetHourlyRate: 50,
+        hoursPerDay: 5,
+        expensesPerUnit: 30,
+        fridayMotzeiHalfDay: false,
+      )!;
+      // 10h x 50 = 500 labour, plus 10 x 30 = 300 materials
+      expect(q.suggestedPrice, 800);
+    });
+
+    test('the completion date never lands on Shabbat', () {
+      // Try every starting weekday: no amount of work should finish on a day
+      // that is not a working day.
+      for (var offset = 0; offset < 14; offset++) {
+        final start = DateTime(2026, 5, 4).add(Duration(days: offset));
+        final q = QuoteCalculator.estimate(
+          units: 6,
+          timePerUnit: const Duration(hours: 5),
+          targetHourlyRate: 50,
+          hoursPerDay: 5,
+          fridayMotzeiHalfDay: false,
+          startingFrom: start,
+        )!;
+        expect(q.estimatedCompletion.weekday, isNot(DateTime.saturday),
+            reason: 'finished on Shabbat starting from $start');
+      }
+    });
+
+    test('non-working days push the completion date out', () {
+      // Six working days cannot fit into six calendar days when a Shabbat
+      // falls inside the span.
+      final q = QuoteCalculator.estimate(
+        units: 6,
+        timePerUnit: const Duration(hours: 5),
+        targetHourlyRate: 50,
+        hoursPerDay: 5, // exactly 6 working days
+        fridayMotzeiHalfDay: false,
+        startingFrom: DateTime(2026, 5, 4),
+      )!;
+      expect(q.workDays, 6);
+      expect(
+          q.estimatedCompletion
+              .difference(DateTime(2026, 5, 4))
+              .inDays,
+          greaterThanOrEqualTo(6));
+    });
+
+    test('nonsense input yields no estimate rather than a wrong one', () {
+      expect(
+          QuoteCalculator.estimate(
+              units: 0,
+              timePerUnit: const Duration(hours: 1),
+              targetHourlyRate: 50,
+              hoursPerDay: 5,
+              fridayMotzeiHalfDay: false),
+          isNull);
+      expect(
+          QuoteCalculator.estimate(
+              units: 10,
+              timePerUnit: Duration.zero,
+              targetHourlyRate: 50,
+              hoursPerDay: 5,
+              fridayMotzeiHalfDay: false),
+          isNull);
+      expect(
+          QuoteCalculator.estimate(
+              units: 10,
+              timePerUnit: const Duration(hours: 1),
+              targetHourlyRate: 50,
+              hoursPerDay: 0,
+              fridayMotzeiHalfDay: false),
+          isNull);
+    });
+
+    test('implied rate checks an offer a client already made', () {
+      // 1000 for 20 hours of work
+      expect(
+          QuoteCalculator.impliedHourlyRate(
+              totalPrice: 1000, units: 10, timePerUnit: const Duration(hours: 2)),
+          50);
+      // The same offer with 300 of materials pays less per hour
+      expect(
+          QuoteCalculator.impliedHourlyRate(
+              totalPrice: 1000,
+              units: 10,
+              timePerUnit: const Duration(hours: 2),
+              expensesPerUnit: 30),
+          35);
     });
   });
 
