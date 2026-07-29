@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'logic/id_generator.dart';
 import 'models.dart';
 import 'storage_service.dart';
 import 'sync_service.dart';
@@ -182,7 +183,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                   }
                 } else {
                   _all.add(Expense(
-                    id: DateTime.now().millisecondsSinceEpoch.toString(),
+                    id: IdGenerator.generate(),
                     product: product,
                     date: pickedDate,
                     amount: amount,

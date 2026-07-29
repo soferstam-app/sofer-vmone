@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sofer_vmone/backup_service.dart';
 import 'package:sofer_vmone/hebrew_utils.dart';
 import 'package:sofer_vmone/logic/date_logic.dart';
+import 'package:sofer_vmone/logic/id_generator.dart';
 import 'package:sofer_vmone/logic/production_calculator.dart';
 import 'package:sofer_vmone/logic/profit_calculator.dart';
 import 'package:sofer_vmone/logic/session_logic.dart';
@@ -344,6 +345,33 @@ void main() {
             session(amount: 1, tefillinType: 'head', parshiya: 3), // 1
           ]),
           13);
+    });
+  });
+
+  group('IdGenerator', () {
+    test('ids created in the same millisecond are still distinct', () {
+      // The old scheme was a bare millisecond timestamp, so a tight loop
+      // produced duplicates — and so did two devices writing at once.
+      final ids = <String>{};
+      for (var i = 0; i < 10000; i++) {
+        ids.add(IdGenerator.generate());
+      }
+      expect(ids.length, 10000);
+    });
+
+    test('a suffix distinguishes records from one operation', () {
+      final a = IdGenerator.generate(suffix: '5');
+      final b = IdGenerator.generate(suffix: '6');
+      expect(a, endsWith('-5'));
+      expect(b, endsWith('-6'));
+      expect(a, isNot(b));
+    });
+
+    test('ids stay roughly sortable by creation time', () {
+      final first = IdGenerator.generate();
+      final firstMillis = int.parse(first.split('-').first);
+      expect(firstMillis,
+          closeTo(DateTime.now().millisecondsSinceEpoch, 5000));
     });
   });
 

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:window_manager/window_manager.dart';
+import 'logic/id_generator.dart';
 import 'logic/date_logic.dart';
 import 'logic/production_calculator.dart';
 import 'logic/session_logic.dart';
@@ -610,7 +611,7 @@ class _SoferHomeState extends State<SoferHome>
       List<WorkSession> newSessions = [];
       if (numFullMezuzot > 0) {
         newSessions.add(WorkSession(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          id: IdGenerator.generate(),
           projectId: _selectedProject!.id,
           startTime: DateTime.now(), // Placeholder
           endTime: DateTime.now(), // Placeholder
@@ -624,7 +625,7 @@ class _SoferHomeState extends State<SoferHome>
 
       if (remainingLines > 0) {
         newSessions.add(WorkSession(
-          id: "${DateTime.now().millisecondsSinceEpoch}_p",
+          id: IdGenerator.generate(suffix: 'p'),
           projectId: _selectedProject!.id,
           startTime: DateTime.now(), // Placeholder
           endTime: DateTime.now(), // Placeholder
@@ -709,7 +710,7 @@ class _SoferHomeState extends State<SoferHome>
           totalLinesWritten += linesInThisPage;
 
           newSessions.add(WorkSession(
-            id: "${DateTime.now().millisecondsSinceEpoch}_$p",
+            id: IdGenerator.generate(suffix: '\$p'),
             projectId: _selectedProject!.id,
             startTime: DateTime.now(),
             endTime: DateTime.now(),
@@ -1456,7 +1457,7 @@ class _SoferHomeState extends State<SoferHome>
         final List<WorkSession> rangeSessions = [];
         for (int p = pageFrom; p <= pageTo; p++) {
           rangeSessions.add(WorkSession(
-            id: "${DateTime.now().millisecondsSinceEpoch}_$p",
+            id: IdGenerator.generate(suffix: '\$p'),
             projectId: _selectedProject!.id,
             startTime: sessionStart,
             endTime: sessionEnd,
@@ -1605,7 +1606,7 @@ class _SoferHomeState extends State<SoferHome>
     setState(() {
       history.add(
         WorkSession(
-          id: DateTime.now().toString(),
+          id: IdGenerator.generate(),
           projectId: _selectedProject!.id,
           startTime: sessionStart,
           endTime: sessionEnd,
