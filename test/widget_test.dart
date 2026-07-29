@@ -3,11 +3,17 @@
 // The previous file here was the default Flutter counter smoke test, which did
 // not compile and tested nothing relevant to this project.
 
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sofer_vmone/backup_service.dart';
 import 'package:sofer_vmone/hebrew_utils.dart';
 import 'package:sofer_vmone/models.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('formatHebrewNumber', () {
     test('single letters get a geresh', () {
       expect(formatHebrewNumber(1), "א'");
@@ -109,6 +115,75 @@ void main() {
       expect(deleted.id, original.id);
       expect(deleted.isDeleted, isTrue);
       expect(deleted.lastUpdated.isAfter(original.lastUpdated), isTrue);
+    });
+  });
+
+  group('BackupService', () {
+    test('backup file carries every data list and the settings', () async {
+      SharedPreferences.setMockInitialValues({
+        'projects': jsonEncode([
+          Project(
+            id: 'p1',
+            name: 'ספר תורה',
+            type: ProjectType.sefer,
+            price: 100,
+            expenses: 10,
+            targetDaily: 2,
+            targetMonthly: 40,
+            totalPages: 245,
+            linesPerPage: 42,
+          ).toJson()
+        ]),
+        'history': jsonEncode([]),
+        'expenses': jsonEncode([
+          Expense(
+            id: 'e1',
+            product: 'קלף',
+            date: DateTime(2026, 5, 1),
+            amount: 300,
+          ).toJson()
+        ]),
+        'day_rollover_hour': 2,
+        'use_gregorian_dates': true,
+      });
+
+      final json = await BackupService.instance.buildBackupJson();
+      final decoded = jsonDecode(json) as Map<String, dynamic>;
+
+      expect(decoded['app'], 'sofer_vmone');
+      expect(decoded['formatVersion'], BackupService.formatVersion);
+      expect(decoded['exportedAt'], isNotNull);
+
+      // All three data lists travel in one document.
+      expect((decoded['projects'] as List), hasLength(1));
+      expect((decoded['history'] as List), isEmpty);
+      expect((decoded['expenses'] as List), hasLength(1));
+
+      // Settings ride along so a restore rebuilds the user's setup.
+      final settings = decoded['settings'] as Map<String, dynamic>;
+      expect(settings['day_rollover_hour'], 2);
+      expect(settings['use_gregorian_dates'], isTrue);
+
+      expect((decoded['counts'] as Map)['projects'], 1);
+    });
+
+    test('suggested file name is timestamped and json', () {
+      final name = BackupService.instance.suggestedFileName();
+      expect(name, startsWith('sofer-vmone-backup-'));
+      expect(name, endsWith('.json'));
+    });
+
+    test('survives corrupt stored data instead of throwing', () async {
+      SharedPreferences.setMockInitialValues({
+        'projects': 'not-json-at-all',
+        'expenses': '{"unexpected":"shape"}',
+      });
+
+      final json = await BackupService.instance.buildBackupJson();
+      final decoded = jsonDecode(json) as Map<String, dynamic>;
+
+      expect((decoded['projects'] as List), isEmpty);
+      expect((decoded['expenses'] as List), isEmpty);
     });
   });
 }

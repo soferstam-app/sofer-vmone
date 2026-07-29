@@ -36,6 +36,8 @@ lib/
 ├── recycle_bin_screen.dart      סל מחזור – שחזור/מחיקה סופית של פרויקטים
 ├── models.dart                  Project, WorkSession, Expense
 ├── storage_service.dart         עטיפה ל-SharedPreferences (כל המפתחות במקום אחד)
+├── backup_service.dart          בניית קובץ גיבוי מלא + שמירה/שיתוף
+├── platform_support.dart        הפשטת יכולות פלטפורמה (isDesktop וכו')
 ├── sync_service.dart            סנכרון דו-כיווני מול Google Drive (Singleton)
 ├── notification_service.dart    התראות מקומיות (תזכורת יומית + סוף הפסקה)
 ├── timer_foreground_task.dart   Foreground Service לאנדרואיד – טיימר רץ ברקע
@@ -174,6 +176,49 @@ test/widget_test.dart            טסט ברירת מחדל של Flutter (לא �
 
 ---
 
+## 6א. גיבוי לקובץ (`backup_service.dart`)
+
+חלופה מקומית לסנכרון הענן, ובסיס להעברת נתונים בין מכשירים.
+
+**מבנה קובץ הגיבוי** (JSON יחיד, pretty-printed):
+```jsonc
+{
+  "app": "sofer_vmone",
+  "formatVersion": 1,          // בקרת תאימות לייבוא עתידי
+  "appVersion": "0.4.0",
+  "exportedAt": "2026-07-29T14:35:00.000",
+  "exportedFrom": "windows",   // android / windows / macos
+  "counts": { "projects": 3, "history": 812, "expenses": 44 },
+  "projects":  [ ... ],
+  "history":   [ ... ],
+  "expenses":  [ ... ],
+  "lastPositions": { "<projectId>": { "page": 12, "line": 7 } },
+  "settings": { "day_rollover_hour": 2, "use_gregorian_dates": true, ... }
+}
+```
+
+`StorageService.exportAll()` אוסף את הכול ממקום אחד. `timer_state` **מוחרג** במכוון – הוא מצב רגעי ופר-מכשיר. פענוח שדות פגומים לא זורק חריגה אלא מחזיר רשימה ריקה, כדי שגיבוי יצליח גם אם ערך אחד באחסון השתבש.
+
+**שני מסלולי ייצוא**, לבחירת המשתמש:
+| מסלול | דסקטופ (Windows/מק) | אנדרואיד |
+|---|---|---|
+| **שמור במכשיר** | דיאלוג שמירה מקורי; הקובץ נכתב ידנית לנתיב שנבחר | בורר המסמכים של המערכת; ה-bytes מועברים ל-`saveFile` |
+| **שיתוף** | תפריט השיתוף של המערכת | share sheet – וואטסאפ, מייל, כל אפליקציה |
+
+שם הקובץ נושא חותמת תאריך ושעה, כך שגיבויים עוקבים לא דורסים זה את זה.
+
+⚠️ **לפני מימוש הייבוא** יש לתקן את יצירת המזהים: כל ה-`id` בקוד נגזרים מ-`DateTime.now().millisecondsSinceEpoch` בלבד, כך ששני מכשירים שיצרו רשומה באותה מילישנייה מייצרים מזהה זהה – ובמיזוג אחד ידרוס את השני. יש להוסיף רכיב אקראי או מזהה-מכשיר.
+
+---
+
+## 6ב. הפשטת פלטפורמה (`platform_support.dart`)
+
+בקוד יש 22 בדיקות `Platform.is*` (12 `isAndroid`, 10 `isWindows`, 2 `isMacOS`). כמעט כל `isWindows` מתכוון בפועל ל"דסקטופ" – וזו הסיבה שמק נופל בין הכיסאות. `PlatformSupport` מרכז את השאלות כ**יכולות** ולא כשמות מערכת: `isDesktop`, `isMobile`, `hasNativeSaveDialog`, `canBindLocalServer`, `hasForegroundTimerService`, `hasLocalNotifications`, `hasWindowManager`, `name`.
+
+קוד חדש צריך לשאול דרך המחלקה הזו. הקוד הישן יועבר בהדרגה.
+
+---
+
 ## 7. לוגיקה עסקית לפי סוג פרויקט
 
 זהו החלק העדין ביותר בקוד – כל סוג פרויקט נספר אחרת:
@@ -289,7 +334,12 @@ Singleton מעל `flutter_local_notifications`. אזור זמן קבוע: `Asia/
 בנייה: `flutter build windows --release` (בתוספת `--dart-define` למפתחות OAuth, אם לא משתמשים בקובץ)
 
 ### תלויות עיקריות
-`kosher_dart` (path מקומי, 2.0.18) · `shared_preferences` · `path_provider` · `url_launcher` · `google_sign_in` · `googleapis` + `googleapis_auth` · `http` · `flutter_local_notifications` · `timezone` · `flutter_foreground_task` · `window_manager` · `auto_updater` · `flutter_localizations`.
+`kosher_dart` (path מקומי, 2.0.18) · `shared_preferences` · `path_provider` · `url_launcher` · `google_sign_in` · `googleapis` + `googleapis_auth` · `http` · `flutter_local_notifications` · `timezone` · `flutter_foreground_task` · `window_manager` · `auto_updater` · `flutter_localizations` · **`file_picker` 8.3.7** (שמירה מקומית בכל הפלטפורמות) · **`share_plus` 10.1.4** (תפריט שיתוף מערכתי).
+
+### מצב הבנייה בסביבת הפיתוח
+- **Windows:** ✅ נבנה (`flutter build windows --release`).
+- **אנדרואיד:** ❌ נכשל בסביבה הנוכחית – **לא בגלל הקוד**. Gradle נעצר בשלב ה-configuration: `LicenceNotAcceptedException` עבור `ndk;28.2.13676358`, ובנוסף `cmdline-tools` חסר ב-Android SDK. תיקון: להתקין "Android SDK Command-line Tools" (Android Studio → SDK Manager → SDK Tools) ואז להריץ `flutter doctor --android-licenses` ולאשר.
+- **מק:** לא נבנה – נדרש מארח macOS. ראו סעיף בנייה בענן בפרק 13.
 
 ---
 
@@ -335,6 +385,12 @@ Singleton מעל `flutter_local_notifications`. אזור זמן קבוע: `Asia/
 | 7 | `type.index` בסריאליזציה | שינוי סדר ה-enum ישבור נתונים קיימים |
 | 8 | קישורים ב-README | "[קישור להורדות]" עדיין placeholder, וכן `YOUR_USERNAME` בהוראות ה-clone |
 | 9 | תמיכת iOS/macOS/Linux/web | תיקיות קיימות אך לא נבדקו; `NotificationService` ו-`SyncService` מותנים ב-Android/Windows בלבד |
+| 10 | **מק – חסמי רשת** | `macos/Runner/Release.entitlements` מכיל רק `app-sandbox`. חסר `com.apple.security.network.client` – ובלעדיו **כל גישה לרשת חסומה ב-release**. `network.server` (נדרש ל-OAuth loopback ולהעברת LAN) קיים רק ב-`DebugProfile` |
+| 11 | מק – מזהה חבילה | `PRODUCT_BUNDLE_IDENTIFIER = com.example.stamsofer`, חוסם חתימה והפצה |
+| 12 | מזהי רשומות מבוססי-זמן בלבד | ראו אזהרה בפרק 6א – תנאי מקדים לייבוא/מיזוג בין מכשירים |
+
+### בנייה למק בלי מחשב מק
+**GitHub Actions** מריץ `macos-latest` (חינם למאגר ציבורי): workflow שמריץ `flutter build macos --release` ומעלה את התוצאה כ-artifact. מגבלות: (א) בנייה בלבד – בדיקה ויזואלית עדיין דורשת מק אמיתי; (ב) חתימה ונוטריזציה דורשות חשבון Apple Developer, ובלעדיהן המשתמש נדרש לעקוף Gatekeeper ידנית.
 
 ---
 
@@ -353,6 +409,10 @@ Singleton מעל `flutter_local_notifications`. אזור זמן קבוע: `Asia/
 | **`lastUpdated` נפרד מ-`date` ב-`Expense`** | תאריך ההוצאה הוא נתון עסקי שהמשתמש קובע; חותמת המיזוג חייבת להשתנות בכל עריכה. שימוש בשדה אחד לשתי המטרות מנע מעריכות להסתנכרן |
 | **מחיקה לוגית גם להוצאות** | ב-Last-Write-Wins, היעדר רשומה אינו "מידע" – רק נוכחות של `isDeleted` מבדילה בין "נמחק" ל"עדיין לא הגיע לכאן" |
 | **`_isSyncing` + coalescing במקום debounce** | debounce מעכב כל שמירה; הדגל מונע את מרוץ הכתיבה בלי להשהות את המשתמש, וה-`_resyncQueued` מבטיח שאף שינוי לא יאבד |
+| **קובץ גיבוי יחיד ולא כמה קבצים** | העברה בין מכשירים צריכה להיות פעולה אחת של המשתמש. קובץ אחד גם מבטיח שההגדרות והנתונים תמיד עקביים ביניהם |
+| **`formatVersion` בקובץ הגיבוי** | מאפשר לייבוא עתידי לזהות ולהמיר גיבויים ישנים במקום להיכשל או, גרוע מכך, לפרש שדות לא נכון |
+| **הגדרות נכללות בגיבוי, `timer_state` לא** | ההגדרות הן חלק מהסביבה שהמשתמש בנה לעצמו ושווה לשחזר; מצב הטיימר רגעי ופר-מכשיר, ושחזורו במכשיר אחר היה יוצר סשן פנטום |
+| **`PlatformSupport` לפי יכולת ולא לפי שם מערכת** | `Platform.isWindows` פזור ב-10 מקומות התכוון בפועל ל"דסקטופ"; שאלה לפי יכולת הופכת הוספת מק לשינוי במקום אחד |
 | **תעודת נטפרי מוטמעת בקוד** | קהל היעד (סופרי סת"ם) משתמש בהיקף רחב בסינון נטפרי; הטמעה מונעת כשל התחברות ל-Google Drive אצל רוב המשתמשים |
 | **`kosher_dart` כתלות path מקומית** | שליטה בגרסה ואפשרות תיקונים מקומיים בלי להמתין לגרסה ב-pub.dev |
 | **`price` ו-`expenses` הם *ליחידה*** | רווח מחושב תמיד כ-`יחידות × (price - expenses)`; הוצאות כלליות שאינן תלויות יחידה מנוהלות בנפרד במסך ההוצאות |

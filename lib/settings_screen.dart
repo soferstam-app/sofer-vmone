@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'backup_service.dart';
+import 'platform_support.dart';
 import 'sync_service.dart';
 import 'storage_service.dart';
 import 'notification_service.dart';
@@ -20,6 +22,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int _dayRolloverHour = 0;
   bool _fridayMotzeiHalfDay = false;
   bool _useGregorianDates = false;
+  bool _isExporting = false;
   final StorageService _storage = StorageService();
 
   @override
@@ -134,6 +137,77 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SnackBar(
             content: Text(
                 "הסנכרון נכשל: ${SyncService.instance.lastSyncError ?? 'שגיאה לא ידועה'}"),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 6),
+          ),
+        );
+    }
+  }
+
+  /// Lets the user choose between writing the backup to a location they pick
+  /// and handing it to the OS share sheet. Both produce the same file.
+  Future<void> _showBackupOptions() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                "גיבוי הנתונים",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.save_alt, color: Colors.deepPurple),
+              title: const Text("שמור במכשיר"),
+              subtitle: Text(PlatformSupport.isDesktop
+                  ? "בחירת תיקייה לשמירת הקובץ"
+                  : "בחירת מיקום בזיכרון המכשיר"),
+              onTap: () => Navigator.pop(ctx, 'save'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.share, color: Colors.deepPurple),
+              title: const Text("שיתוף"),
+              subtitle: const Text(
+                  "שליחה לוואטסאפ, מייל, או כל אפליקציה אחרת במכשיר"),
+              onTap: () => Navigator.pop(ctx, 'share'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+
+    if (choice == null || !mounted) return;
+
+    setState(() => _isExporting = true);
+    final result = choice == 'save'
+        ? await BackupService.instance.saveToDevice()
+        : await BackupService.instance.shareBackup();
+    if (!mounted) return;
+    setState(() => _isExporting = false);
+
+    switch (result.outcome) {
+      case BackupOutcome.success:
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(choice == 'save' && result.path != null
+                ? "הגיבוי נשמר:\n${result.path}"
+                : "הגיבוי נוצר בהצלחה"),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 6),
+          ),
+        );
+      case BackupOutcome.cancelled:
+        break;
+      case BackupOutcome.failed:
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text("הגיבוי נכשל: ${result.error ?? 'שגיאה לא ידועה'}"),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 6),
           ),
@@ -386,6 +460,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           if (mounted) setState(() => _dayRolloverHour = h);
                         }
                       },
+                    ),
+                    const Divider(),
+                    ListTile(
+                      title: const Text("גיבוי הנתונים"),
+                      subtitle: const Text(
+                          "ייצוא כל הנתונים לקובץ אחד – פרויקטים, היסטוריה, הוצאות והגדרות"),
+                      leading: const Icon(Icons.backup,
+                          color: Colors.deepPurple),
+                      trailing: _isExporting
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.chevron_left),
+                      onTap: _isExporting ? null : _showBackupOptions,
                     ),
                     if (Platform.isWindows || Platform.isMacOS)
                       ListTile(
