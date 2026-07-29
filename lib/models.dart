@@ -13,10 +13,25 @@ class Project {
   final bool dailyGoalInLines;
   final int? totalPages;
   final int? linesPerPage;
+
+  /// How large the order is, for mezuzot and tefillin — the number of mezuzot
+  /// or of full sets. A sefer states its size through [totalPages] instead.
+  ///
+  /// Null means the size was never entered, and no completion date can be
+  /// estimated for the project.
+  final int? targetUnits;
+
   final DateTime lastUpdated;
   final bool isDeleted;
   final String? clientEmail;
   final DateTime? targetCompletionDate;
+
+  /// The size of the job in billable units — pages, mezuzot or sets — however
+  /// the project happens to state it. Null when unknown.
+  double? get plannedUnits => switch (type) {
+        ProjectType.sefer => totalPages?.toDouble(),
+        ProjectType.mezuza || ProjectType.tefillin => targetUnits?.toDouble(),
+      };
 
   Project({
     required this.id,
@@ -29,6 +44,7 @@ class Project {
     this.dailyGoalInLines = false,
     this.totalPages,
     this.linesPerPage,
+    this.targetUnits,
     DateTime? lastUpdated,
     this.isDeleted = false,
     this.clientEmail,
@@ -47,6 +63,7 @@ class Project {
       'dailyGoalInLines': dailyGoalInLines,
       'totalPages': totalPages,
       'linesPerPage': linesPerPage,
+      'targetUnits': targetUnits,
       'lastUpdated': lastUpdated.toIso8601String(),
       'isDeleted': isDeleted,
       'clientEmail': clientEmail,
@@ -66,6 +83,7 @@ class Project {
       dailyGoalInLines: json['dailyGoalInLines'] ?? false,
       totalPages: json['totalPages'],
       linesPerPage: json['linesPerPage'],
+      targetUnits: json['targetUnits'],
       lastUpdated: json['lastUpdated'] != null
           ? DateTime.parse(json['lastUpdated'])
           : DateTime.now(),
@@ -86,6 +104,7 @@ class Project {
     bool? dailyGoalInLines,
     int? totalPages,
     int? linesPerPage,
+    int? targetUnits,
     bool? isDeleted,
     String? clientEmail,
     DateTime? targetCompletionDate,
@@ -101,6 +120,7 @@ class Project {
       dailyGoalInLines: dailyGoalInLines ?? this.dailyGoalInLines,
       totalPages: totalPages ?? this.totalPages,
       linesPerPage: linesPerPage ?? this.linesPerPage,
+      targetUnits: targetUnits ?? this.targetUnits,
       lastUpdated: DateTime.now(),
       isDeleted: isDeleted ?? this.isDeleted,
       clientEmail: clientEmail ?? this.clientEmail,

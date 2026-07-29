@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 import 'logic/date_logic.dart';
 import 'logic/expense_logic.dart';
+import 'logic/hebrew_work_calendar.dart';
 import 'logic/production_calculator.dart';
 import 'logic/profit_calculator.dart';
 import 'logic/session_logic.dart';
@@ -37,11 +38,18 @@ class _SummaryScreenState extends State<SummaryScreen> {
   /// same working day the home screen displays.
   int _dayRolloverHour = 0;
 
+  /// Used to count the working days in a Hebrew month, so a monthly target is
+  /// measured against the days the writer actually writes.
+  WorkCalendarRules _rules = WorkCalendarRules.standard;
+
   @override
   void initState() {
     super.initState();
     _storage.getDayRolloverHour().then((h) {
       if (mounted) setState(() => _dayRolloverHour = h);
+    });
+    _storage.getWorkCalendarRules().then((r) {
+      if (mounted) setState(() => _rules = r);
     });
   }
 
@@ -628,23 +636,25 @@ class _SummaryScreenState extends State<SummaryScreen> {
     return "${twoDigits(d.inHours)}:${twoDigits(d.inMinutes.remainder(60))}";
   }
 
-  int _calculateWorkDaysInJewishMonth(DateTime date) {
-    JewishDate jd = JewishDate.fromDateTime(date);
-    int year = jd.getJewishYear();
-    int month = jd.getJewishMonth();
-    int daysInMonth = jd.getDaysInJewishMonth();
+  /// Working days in the Hebrew month containing [date].
+  ///
+  /// The month is walked from its first to its last Hebrew day, so a monthly
+  /// target is measured against the month the writer actually thinks in. This
+  /// used to count Sunday to Thursday and nothing else, which ignored every
+  /// festival and made Tishrei look like an ordinary month.
+  double _calculateWorkDaysInJewishMonth(DateTime date) {
+    final jd = JewishDate.fromDateTime(date);
+    final year = jd.getJewishYear();
+    final month = jd.getJewishMonth();
 
-    int workDays = 0;
-    for (int d = 1; d <= daysInMonth; d++) {
-      JewishDate temp = JewishDate();
-      temp.setJewishDate(year, month, d);
-      DateTime gDate = temp.getGregorianCalendar();
-      if (gDate.weekday == DateTime.sunday ||
-          gDate.weekday <= DateTime.thursday) {
-        workDays++;
-      }
-    }
-    return workDays;
+    final first = JewishCalendar.initDate(year, month, 1);
+    final last = JewishCalendar.initDate(year, month, jd.getDaysInJewishMonth());
+
+    return HebrewWorkCalendar.countWorkDays(
+      first.getGregorianCalendar(),
+      last.getGregorianCalendar(),
+      _rules,
+    );
   }
 
   Future<void> _showMonthlySummary() async {
@@ -663,7 +673,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
     Duration totalMonthTime = Duration.zero;
     double totalMonthlyProfit = 0;
-    int workDays = _calculateWorkDaysInJewishMonth(_selectedDate);
+    final double workDays = _calculateWorkDaysInJewishMonth(_selectedDate);
 
     Duration timeForLineAvg = Duration.zero;
     int totalLinesForAvg = 0;
@@ -766,7 +776,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
       if (project.targetMonthly > 0) {
         target = project.targetMonthly.toDouble();
       } else if (project.targetDaily > 0) {
-        target = (project.targetDaily * workDays).toDouble();
+        target = project.targetDaily * workDays;
       }
 
       Widget? goalWidget;

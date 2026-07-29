@@ -1,4 +1,4 @@
-import '../work_days_calculator.dart';
+import 'hebrew_work_calendar.dart';
 
 /// What a job would take, and what it should cost.
 class QuoteEstimate {
@@ -9,23 +9,35 @@ class QuoteEstimate {
   final Duration timePerUnit;
   final Duration totalTime;
 
-  /// Working days, honouring Shabbat, festivals and the half-day setting.
+  /// Working days, honouring Shabbat, festivals and the writer's own rules.
   final double workDays;
-  final DateTime estimatedCompletion;
 
-  /// Price that would achieve the requested hourly rate, before expenses.
+  /// The delivery date with its full reasoning — the Hebrew date, how many
+  /// calendar days it is out, and which days were skipped on the way.
+  final WorkPlan plan;
+
+  /// Price that would achieve the requested hourly rate, materials included.
   final double suggestedPrice;
   final double pricePerUnit;
+
+  /// The materials part of [suggestedPrice], separated out so a client can be
+  /// shown what is labour and what is parchment.
+  final double materials;
 
   const QuoteEstimate({
     required this.units,
     required this.timePerUnit,
     required this.totalTime,
     required this.workDays,
-    required this.estimatedCompletion,
+    required this.plan,
     required this.suggestedPrice,
     required this.pricePerUnit,
+    required this.materials,
   });
+
+  DateTime get estimatedCompletion => plan.completionDate;
+
+  double get labour => suggestedPrice - materials;
 }
 
 /// Turns "how much work is this and what should I charge" into numbers,
@@ -42,12 +54,16 @@ class QuoteCalculator {
   /// [expensesPerUnit] is added on top of the price needed to reach
   /// [targetHourlyRate], so materials do not quietly come out of the writer's
   /// own pay.
+  ///
+  /// [rules] decide which days count as writing days; they come from the same
+  /// settings the project screens use, so a date quoted to a client and a date
+  /// shown once the job starts cannot disagree.
   static QuoteEstimate? estimate({
     required double units,
     required Duration timePerUnit,
     required double targetHourlyRate,
     required double hoursPerDay,
-    required bool fridayMotzeiHalfDay,
+    required WorkCalendarRules rules,
     double expensesPerUnit = 0,
     DateTime? startingFrom,
   }) {
@@ -59,16 +75,13 @@ class QuoteCalculator {
     final totalHours = totalSeconds / 3600;
 
     final workDays = totalHours / hoursPerDay;
-    final from = startingFrom ?? DateTime.now();
 
-    final completion = estimatedCompletionDate(
-      fromDate: from,
-      remainingWorkUnits: workDays,
-      // One "unit" per working day here, because workDays is already expressed
-      // in days — this lets the shared calculator skip Shabbat and festivals.
-      workUnitsPerDay: 1,
-      fridayMotzeiHalfDay: fridayMotzeiHalfDay,
+    final plan = HebrewWorkCalendar.plan(
+      from: startingFrom ?? DateTime.now(),
+      workDaysNeeded: workDays,
+      rules: rules,
     );
+    if (plan == null) return null;
 
     final labour = totalHours * targetHourlyRate;
     final materials = expensesPerUnit * units;
@@ -79,9 +92,10 @@ class QuoteCalculator {
       timePerUnit: timePerUnit,
       totalTime: totalTime,
       workDays: workDays,
-      estimatedCompletion: completion,
+      plan: plan,
       suggestedPrice: price,
       pricePerUnit: price / units,
+      materials: materials,
     );
   }
 

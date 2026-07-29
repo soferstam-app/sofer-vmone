@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'logic/completion_estimator.dart';
 import 'logic/expense_logic.dart';
+import 'logic/hebrew_work_calendar.dart';
 import 'logic/production_calculator.dart';
 import 'logic/profit_calculator.dart';
 import 'models.dart';
 import 'hebrew_utils.dart';
 import 'storage_service.dart';
-import 'work_days_calculator.dart';
 
 class ProjectSummaryScreen extends StatefulWidget {
   final List<Project> projects;
@@ -24,7 +25,7 @@ class ProjectSummaryScreen extends StatefulWidget {
 
 class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
   Project? _selectedProject;
-  bool _fridayMotzeiHalfDay = false;
+  WorkCalendarRules _rules = WorkCalendarRules.standard;
   bool _useGregorianDates = false;
   String _soferName = '';
 
@@ -39,8 +40,8 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
     if (widget.projects.isNotEmpty) {
       _selectedProject = widget.projects.first;
     }
-    _storage.getFridayMotzeiHalfDay().then((v) {
-      if (mounted) setState(() => _fridayMotzeiHalfDay = v);
+    _storage.getWorkCalendarRules().then((v) {
+      if (mounted) setState(() => _rules = v);
     });
     _storage.getUseGregorianDates().then((v) {
       if (mounted) setState(() => _useGregorianDates = v);
@@ -209,47 +210,30 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
     final projectExpenses =
         ExpenseLogic.totalForProject(project.id, _expenses);
 
-    String estimatedEndStr = "";
-    String targetLinesPerDayStr = "";
-    int remaining = 0;
-    if (project.type == ProjectType.sefer) {
-      int totalPages = project.totalPages ?? 245;
-      final int linesPerPage = ProductionCalculator.linesPerPageOf(project);
-      int totalLines = totalPages * linesPerPage;
-      remaining = totalLines - totalLinesWritten;
-      if (remaining > 0 && sessions.isNotEmpty) {
-        DateTime first = sessions
-            .map((s) => s.startTime)
-            .reduce((a, b) => a.isBefore(b) ? a : b);
-        DateTime last = sessions
-            .map((s) => s.endTime)
-            .reduce((a, b) => a.isAfter(b) ? a : b);
-        double workDaysInPeriod =
-            countWorkDays(first, last, _fridayMotzeiHalfDay);
-        double linesPerWorkDay = workDaysInPeriod > 0
-            ? totalLinesWritten / workDaysInPeriod
-            : (project.targetDaily > 0 ? project.targetDaily.toDouble() : 10);
-        if (linesPerWorkDay <= 0) linesPerWorkDay = 10;
-        DateTime from = DateTime.now();
-        DateTime est = estimatedCompletionDate(
-          fromDate: from,
-          remainingWorkUnits: remaining.toDouble(),
-          workUnitsPerDay: linesPerWorkDay,
-          fridayMotzeiHalfDay: _fridayMotzeiHalfDay,
-        );
-        estimatedEndStr = "${est.day}/${est.month}/${est.year}";
-      }
-      if (project.targetCompletionDate != null && remaining > 0) {
-        DateTime target = project.targetCompletionDate!;
-        DateTime today = DateTime.now();
-        if (target.isAfter(today)) {
-          double wd = countWorkDays(today, target, _fridayMotzeiHalfDay);
-          if (wd > 0) {
-            double perDay = remaining / wd;
-            targetLinesPerDayStr =
-                "${perDay.toStringAsFixed(1)} שורות ליום עבודה";
-          }
-        }
+    // One estimator for every project type. A sefer states its size in pages,
+    // mezuzot and tefillin in units; both arrive here as billable units, so the
+    // delivery date is produced the same way for all three.
+    final estimate = CompletionEstimator.estimate(
+      project: project,
+      history: widget.history,
+      rules: _rules,
+    );
+
+    final String estimatedEndStr = estimate == null
+        ? ""
+        : formatDisplayDate(estimate.plan.completionDate, _useGregorianDates);
+
+    String targetPaceStr = "";
+    if (project.targetCompletionDate != null && estimate != null) {
+      final needed = CompletionEstimator.paceRequiredFor(
+        remainingUnits: estimate.remainingUnits,
+        deadline: project.targetCompletionDate!,
+        rules: _rules,
+      );
+      if (needed != null) {
+        targetPaceStr = project.type == ProjectType.sefer
+            ? "${(needed * ProductionCalculator.linesPerPageOf(project)).toStringAsFixed(1)} שורות ליום עבודה"
+            : "${needed.toStringAsFixed(1)} ${_unitPlural(project.type)} ליום עבודה";
       }
     }
 
@@ -317,15 +301,14 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                     _statRow("שכר לשעה:",
                         "₪${hourlyRate.toStringAsFixed(0)} לשעה"),
                   if (avgTimeStr.isNotEmpty) _statRow("ממוצע:", avgTimeStr),
-                  if (estimatedEndStr.isNotEmpty)
-                    _statRow("מתי אני אמור לסיים:", estimatedEndStr),
-                  if (targetLinesPerDayStr.isNotEmpty)
-                    _statRow("שורות ליום שנותר (לפי תאריך יעד):",
-                        targetLinesPerDayStr),
                 ],
               ),
             ),
           ),
+          if (estimate != null)
+            _completionCard(project, estimate, targetPaceStr)
+          else if (project.plannedUnits == null)
+            _missingSizeCard(project),
           if (project.type == ProjectType.sefer)
             _buildSeferGrid(project, sessions),
           if (project.type == ProjectType.tefillin)
@@ -344,6 +327,127 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
           Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
           Text(value),
         ],
+      ),
+    );
+  }
+
+  static String _unitPlural(ProjectType type) => switch (type) {
+        ProjectType.sefer => 'עמודים',
+        ProjectType.mezuza => 'מזוזות',
+        ProjectType.tefillin => 'סטים',
+      };
+
+  /// The delivery date, and what it rests on.
+  ///
+  /// A date on its own invites either blind trust or dismissal, so the card
+  /// also shows the pace it was derived from, whether that pace was measured or
+  /// assumed, and how many days were lost to the calendar on the way.
+  Widget _completionCard(
+    Project project,
+    CompletionEstimate estimate,
+    String targetPaceStr,
+  ) {
+    final plan = estimate.plan;
+    final unit = _unitPlural(project.type);
+
+    return Card(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.event_available, color: Colors.deepPurple.shade400),
+                const SizedBox(width: 8),
+                const Text("צפי סיום",
+                    style:
+                        TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              formatDisplayDateWithWeekday(
+                  plan.completionDate, _useGregorianDates),
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.deepPurple.shade700,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              "בעוד ${plan.calendarDays} ימים · "
+              "${estimate.workDaysLeft.toStringAsFixed(1)} ימי עבודה",
+              style: TextStyle(color: Colors.grey.shade700),
+            ),
+            const SizedBox(height: 12),
+            LinearProgressIndicator(
+              value: estimate.progress,
+              minHeight: 8,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              "${estimate.doneUnits.toStringAsFixed(1)} מתוך "
+              "${estimate.totalUnits.toStringAsFixed(0)} $unit "
+              "(${(estimate.progress * 100).toStringAsFixed(0)}%)",
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+            ),
+            const Divider(height: 24),
+            _statRow(
+              estimate.paceMeasured ? "הקצב שלך:" : "לפי היעד היומי:",
+              "${estimate.unitsPerWorkDay.toStringAsFixed(2)} $unit ליום עבודה",
+            ),
+            if (!estimate.paceMeasured)
+              Text(
+                "עדיין אין מספיק עבודה מתועדת בפרויקט, לכן החישוב לפי היעד "
+                "היומי שהגדרת ולא לפי הקצב בפועל.",
+                style: TextStyle(fontSize: 12, color: Colors.orange.shade800),
+              ),
+            if (targetPaceStr.isNotEmpty)
+              _statRow("נדרש כדי לעמוד בתאריך היעד:", targetPaceStr),
+            if (plan.skippedTotal > 0) ...[
+              const SizedBox(height: 8),
+              Text(
+                "${plan.skippedTotal} ימים בדרך אינם ימי עבודה: "
+                "${formatSkippedDays(plan)}",
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Shown when the job size was never entered, since without it no date can
+  /// be worked out at all.
+  Widget _missingSizeCard(Project project) {
+    final what = switch (project.type) {
+      ProjectType.sefer => "מספר העמודים בספר",
+      ProjectType.mezuza => "כמה מזוזות בהזמנה",
+      ProjectType.tefillin => "כמה סטים בהזמנה",
+    };
+    return Card(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      color: Colors.orange.shade50,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            Icon(Icons.info_outline, color: Colors.orange.shade800),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                "כדי לחשב צפי סיום צריך להזין בפרויקט את $what.",
+                style: const TextStyle(fontSize: 13),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

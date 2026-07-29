@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'logic/completion_estimator.dart';
+import 'logic/hebrew_work_calendar.dart';
 import 'logic/id_generator.dart';
 import 'models.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -31,11 +33,22 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
   bool _useGregorianDates = false;
   final StorageService _storage = StorageService();
 
+  /// Loaded so each card can carry its own delivery date — the question a
+  /// sofer opens this screen to answer.
+  List<WorkSession> _history = const [];
+  WorkCalendarRules _rules = WorkCalendarRules.standard;
+
   @override
   void initState() {
     super.initState();
     _storage.getUseGregorianDates().then((v) {
       if (mounted) setState(() => _useGregorianDates = v);
+    });
+    _storage.getWorkCalendarRules().then((v) {
+      if (mounted) setState(() => _rules = v);
+    });
+    _storage.loadHistory().then((v) {
+      if (mounted) setState(() => _history = v);
     });
   }
 
@@ -327,12 +340,40 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                             vertical: 5,
                           ),
                           child: ListTile(
+                            isThreeLine: _estimateLine(p) != null,
                             title: Text(
                               p.name,
                               style:
                                   const TextStyle(fontWeight: FontWeight.bold),
                             ),
-                            subtitle: Text(_getProjectSubtitle(p)),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(_getProjectSubtitle(p)),
+                                if (_estimateLine(p) case final line?)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 2),
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.event_available,
+                                            size: 14,
+                                            color: Colors.deepPurple.shade300),
+                                        const SizedBox(width: 4),
+                                        Expanded(
+                                          child: Text(
+                                            line,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.deepPurple.shade400,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                              ],
+                            ),
                             leading: Icon(_getIconForType(p.type)),
                             trailing: IconButton(
                               icon: const Icon(Icons.edit),
@@ -356,8 +397,27 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
 
   String _getProjectSubtitle(Project p) {
     if (p.type == ProjectType.sefer) return "ספר תורה (${p.totalPages} עמודים)";
-    if (p.type == ProjectType.tefillin) return "תפילין (ראש + יד)";
-    return "מזוזה (22 שורות)";
+    if (p.type == ProjectType.tefillin) {
+      return p.targetUnits == null
+          ? "תפילין (ראש + יד)"
+          : "תפילין – ${p.targetUnits} סטים";
+    }
+    return p.targetUnits == null
+        ? "מזוזה (22 שורות)"
+        : "מזוזות – ${p.targetUnits} בהזמנה";
+  }
+
+  /// Progress and delivery date in one line, or null when the project has
+  /// nothing to estimate from — an unstated size or no measured pace.
+  String? _estimateLine(Project p) {
+    final e = CompletionEstimator.estimate(
+      project: p,
+      history: _history,
+      rules: _rules,
+    );
+    if (e == null) return null;
+    return "${(e.progress * 100).toStringAsFixed(0)}% · "
+        "צפי סיום ${formatDisplayDate(e.plan.completionDate, _useGregorianDates)}";
   }
 
   IconData _getIconForType(ProjectType type) {
@@ -403,6 +463,9 @@ class _ProjectDialogState extends State<ProjectDialog> {
   late TextEditingController _monthlyCtrl;
   late TextEditingController _pagesCtrl;
   late TextEditingController _linesCtrl;
+
+  /// Order size for mezuzot and tefillin — a sefer states its size in pages.
+  late TextEditingController _unitsCtrl;
   late TextEditingController _clientEmailCtrl;
 
   ProjectType _type = ProjectType.sefer;
@@ -430,6 +493,7 @@ class _ProjectDialogState extends State<ProjectDialog> {
     _linesCtrl = TextEditingController(
       text: p?.linesPerPage?.toString() ?? "42",
     );
+    _unitsCtrl = TextEditingController(text: p?.targetUnits?.toString() ?? "");
     _clientEmailCtrl = TextEditingController(text: p?.clientEmail ?? "");
   }
 
@@ -442,6 +506,7 @@ class _ProjectDialogState extends State<ProjectDialog> {
     _monthlyCtrl.dispose();
     _pagesCtrl.dispose();
     _linesCtrl.dispose();
+    _unitsCtrl.dispose();
     _clientEmailCtrl.dispose();
     super.dispose();
   }
@@ -572,7 +637,25 @@ class _ProjectDialogState extends State<ProjectDialog> {
               ),
             ],
           ),
-        ],
+        ] else
+          // The size of the order. Without it there is nothing to measure
+          // progress against, and no completion date can be worked out — hence
+          // the hint rather than a silent empty field.
+          TextFormField(
+            controller: _unitsCtrl,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              labelText: _type == ProjectType.mezuza
+                  ? 'כמה מזוזות בהזמנה'
+                  : 'כמה סטים בהזמנה',
+              helperText: 'משמש לחישוב ההתקדמות וצפי הסיום',
+            ),
+            validator: (v) {
+              if (v == null || v.trim().isEmpty) return null;
+              final n = int.tryParse(v.trim());
+              return (n == null || n <= 0) ? 'יש להזין מספר חיובי' : null;
+            },
+          ),
         const SizedBox(height: 10),
         Text(
           _getPriceLabel(),
@@ -765,6 +848,8 @@ class _ProjectDialogState extends State<ProjectDialog> {
             _type == ProjectType.sefer ? int.tryParse(_pagesCtrl.text) : null,
         linesPerPage:
             _type == ProjectType.sefer ? int.tryParse(_linesCtrl.text) : null,
+        targetUnits:
+            _type == ProjectType.sefer ? null : int.tryParse(_unitsCtrl.text),
         clientEmail: email.isEmpty ? null : email,
         targetCompletionDate: _targetCompletionDate,
       );
