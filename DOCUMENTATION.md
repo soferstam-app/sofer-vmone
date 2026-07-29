@@ -345,9 +345,38 @@ Singleton מעל `flutter_local_notifications`. אזור זמן קבוע: `Asia/
 `kosher_dart` (path מקומי, 2.0.18) · `shared_preferences` · `path_provider` · `url_launcher` · `google_sign_in` · `googleapis` + `googleapis_auth` · `http` · `flutter_local_notifications` · `timezone` · `flutter_foreground_task` · `window_manager` · `auto_updater` · `flutter_localizations` · **`file_picker` 8.3.7** (שמירה מקומית בכל הפלטפורמות) · **`share_plus` 10.1.4** (תפריט שיתוף מערכתי).
 
 ### מצב הבנייה בסביבת הפיתוח
-- **Windows:** ✅ נבנה (`flutter build windows --release`).
-- **אנדרואיד:** ❌ נכשל בסביבה הנוכחית – **לא בגלל הקוד**. Gradle נעצר בשלב ה-configuration: `LicenceNotAcceptedException` עבור `ndk;28.2.13676358`, ובנוסף `cmdline-tools` חסר ב-Android SDK. תיקון: להתקין "Android SDK Command-line Tools" (Android Studio → SDK Manager → SDK Tools) ואז להריץ `flutter doctor --android-licenses` ולאשר.
+- **Windows:** ✅ `flutter build windows --release`
+- **אנדרואיד:** ✅ `flutter build apk --release` (55.6MB)
 - **מק:** לא נבנה – נדרש מארח macOS. ראו סעיף בנייה בענן בפרק 13.
+
+### ⚠️ הגדרות סביבה נדרשות לבניית אנדרואיד (מכונה זו)
+
+ארבע מכשלות נפרדות התגלו בהעלאת בניית האנדרואיד. אם היא נשברת שוב – זה הסדר לבדוק בו:
+
+**1. Flutter הצביע ל-SDK הלא נכון.** הוא השתמש ב-PlatformTools מינימלי של WinGet במקום ב-SDK המלא של Android Studio:
+```
+flutter config --android-sdk "C:\Users\<user>\AppData\Local\Android\Sdk"
+```
+
+**2. NDK לא היה מותקן.** נדרשות **שתי** גרסאות – Flutter מבקש 27, ה-AGP דורש בפועל 28.2:
+```
+sdkmanager --install "ndk;27.0.12077973" "ndk;28.2.13676358"
+```
+
+**3. תעודות נטפרי חסרות ב-truststore של Java.** התעודות מותקנות ב-Windows, ולכן הדפדפן ו-PowerShell עובדים – אבל **Java מחזיק truststore נפרד** ולא רואה אותן, וכל הורדת תלות ב-Gradle נכשלת ב-`PKIX path building failed`.
+הפתרון שיושם, ללא נגיעה בקובצי מערכת: עותק של ה-`cacerts` של ה-JDK בתוספת תעודות נטפרי, ב-`C:\gradle-trust\netfree-cacerts`, ומצביעים אליו מ-`~/.gradle/gradle.properties`:
+```properties
+systemProp.javax.net.ssl.trustStore=C:/gradle-trust/netfree-cacerts
+systemProp.javax.net.ssl.trustStorePassword=changeit
+```
+⚠️ הנתיב חייב להיות **באנגלית בלבד** – ראו סעיף 4.
+(`trustStoreType=Windows-ROOT` **אינו** עובד – ה-JBR של Android Studio לא כולל את הספק הזה.)
+
+**4. תווים עבריים בנתיב שוברים את מהדר Kotlin.** ה-pub cache ישב תחת `C:\Users\שאול\...`, ומהדר Kotlin קיבל את הנתיב מקודד כ-`C:\Users\u05E9u05D0u05D5u05DC\...` ודיווח על **כל** קובצי המקור של הפלאגינים כלא-קיימים. הפתרון – pub cache בנתיב אנגלי:
+```
+setx PUB_CACHE "C:\pub-cache"
+```
+בנוסף, ה-Kotlin daemon נכשל על המכונה (`Daemon compilation failed: null`); `android/gradle.properties` מגדיר לכן `kotlin.compiler.execution.strategy=in-process`.
 
 ---
 
