@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:window_manager/window_manager.dart';
+import 'logic/production_calculator.dart';
 import 'models.dart';
 import 'settings_screen.dart';
 import 'projects_screen.dart';
@@ -480,8 +481,8 @@ class _SoferHomeState extends State<SoferHome>
           _smartCurrentPage++; // Move to the next mezuza
         }
       } else {
-        int linesPerPage = _selectedProject!.linesPerPage ?? 42;
-        if (linesPerPage == 0) linesPerPage = 42;
+        final int linesPerPage =
+            ProductionCalculator.linesPerPageOf(_selectedProject!);
 
         if (_smartCurrentLine > linesPerPage) {
           _smartCurrentLine = 1;
@@ -502,7 +503,9 @@ class _SoferHomeState extends State<SoferHome>
             ? _smartCurrentPage.toString()
             : formatHebrewNumber(_smartCurrentPage));
     final lineCtrl = TextEditingController(text: _smartCurrentLine.toString());
-    final maxLines = isMezuza ? 22 : (_selectedProject!.linesPerPage ?? 42);
+    final maxLines = isMezuza
+        ? ProductionCalculator.linesPerMezuza
+        : ProductionCalculator.linesPerPageOf(_selectedProject!);
     final maxPages = isMezuza ? 999 : (_selectedProject!.totalPages ?? 245);
 
     final ok = await showDialog<bool>(
@@ -675,8 +678,8 @@ class _SoferHomeState extends State<SoferHome>
               : "הסשן נשמר בהצלחה! סה\"כ נכתבו $totalLinesWritten שורות.");
     } else {
       // --- Logic for Sefer Torah Projects ---
-      int linesPerPage = _selectedProject!.linesPerPage ?? 42;
-      if (linesPerPage == 0) linesPerPage = 42;
+      final int linesPerPage =
+          ProductionCalculator.linesPerPageOf(_selectedProject!);
 
       int finalPage = _smartCurrentPage;
       int finalLine = _smartCurrentLine - 1;
@@ -733,7 +736,7 @@ class _SoferHomeState extends State<SoferHome>
 
       for (int i = newSessions.length - 1; i >= 0; i--) {
         WorkSession s = newSessions[i];
-        int linesInThisSession = s.endLine - s.startLine + 1;
+        int linesInThisSession = ProductionCalculator.seferLinesInSession(s);
         Duration partDuration =
             Duration(milliseconds: (msPerLine * linesInThisSession).round());
 
@@ -1366,7 +1369,8 @@ class _SoferHomeState extends State<SoferHome>
 
     if (_selectedProject!.type == ProjectType.sefer) {
       final int? totalPages = _selectedProject!.totalPages;
-      final int linesPerPage = _selectedProject!.linesPerPage ?? 42;
+      final int linesPerPage =
+          ProductionCalculator.linesPerPageOf(_selectedProject!);
 
       int pageFrom = int.tryParse(_pageCtrl.text.trim()) ??
           parseHebrewPageToNumber(_pageCtrl.text.trim());
@@ -1636,8 +1640,8 @@ class _SoferHomeState extends State<SoferHome>
     int target = project.targetDaily;
     for (var s in todaySessions) {
       if (project.type == ProjectType.sefer) {
-        int linesPerPage = project.linesPerPage ?? 42;
-        totalDone += (s.endLine - s.startLine + 1);
+        final int linesPerPage = ProductionCalculator.linesPerPageOf(project);
+        totalDone += ProductionCalculator.seferLinesInSession(s);
         target = project.dailyGoalInLines
             ? project.targetDaily
             : (project.targetDaily * linesPerPage);

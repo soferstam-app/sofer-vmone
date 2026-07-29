@@ -42,6 +42,39 @@ class ProductionCalculator {
   static double mezuzotTotal(Iterable<WorkSession> sessions) =>
       mezuzaLinesTotal(sessions) / linesPerMezuza;
 
+  // --- Sefer Torah ---
+
+  /// Default page geometry, used when a project leaves it unset.
+  static const int defaultLinesPerPage = 42;
+  static const int defaultTotalPages = 245;
+
+  /// Lines written in one sefer session.
+  ///
+  /// The range is inclusive on both ends: writing line 5 through line 5 is one
+  /// line, not zero.
+  static int seferLinesInSession(WorkSession session) =>
+      session.endLine - session.startLine + 1;
+
+  /// Total lines written across sefer sessions.
+  static int seferLinesTotal(Iterable<WorkSession> sessions) {
+    var total = 0;
+    for (final session in sessions) {
+      total += seferLinesInSession(session);
+    }
+    return total;
+  }
+
+  /// Lines per page for a project, falling back to the default and guarding
+  /// against a stored zero, which would otherwise divide by zero.
+  static int linesPerPageOf(Project project) {
+    final value = project.linesPerPage ?? defaultLinesPerPage;
+    return value == 0 ? defaultLinesPerPage : value;
+  }
+
+  /// Written lines expressed as a (fractional) number of pages.
+  static double seferPages(Iterable<WorkSession> sessions, Project project) =>
+      seferLinesTotal(sessions) / linesPerPageOf(project);
+
   // --- Tefillin ---
 
   /// A full set is head + hand, four parshiyot each.

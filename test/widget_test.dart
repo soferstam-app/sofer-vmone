@@ -189,6 +189,74 @@ void main() {
     });
   });
 
+  group('ProductionCalculator – sefer', () {
+    WorkSession session({required int startLine, required int endLine}) =>
+        WorkSession(
+          id: 'x',
+          projectId: 'p',
+          startTime: DateTime(2026, 1, 1, 9),
+          endTime: DateTime(2026, 1, 1, 10),
+          amount: 1,
+          startLine: startLine,
+          endLine: endLine,
+          description: '',
+          isManual: false,
+        );
+
+    Project project({int? linesPerPage}) => Project(
+          id: 'p',
+          name: 'ספר',
+          type: ProjectType.sefer,
+          price: 100,
+          expenses: 0,
+          targetDaily: 1,
+          targetMonthly: 20,
+          linesPerPage: linesPerPage,
+        );
+
+    test('line range is inclusive on both ends', () {
+      expect(
+          ProductionCalculator.seferLinesInSession(
+              session(startLine: 1, endLine: 42)),
+          42);
+      // A single line written
+      expect(
+          ProductionCalculator.seferLinesInSession(
+              session(startLine: 5, endLine: 5)),
+          1);
+    });
+
+    test('totals sum across sessions', () {
+      expect(
+          ProductionCalculator.seferLinesTotal([
+            session(startLine: 1, endLine: 10), // 10
+            session(startLine: 11, endLine: 42), // 32
+          ]),
+          42);
+    });
+
+    test('linesPerPage falls back when unset', () {
+      expect(ProductionCalculator.linesPerPageOf(project()), 42);
+      expect(
+          ProductionCalculator.linesPerPageOf(project(linesPerPage: 30)), 30);
+    });
+
+    test('a stored zero does not cause a division by zero', () {
+      expect(ProductionCalculator.linesPerPageOf(project(linesPerPage: 0)), 42);
+      expect(
+          ProductionCalculator.seferPages(
+              [session(startLine: 1, endLine: 42)], project(linesPerPage: 0)),
+          1.0);
+    });
+
+    test('pages can be fractional', () {
+      expect(
+          ProductionCalculator.seferPages(
+              [session(startLine: 1, endLine: 21)], project(linesPerPage: 42)),
+          0.5);
+    });
+  });
+
   group('ProductionCalculator – tefillin', () {
     WorkSession session({
       required int amount,
