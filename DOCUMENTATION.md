@@ -34,6 +34,10 @@ lib/
 ├── expenses_screen.dart         מסך הוצאות (הוספה/עריכה/מחיקה, קטגוריות מוצעות)
 ├── settings_screen.dart         הגדרות, התחברות Google, סנכרון ידני, בדיקת עדכונים
 ├── recycle_bin_screen.dart      סל מחזור – שחזור/מחיקה סופית של פרויקטים
+├── logic/                       ★ לוגיקה טהורה – בלי Flutter, נבדקת בטסטים
+│   ├── production_calculator.dart   הספק: שורות/מזוזות/פרשיות לפי סוג
+│   ├── profit_calculator.dart       יחידות לחיוב, רווח, ₪/שעה
+│   └── date_logic.dart              יום עבודה לפי שעת מעבר יום
 ├── models.dart                  Project, WorkSession, Expense
 ├── storage_service.dart         עטיפה ל-SharedPreferences (כל המפתחות במקום אחד)
 ├── backup_service.dart          בניית קובץ גיבוי מלא + שמירה/שיתוף
@@ -221,7 +225,9 @@ test/widget_test.dart            טסט ברירת מחדל של Flutter (לא �
 
 ## 7. לוגיקה עסקית לפי סוג פרויקט
 
-זהו החלק העדין ביותר בקוד – כל סוג פרויקט נספר אחרת:
+זהו החלק העדין ביותר בקוד – כל סוג פרויקט נספר אחרת.
+
+> **מאז 29.07.2026 כל החישובים האלה חיים ב-`lib/logic/` ולא בתוך המסכים.** `ProductionCalculator` להספק, `ProfitCalculator` לכסף, `DateLogic` לתאריכים. המסכים קוראים להם ואינם מחזיקים עותק משלהם. 43 טסטים מכסים אותם.
 
 ### ספר תורה (`sefer`)
 - יחידת מדידה: **שורות**. `amount` ברשומה = מספר העמוד.
