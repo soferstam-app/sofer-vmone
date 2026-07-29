@@ -23,6 +23,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _fridayMotzeiHalfDay = false;
   bool _useGregorianDates = false;
   bool _isExporting = false;
+  String _soferName = '';
   final StorageService _storage = StorageService();
 
   @override
@@ -38,6 +39,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final rollover = await _storage.getDayRolloverHour();
     final fridayHalf = await _storage.getFridayMotzeiHalfDay();
     final useGregorian = await _storage.getUseGregorianDates();
+    final soferName = await _storage.getSoferName();
     if (mounted) {
       setState(() {
         _notificationsEnabled = enabled;
@@ -46,6 +48,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _dayRolloverHour = rollover;
         _fridayMotzeiHalfDay = fridayHalf;
         _useGregorianDates = useGregorian;
+        _soferName = soferName;
       });
     }
   }
@@ -142,6 +145,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         );
     }
+  }
+
+  Future<void> _editSoferName() async {
+    final ctrl = TextEditingController(text: _soferName);
+    final saved = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("שם הסופר"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              "השם שיופיע כחתימה בעדכוני ההתקדמות שנשלחים ללקוחות.",
+              style: TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: ctrl,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: "שם מלא",
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text("ביטול")),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+              child: const Text("שמור")),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    if (saved == null || !mounted) return;
+    await _storage.setSoferName(saved);
+    if (mounted) setState(() => _soferName = saved);
   }
 
   /// Lets the user choose between writing the backup to a location they pick
@@ -460,6 +502,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           if (mounted) setState(() => _dayRolloverHour = h);
                         }
                       },
+                    ),
+                    const Divider(),
+                    ListTile(
+                      title: const Text("שם הסופר"),
+                      subtitle: Text(_soferName.isEmpty
+                          ? "לחתימה בעדכונים ללקוחות (לא הוגדר)"
+                          : _soferName),
+                      leading: const Icon(Icons.badge,
+                          color: Colors.deepPurple),
+                      onTap: _editSoferName,
                     ),
                     const Divider(),
                     ListTile(

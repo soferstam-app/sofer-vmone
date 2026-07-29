@@ -15,6 +15,7 @@ class StorageService {
   static const String _keyFridayMotzeiHalfDay = 'friday_motzei_half_day';
   static const String _keyUseGregorianDates = 'use_gregorian_dates';
   static const String _keyExpenses = 'expenses';
+  static const String _keySoferName = 'sofer_name';
 
   Future<void> saveProjects(List<Project> projects) async {
     final prefs = await SharedPreferences.getInstance();
@@ -85,6 +86,7 @@ class StorageService {
         _keyDayRolloverHour: prefs.getInt(_keyDayRolloverHour),
         _keyFridayMotzeiHalfDay: prefs.getBool(_keyFridayMotzeiHalfDay),
         _keyUseGregorianDates: prefs.getBool(_keyUseGregorianDates),
+        _keySoferName: prefs.getString(_keySoferName),
       },
     };
   }
@@ -191,6 +193,18 @@ class StorageService {
   Future<void> setUseGregorianDates(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyUseGregorianDates, value);
+  }
+
+  /// The writer's own name, used to sign the client update email.
+  /// Empty when not set — the email then simply omits the signature.
+  Future<String> getSoferName() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keySoferName) ?? '';
+  }
+
+  Future<void> setSoferName(String name) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keySoferName, name.trim());
   }
 
   Future<void> saveExpenses(List<Expense> expenses) async {

@@ -24,6 +24,8 @@ class ProjectSummaryScreen extends StatefulWidget {
 class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
   Project? _selectedProject;
   bool _fridayMotzeiHalfDay = false;
+  bool _useGregorianDates = false;
+  String _soferName = '';
   final StorageService _storage = StorageService();
 
   @override
@@ -35,6 +37,66 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
     _storage.getFridayMotzeiHalfDay().then((v) {
       if (mounted) setState(() => _fridayMotzeiHalfDay = v);
     });
+    _storage.getUseGregorianDates().then((v) {
+      if (mounted) setState(() => _useGregorianDates = v);
+    });
+    _storage.getSoferName().then((v) {
+      if (mounted) setState(() => _soferName = v);
+    });
+  }
+
+  /// Builds the client progress update.
+  ///
+  /// Written as something a sofer could send as-is: what was written, how far
+  /// along it is, and when it is expected to be finished — the last being what
+  /// a client actually wants to know. Figures the screen cannot compute for a
+  /// given project type are simply left out rather than shown empty.
+  String _buildClientEmailBody({
+    required Project project,
+    required String totalWrittenStr,
+    required String estimatedEndStr,
+    required int totalLinesWritten,
+  }) {
+    final today = formatDisplayDate(DateTime.now(), _useGregorianDates);
+    final lines = <String>[
+      'בס"ד',
+      '',
+      'שלום וברכה,',
+      '',
+      'להלן עדכון על התקדמות העבודה בפרויקט "${project.name}", נכון לתאריך $today:',
+      '',
+    ];
+
+    if (project.type == ProjectType.sefer && project.totalPages != null) {
+      final linesPerPage = ProductionCalculator.linesPerPageOf(project);
+      final totalLines = project.totalPages! * linesPerPage;
+      lines.add('• נכתב עד כה: $totalWrittenStr'
+          ' (מתוך ${project.totalPages} עמודים)');
+      if (totalLines > 0) {
+        final percent = (totalLinesWritten / totalLines * 100).clamp(0, 100);
+        lines.add('• התקדמות: ${percent.toStringAsFixed(0)}%');
+      }
+    } else {
+      lines.add('• נכתב עד כה: $totalWrittenStr');
+    }
+
+    if (estimatedEndStr.isNotEmpty) {
+      lines.add('• צפי סיום משוער: $estimatedEndStr');
+    }
+    if (project.targetCompletionDate != null) {
+      lines.add('• תאריך יעד מוסכם: '
+          '${formatDisplayDate(project.targetCompletionDate!, _useGregorianDates)}');
+    }
+
+    lines.addAll([
+      '',
+      'אשמח לעמוד לרשותכם בכל שאלה.',
+      '',
+      'בברכה,',
+    ]);
+    if (_soferName.isNotEmpty) lines.add(_soferName);
+
+    return lines.join('\n');
   }
 
   @override
@@ -186,16 +248,33 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: () async {
-                    final body =
-                        "שלום,\nעדכון התקדמות בפרויקט ${project.name}.\n$totalWrittenStr\nבברכה";
+                    final body = _buildClientEmailBody(
+                      project: project,
+                      totalWrittenStr: totalWrittenStr,
+                      estimatedEndStr: estimatedEndStr,
+                      totalLinesWritten: totalLinesWritten,
+                    );
                     final uri = Uri(
                       scheme: 'mailto',
                       path: project.clientEmail,
                       query:
-                          'subject=${Uri.encodeComponent('עדכון התקדמות - ${project.name}')}&body=${Uri.encodeComponent(body)}',
+                          'subject=${Uri.encodeComponent('עדכון התקדמות – ${project.name}')}&body=${Uri.encodeComponent(body)}',
                     );
-                    if (await canLaunchUrl(uri)) {
-                      await launchUrl(uri);
+                    final messenger = ScaffoldMessenger.of(context);
+                    final opened = await canLaunchUrl(uri)
+                        ? await launchUrl(uri)
+                        : false;
+                    if (!opened && mounted) {
+                      // Previously this failed silently, so a user without a
+                      // mail app configured saw nothing happen at all.
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                              "לא נמצאה תוכנת מייל במכשיר. ניתן להעתיק את פרטי ההתקדמות ידנית."),
+                          backgroundColor: Colors.red,
+                          duration: Duration(seconds: 5),
+                        ),
+                      );
                     }
                   },
                   icon: const Icon(Icons.email),
