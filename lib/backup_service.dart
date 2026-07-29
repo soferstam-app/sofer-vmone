@@ -6,11 +6,56 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import 'logic/merge_service.dart';
+import 'models.dart';
 import 'platform_support.dart';
 import 'storage_service.dart';
 
 /// How a backup export ended, so the UI can report precisely.
 enum BackupOutcome { success, cancelled, failed }
+
+/// A backup file that has been read and validated but not yet applied.
+///
+/// Import is deliberately two steps: the user sees what a file contains and
+/// confirms before anything touches their data.
+class BackupPreview {
+  final List<Project> projects;
+  final List<WorkSession> history;
+  final List<Expense> expenses;
+  final Map<String, dynamic> settings;
+  final Map<String, dynamic> lastPositions;
+
+  /// When the file was exported, and from which platform. Null on files that
+  /// predate those fields.
+  final DateTime? exportedAt;
+  final String? exportedFrom;
+  final String fileName;
+
+  const BackupPreview({
+    required this.projects,
+    required this.history,
+    required this.expenses,
+    required this.settings,
+    required this.lastPositions,
+    required this.fileName,
+    this.exportedAt,
+    this.exportedFrom,
+  });
+}
+
+/// Why reading a backup file failed, so the user gets a usable message rather
+/// than a stack trace.
+enum BackupReadError { cancelled, unreadable, notOurFormat, tooNew }
+
+class BackupReadResult {
+  final BackupPreview? preview;
+  final BackupReadError? error;
+
+  const BackupReadResult.ok(this.preview) : error = null;
+  const BackupReadResult.failed(this.error) : preview = null;
+
+  bool get isOk => preview != null;
+}
 
 class BackupResult {
   final BackupOutcome outcome;
@@ -110,6 +155,102 @@ class BackupService {
       debugPrint('Backup saveToDevice failed: $e');
       return BackupResult(BackupOutcome.failed, error: e.toString());
     }
+  }
+
+  /// Lets the user pick a backup file and validates it, without changing
+  /// anything yet.
+  Future<BackupReadResult> readBackupFile() async {
+    try {
+      final picked = await FilePicker.platform.pickFiles(
+        dialogTitle: 'בחירת קובץ גיבוי',
+        type: FileType.custom,
+        allowedExtensions: const ['json'],
+        withData: true,
+      );
+      if (picked == null || picked.files.isEmpty) {
+        return const BackupReadResult.failed(BackupReadError.cancelled);
+      }
+
+      final file = picked.files.first;
+      final bytes = file.bytes ??
+          (file.path != null ? await File(file.path!).readAsBytes() : null);
+      if (bytes == null) {
+        return const BackupReadResult.failed(BackupReadError.unreadable);
+      }
+
+      final decoded = jsonDecode(utf8.decode(bytes));
+      if (decoded is! Map<String, dynamic>) {
+        return const BackupReadResult.failed(BackupReadError.notOurFormat);
+      }
+      if (decoded['app'] != appId) {
+        return const BackupReadResult.failed(BackupReadError.notOurFormat);
+      }
+      // A file written by a newer version may use fields this build does not
+      // understand; refusing is safer than importing it partially.
+      final version = (decoded['formatVersion'] as num?)?.toInt() ?? 0;
+      if (version > formatVersion) {
+        return const BackupReadResult.failed(BackupReadError.tooNew);
+      }
+
+      List<T> parse<T>(String key, T Function(Map<String, dynamic>) fromJson) {
+        final raw = decoded[key];
+        if (raw is! List) return <T>[];
+        final out = <T>[];
+        for (final item in raw) {
+          // One malformed record must not lose the whole file.
+          try {
+            if (item is Map) out.add(fromJson(Map<String, dynamic>.from(item)));
+          } catch (_) {}
+        }
+        return out;
+      }
+
+      return BackupReadResult.ok(BackupPreview(
+        projects: parse('projects', Project.fromJson),
+        history: parse('history', WorkSession.fromJson),
+        expenses: parse('expenses', Expense.fromJson),
+        settings: decoded['settings'] is Map
+            ? Map<String, dynamic>.from(decoded['settings'])
+            : const {},
+        lastPositions: decoded['lastPositions'] is Map
+            ? Map<String, dynamic>.from(decoded['lastPositions'])
+            : const {},
+        fileName: file.name,
+        exportedAt: decoded['exportedAt'] is String
+            ? DateTime.tryParse(decoded['exportedAt'])
+            : null,
+        exportedFrom: decoded['exportedFrom'] as String?,
+      ));
+    } catch (e) {
+      debugPrint('Backup readBackupFile failed: $e');
+      return const BackupReadResult.failed(BackupReadError.unreadable);
+    }
+  }
+
+  /// Merges a previewed backup into the stored data.
+  ///
+  /// This is a merge, never a replacement: records the device already has are
+  /// kept, records only in the file are added, and a record present in both is
+  /// resolved by whichever was edited last. Nothing local is dropped because it
+  /// is missing from the file.
+  ///
+  /// Settings are deliberately *not* restored — they describe how this device
+  /// is set up, and silently changing them while importing work records would
+  /// surprise the user.
+  Future<MergeOutcome> applyBackup(BackupPreview preview) async {
+    final outcome = MergeService.mergeBackup(
+      localProjects: await _storage.loadProjects(),
+      localHistory: await _storage.loadHistory(),
+      localExpenses: await _storage.loadExpenses(),
+      incomingProjects: preview.projects,
+      incomingHistory: preview.history,
+      incomingExpenses: preview.expenses,
+    );
+
+    await _storage.saveProjects(outcome.projects);
+    await _storage.saveHistory(outcome.history);
+    await _storage.saveExpenses(outcome.expenses);
+    return outcome;
   }
 
   /// Writes the backup to a temporary file and hands it to the OS share sheet

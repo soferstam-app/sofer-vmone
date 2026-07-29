@@ -11,6 +11,7 @@ import 'package:sofer_vmone/backup_service.dart';
 import 'package:sofer_vmone/hebrew_utils.dart';
 import 'package:sofer_vmone/logic/date_logic.dart';
 import 'package:sofer_vmone/logic/id_generator.dart';
+import 'package:sofer_vmone/logic/merge_service.dart';
 import 'package:sofer_vmone/logic/production_calculator.dart';
 import 'package:sofer_vmone/logic/profit_calculator.dart';
 import 'package:sofer_vmone/logic/session_logic.dart';
@@ -707,6 +708,114 @@ void main() {
     });
   });
 
+  group('MergeService', () {
+    Project project(String id, {DateTime? updated, bool deleted = false}) =>
+        Project(
+          id: id,
+          name: 'p$id',
+          type: ProjectType.sefer,
+          price: 100,
+          expenses: 0,
+          targetDaily: 1,
+          targetMonthly: 20,
+          lastUpdated: updated ?? DateTime(2026, 1, 1),
+          isDeleted: deleted,
+        );
+
+    test('records present on only one side are all kept', () {
+      final r = MergeService.mergeById<Project>(
+        [project('a')],
+        [project('b')],
+        (p) => p.id,
+        (p) => p.lastUpdated,
+      );
+      expect(r.merged.map((p) => p.id).toSet(), {'a', 'b'});
+      expect(r.stats.added, 1);
+    });
+
+    test('local data is never dropped for being absent from the import', () {
+      // This is the guarantee that makes import a merge, not a replacement.
+      final r = MergeService.mergeById<Project>(
+        [project('a'), project('b'), project('c')],
+        [], // an empty backup
+        (p) => p.id,
+        (p) => p.lastUpdated,
+      );
+      expect(r.merged.length, 3);
+      expect(r.stats.added, 0);
+    });
+
+    test('the more recently edited copy wins a conflict', () {
+      final older = project('a', updated: DateTime(2026, 1, 1));
+      final newer = project('a', updated: DateTime(2026, 6, 1));
+
+      final incomingNewer = MergeService.mergeById<Project>(
+          [older], [newer], (p) => p.id, (p) => p.lastUpdated);
+      expect(incomingNewer.merged.single.lastUpdated, DateTime(2026, 6, 1));
+      expect(incomingNewer.stats.updated, 1);
+
+      // And the other way round: a stale backup must not overwrite newer work
+      final incomingOlder = MergeService.mergeById<Project>(
+          [newer], [older], (p) => p.id, (p) => p.lastUpdated);
+      expect(incomingOlder.merged.single.lastUpdated, DateTime(2026, 6, 1));
+      expect(incomingOlder.stats.updated, 0);
+      expect(incomingOlder.stats.unchanged, 1);
+    });
+
+    test('a recent deletion survives so it can propagate', () {
+      final justDeleted = project('a', updated: DateTime.now(), deleted: true);
+      final kept = MergeService.purgeOldDeleted(
+          [justDeleted], (p) => p.isDeleted, (p) => p.lastUpdated);
+      expect(kept, hasLength(1));
+    });
+
+    test('a deletion older than the retention window is dropped', () {
+      final longGone = project('a',
+          updated: DateTime.now().subtract(const Duration(days: 40)),
+          deleted: true);
+      final kept = MergeService.purgeOldDeleted(
+          [longGone], (p) => p.isDeleted, (p) => p.lastUpdated);
+      expect(kept, isEmpty);
+    });
+
+    test('live records are never purged regardless of age', () {
+      final ancient =
+          project('a', updated: DateTime(2020, 1, 1), deleted: false);
+      final kept = MergeService.purgeOldDeleted(
+          [ancient], (p) => p.isDeleted, (p) => p.lastUpdated);
+      expect(kept, hasLength(1));
+    });
+
+    test('mergeBackup reports what happened per list', () {
+      final outcome = MergeService.mergeBackup(
+        localProjects: [project('a')],
+        localHistory: const [],
+        localExpenses: const [],
+        incomingProjects: [project('a'), project('b')],
+        incomingHistory: const [],
+        incomingExpenses: const [],
+      );
+      expect(outcome.projects.length, 2);
+      expect(outcome.projectStats.added, 1);
+      expect(outcome.projectStats.unchanged, 1);
+      expect(outcome.changedAnything, isTrue);
+    });
+
+    test('re-importing the same file changes nothing', () {
+      final data = [project('a'), project('b')];
+      final outcome = MergeService.mergeBackup(
+        localProjects: data,
+        localHistory: const [],
+        localExpenses: const [],
+        incomingProjects: data,
+        incomingHistory: const [],
+        incomingExpenses: const [],
+      );
+      expect(outcome.projects.length, 2);
+      expect(outcome.changedAnything, isFalse);
+    });
+  });
+
   group('BackupService', () {
     test('backup file carries every data list and the settings', () async {
       SharedPreferences.setMockInitialValues({
@@ -754,6 +863,113 @@ void main() {
       expect(settings['use_gregorian_dates'], isTrue);
 
       expect((decoded['counts'] as Map)['projects'], 1);
+    });
+
+    test('a backup survives a full export and re-import', () async {
+      final project = Project(
+        id: 'p1',
+        name: 'ספר תורה',
+        type: ProjectType.sefer,
+        price: 100,
+        expenses: 10,
+        targetDaily: 2,
+        targetMonthly: 40,
+        totalPages: 245,
+        linesPerPage: 42,
+      );
+      final session = WorkSession(
+        id: 's1',
+        projectId: 'p1',
+        startTime: DateTime(2026, 5, 1, 9),
+        endTime: DateTime(2026, 5, 1, 12),
+        amount: 7,
+        startLine: 1,
+        endLine: 42,
+        description: 'עמוד ז',
+        isManual: false,
+        linesPerPageAtEntry: 42,
+      );
+      final expense = Expense(
+        id: 'e1',
+        product: 'קלף',
+        date: DateTime(2026, 5, 1),
+        amount: 300,
+      );
+
+      SharedPreferences.setMockInitialValues({
+        'projects': jsonEncode([project.toJson()]),
+        'history': jsonEncode([session.toJson()]),
+        'expenses': jsonEncode([expense.toJson()]),
+      });
+
+      // Export, then read it back the way the importer would.
+      final exported = await BackupService.instance.buildBackupJson();
+      final decoded = jsonDecode(exported) as Map<String, dynamic>;
+
+      final reProjects = (decoded['projects'] as List)
+          .map((e) => Project.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+      final reHistory = (decoded['history'] as List)
+          .map((e) => WorkSession.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+      final reExpenses = (decoded['expenses'] as List)
+          .map((e) => Expense.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+
+      // Importing into an empty device restores everything.
+      final ontoEmpty = MergeService.mergeBackup(
+        localProjects: const [],
+        localHistory: const [],
+        localExpenses: const [],
+        incomingProjects: reProjects,
+        incomingHistory: reHistory,
+        incomingExpenses: reExpenses,
+      );
+      expect(ontoEmpty.projects.single.name, 'ספר תורה');
+      expect(ontoEmpty.history.single.description, 'עמוד ז');
+      expect(ontoEmpty.history.single.linesPerPageAtEntry, 42);
+      expect(ontoEmpty.expenses.single.amount, 300);
+
+      // Importing the same file again is a no-op, not a duplication.
+      final twice = MergeService.mergeBackup(
+        localProjects: ontoEmpty.projects,
+        localHistory: ontoEmpty.history,
+        localExpenses: ontoEmpty.expenses,
+        incomingProjects: reProjects,
+        incomingHistory: reHistory,
+        incomingExpenses: reExpenses,
+      );
+      expect(twice.projects, hasLength(1));
+      expect(twice.history, hasLength(1));
+      expect(twice.changedAnything, isFalse);
+    });
+
+    test('importing onto a device with other work keeps both sides', () async {
+      WorkSession s(String id, String projectId) => WorkSession(
+            id: id,
+            projectId: projectId,
+            startTime: DateTime(2026, 5, 1),
+            endTime: DateTime(2026, 5, 1, 1),
+            amount: 1,
+            startLine: 1,
+            endLine: 10,
+            description: id,
+            isManual: false,
+          );
+
+      // The phone has work the computer does not, and vice versa.
+      final outcome = MergeService.mergeBackup(
+        localProjects: const [],
+        localHistory: [s('phone-1', 'p1'), s('shared', 'p1')],
+        localExpenses: const [],
+        incomingProjects: const [],
+        incomingHistory: [s('desktop-1', 'p1'), s('shared', 'p1')],
+        incomingExpenses: const [],
+      );
+
+      expect(outcome.history.map((e) => e.id).toSet(),
+          {'phone-1', 'desktop-1', 'shared'});
+      expect(outcome.historyStats.added, 1);
     });
 
     test('suggested file name is timestamped and json', () {

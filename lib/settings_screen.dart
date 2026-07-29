@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'backup_service.dart';
+import 'hebrew_utils.dart';
 import 'platform_support.dart';
 import 'sync_service.dart';
 import 'storage_service.dart';
@@ -186,6 +187,93 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (mounted) setState(() => _soferName = saved);
   }
 
+  /// Reads a backup file, shows what it holds, and merges it once confirmed.
+  Future<void> _importBackup() async {
+    setState(() => _isExporting = true);
+    final read = await BackupService.instance.readBackupFile();
+    if (!mounted) return;
+    setState(() => _isExporting = false);
+
+    if (!read.isOk) {
+      final message = switch (read.error!) {
+        BackupReadError.cancelled => null,
+        BackupReadError.unreadable => "לא ניתן לקרוא את הקובץ",
+        BackupReadError.notOurFormat =>
+          "הקובץ אינו קובץ גיבוי של סופר ומונה",
+        BackupReadError.tooNew =>
+          "הקובץ נוצר בגרסה חדשה יותר של האפליקציה. יש לעדכן את האפליקציה כדי לשחזר אותו.",
+      };
+      if (message != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message), backgroundColor: Colors.red),
+        );
+      }
+      return;
+    }
+
+    final p = read.preview!;
+    final exported = p.exportedAt == null
+        ? "לא ידוע"
+        : formatDisplayDate(p.exportedAt!, _useGregorianDates);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("שחזור מגיבוי"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(p.fileName,
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text("נוצר בתאריך: $exported",
+                style: const TextStyle(fontSize: 13)),
+            const Divider(height: 20),
+            Text("פרויקטים בקובץ: ${p.projects.length}"),
+            Text("רשומות עבודה: ${p.history.length}"),
+            Text("הוצאות: ${p.expenses.length}"),
+            const SizedBox(height: 14),
+            const Text(
+              "הנתונים יאוחדו עם הקיימים במכשיר. רשומה שקיימת בשניהם תישמר "
+              "בגרסה שנערכה לאחרונה. שום דבר מהמכשיר לא יימחק.",
+              style: TextStyle(fontSize: 13),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text("ביטול")),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text("שחזר")),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isExporting = true);
+    final outcome = await BackupService.instance.applyBackup(p);
+    if (!mounted) return;
+    setState(() => _isExporting = false);
+
+    final summary = outcome.changedAnything
+        ? "נוספו: ${outcome.projectStats.added} פרויקטים, "
+            "${outcome.historyStats.added} רשומות, "
+            "${outcome.expenseStats.added} הוצאות.\n"
+            "עודכנו: ${outcome.projectStats.updated + outcome.historyStats.updated + outcome.expenseStats.updated} פריטים."
+        : "כל הנתונים בקובץ כבר קיימים במכשיר – לא בוצע שינוי.";
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(summary),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 8),
+      ),
+    );
+  }
+
   /// Lets the user choose between writing the backup to a location they pick
   /// and handing it to the OS share sheet. Both produce the same file.
   Future<void> _showBackupOptions() async {
@@ -217,6 +305,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   "שליחה לוואטסאפ, מייל, או כל אפליקציה אחרת במכשיר"),
               onTap: () => Navigator.pop(ctx, 'share'),
             ),
+            const Divider(),
+            ListTile(
+              leading:
+                  const Icon(Icons.restore_page, color: Colors.deepPurple),
+              title: const Text("שחזור מקובץ גיבוי"),
+              subtitle: const Text(
+                  "הנתונים מהקובץ יתווספו לקיימים – שום דבר לא נמחק"),
+              onTap: () => Navigator.pop(ctx, 'import'),
+            ),
             const SizedBox(height: 8),
           ],
         ),
@@ -224,6 +321,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
 
     if (choice == null || !mounted) return;
+
+    if (choice == 'import') {
+      await _importBackup();
+      return;
+    }
 
     setState(() => _isExporting = true);
     final result = choice == 'save'
