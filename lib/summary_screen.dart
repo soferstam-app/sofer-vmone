@@ -164,7 +164,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
     for (var s in sessions) {
       if (project.type == ProjectType.sefer) {
-        totalLinesWritten += (s.endLine - s.startLine + 1);
+        totalLinesWritten += ProductionCalculator.seferLinesInSession(s);
       } else if (project.type == ProjectType.mezuza) {
         totalMezuzaLines += ProductionCalculator.mezuzaLinesInSession(s);
       }
@@ -178,7 +178,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
     int mezuzaLinesForStats = 0;
     for (var s in sessionsForStats) {
       if (project.type == ProjectType.sefer) {
-        linesForStats += (s.endLine - s.startLine + 1);
+        linesForStats += ProductionCalculator.seferLinesInSession(s);
       } else {
         unitsForStats += s.amount;
         if (project.type == ProjectType.tefillin) {
@@ -196,8 +196,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
     String avgTimeText = "";
 
     if (project.type == ProjectType.sefer) {
-      int linesPerPage = project.linesPerPage ?? 42;
-      if (linesPerPage == 0) linesPerPage = 42;
+      final int linesPerPage = ProductionCalculator.linesPerPageOf(project);
 
       int pages = totalLinesWritten ~/ linesPerPage;
       int lines = totalLinesWritten % linesPerPage;
@@ -668,15 +667,14 @@ class _SummaryScreenState extends State<SummaryScreen> {
         int lines = 0;
         Duration projTime = Duration.zero;
         for (var s in sessions) {
-          lines += (s.endLine - s.startLine + 1);
+          lines += ProductionCalculator.seferLinesInSession(s);
           projTime += s.duration;
         }
 
         totalLinesForAvg += lines;
         timeForLineAvg += projTime;
 
-        int linesPerPage = project.linesPerPage ?? 42;
-        if (linesPerPage == 0) linesPerPage = 42;
+        final int linesPerPage = ProductionCalculator.linesPerPageOf(project);
         projectText =
             "${project.name}: ${lines ~/ linesPerPage} עמודים ו-${lines % linesPerPage} שורות";
 

@@ -85,19 +85,18 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
     if (project.type == ProjectType.sefer) {
       int totalLines = 0;
       for (var s in sessions) {
-        totalLines += (s.endLine - s.startLine + 1);
+        totalLines += ProductionCalculator.seferLinesInSession(s);
       }
       totalLinesWritten = totalLines;
 
-      int linesPerPage = project.linesPerPage ?? 42;
-      if (linesPerPage == 0) linesPerPage = 42;
+      final int linesPerPage = ProductionCalculator.linesPerPageOf(project);
 
       totalWrittenStr =
           "${totalLines ~/ linesPerPage} עמודים ו-${totalLines % linesPerPage} שורות";
 
       int linesForStats = 0;
       for (var s in sessionsForStats) {
-        linesForStats += (s.endLine - s.startLine + 1);
+        linesForStats += ProductionCalculator.seferLinesInSession(s);
       }
       double pages = linesForStats / linesPerPage.toDouble();
       totalProfit = pages * (project.price - project.expenses);
@@ -140,8 +139,7 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
     int remaining = 0;
     if (project.type == ProjectType.sefer) {
       int totalPages = project.totalPages ?? 245;
-      int linesPerPage = project.linesPerPage ?? 42;
-      if (linesPerPage == 0) linesPerPage = 42;
+      final int linesPerPage = ProductionCalculator.linesPerPageOf(project);
       int totalLines = totalPages * linesPerPage;
       remaining = totalLines - totalLinesWritten;
       if (remaining > 0 && sessions.isNotEmpty) {
@@ -251,8 +249,7 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
 
   Widget _buildSeferGrid(Project project, List<WorkSession> sessions) {
     int totalPages = project.totalPages ?? 245;
-    int linesPerPage = project.linesPerPage ?? 42;
-    if (linesPerPage == 0) linesPerPage = 42;
+    final int linesPerPage = ProductionCalculator.linesPerPageOf(project);
 
     Map<int, Set<int>> pageContent = {};
     for (var s in sessions) {
