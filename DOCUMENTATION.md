@@ -9,7 +9,7 @@
 
 ## 1. סקירה כללית
 
-אפליקציית **Flutter** לניהול, מעקב ותיעוד עבודתו של סופר סת"ם: ניהול פרויקטים (ספר תורה, תפילין, מזוזות), מדידת זמני כתיבה, חישוב הספקים ורווחים, סיכומים יומיים/חודשיים/פרויקטיים, ניהול הוצאות וגיבוי ל-Google Drive.
+אפליקציית **Flutter** לניהול, מעקב ותיעוד עבודתו של סופר סת"ם: ניהול פרויקטים (ספר תורה, תפילין, מזוזות), מדידת זמני כתיבה, חישוב הספקים ורווחים, סיכומים יומיים/חודשיים/פרויקטיים, ניהול הוצאות וגיבוי לקובץ.
 
 | נתון | ערך |
 |---|---|
@@ -32,19 +32,19 @@ lib/
 ├── project_summary_screen.dart  סיכום ברמת פרויקט + גריד עמודים/פרשיות
 ├── projects_screen.dart         CRUD פרויקטים + דיאלוג יצירה/עריכה + אודות
 ├── expenses_screen.dart         מסך הוצאות (הוספה/עריכה/מחיקה, קטגוריות מוצעות)
-├── settings_screen.dart         הגדרות, התחברות Google, סנכרון ידני, בדיקת עדכונים
+├── settings_screen.dart         הגדרות, גיבוי/שחזור, שם הסופר, בדיקת עדכונים
 ├── recycle_bin_screen.dart      סל מחזור – שחזור/מחיקה סופית של פרויקטים
 ├── logic/                       ★ לוגיקה טהורה – בלי Flutter, נבדקת בטסטים
 │   ├── production_calculator.dart   הספק: שורות/מזוזות/פרשיות לפי סוג
 │   ├── profit_calculator.dart       יחידות לחיוב, רווח, ₪/שעה
 │   ├── session_logic.dart           טווח זמן, ולידציית שורות, בדיקת חפיפה
 │   ├── date_logic.dart              יום עבודה לפי שעת מעבר יום
+│   ├── merge_service.dart           איחוד נתונים בייבוא (ללא דריסה)
 │   └── id_generator.dart            מזהים ייחודיים חוצי-מכשירים
 ├── models.dart                  Project, WorkSession, Expense
 ├── storage_service.dart         עטיפה ל-SharedPreferences (כל המפתחות במקום אחד)
-├── backup_service.dart          בניית קובץ גיבוי מלא + שמירה/שיתוף
+├── backup_service.dart          גיבוי מלא לקובץ: ייצוא, קריאה, ייבוא
 ├── platform_support.dart        הפשטת יכולות פלטפורמה (isDesktop וכו')
-├── sync_service.dart            סנכרון דו-כיווני מול Google Drive (Singleton)
 ├── notification_service.dart    התראות מקומיות (תזכורת יומית + סוף הפסקה)
 ├── timer_foreground_task.dart   Foreground Service לאנדרואיד – טיימר רץ ברקע
 ├── hebrew_utils.dart            גימטריה, פורמט תאריך עברי/לועזי
@@ -80,12 +80,12 @@ test/widget_test.dart            טסט ברירת מחדל של Flutter (לא �
       StorageService  ──►  SharedPreferences (JSON מקומי)
               │
               ▼
-      SyncService     ──►  Google Drive (sofer_vmone_backup.json)
+      BackupService   ──►  קובץ גיבוי (ייצוא / ייבוא עם מיזוג)
 ```
 
 **עקרונות:**
 - כל המסכים מקבלים את הרשימות כפרמטרים ומחזירים שינויים למעלה; `home_screen` שומר ומסנכרן.
-- כל שמירה מקומית מלווה בקריאה ל-`SyncService.instance.syncData()` (fire-and-forget).
+- שמירה היא מקומית בלבד; גיבוי הוא פעולה יזומה של המשתמש.
 - מסננים גלובליים: המסך הראשי טוען רק פריטים עם `isDeleted == false`.
 
 ---
@@ -108,7 +108,7 @@ test/widget_test.dart            טסט ברירת מחדל של Flutter (לא �
 | `dailyGoalInLines` | bool | **ספר תורה בלבד**: יעד יומי נמדד בשורות (true) או בעמודים (false) |
 | `totalPages` | int? | מספר עמודים בספר (ברירת מחדל בממשק: 245) |
 | `linesPerPage` | int? | שורות לעמוד (ברירת מחדל: 42) |
-| `lastUpdated` | DateTime | חותמת לצורכי מיזוג בסנכרון |
+| `lastUpdated` | DateTime | חותמת לצורכי מיזוג בייבוא |
 | `isDeleted` | bool | מחיקה לוגית (Soft Delete) |
 | `clientEmail` | String? | לשליחת עדכון ללקוח |
 | `targetCompletionDate` | DateTime? | תאריך יעד לסיום |
@@ -132,7 +132,7 @@ test/widget_test.dart            טסט ברירת מחדל של Flutter (לא �
 
 ### `Expense`
 `id`, `product` (קטגוריה/מוצר), `date` (תאריך ההוצאה), `amount`, `lastUpdated`, `isDeleted`.
-מחיקה היא **לוגית** – אחרת המיזוג מול הדרייב היה משחזר את הרשומה. `lastUpdated` נפרד מ-`date` כי עריכת סכום אינה משנה את תאריך ההוצאה, ובלעדיו העריכה לא הייתה מנצחת במיזוג. גיבויים ישנים ללא השדות החדשים נטענים עם נפילה חזרה ל-`date`.
+מחיקה היא **לוגית** – אחרת המיזוג בייבוא היה משחזר את הרשומה. `lastUpdated` נפרד מ-`date` כי עריכת סכום אינה משנה את תאריך ההוצאה, ובלעדיו העריכה לא הייתה מנצחת במיזוג. גיבויים ישנים ללא השדות החדשים נטענים עם נפילה חזרה ל-`date`.
 
 ---
 
@@ -156,29 +156,13 @@ test/widget_test.dart            טסט ברירת מחדל של Flutter (לא �
 
 ---
 
-## 6. סנכרון Google Drive (`sync_service.dart`)
+## 6. גיבוי ושחזור (הוסר: סנכרון Google Drive)
 
-**Singleton** (`SyncService.instance`). Scopes: `email` + `drive.file` (גישה רק לקבצים שהאפליקציה יצרה).
+**הסנכרון ל-Google Drive הוסר בגרסה 0.4.0.** הסיבות: אימות OAuth של גוגל דרש תהליך אישור מסורבל מצד המפתח, ורוב המשתמשים דיווחו שלא השתמשו בגיבוי הענן כלל. במקומו: **גיבוי לקובץ** (פרק 6א) המאפשר העברה בין מכשירים דרך כל אמצעי – USB, וואטסאפ, מייל או תיקייה מסונכרנת.
 
-**קובץ הגיבוי:** `sofer_vmone_backup.json` – מכיל `projects`, `history`, `expenses`, `lastSync`.
+מה שהוסר: `lib/sync_service.dart`, החבילות `google_sign_in` / `googleapis` / `googleapis_auth` / `http`, קובצי `oauth_credentials.json`, וכל ממשק ההתחברות במסך ההגדרות.
 
-**אלגוריתם `syncData()`:**
-1. טעינת נתונים מקומיים + הורדת הקובץ מהדרייב.
-2. **מיזוג (`_mergeLists`)** לפי `id`: הרשומה עם `lastUpdated` מאוחר יותר מנצחת – בכל שלושת סוגי הנתונים.
-3. **ניקוי (`_purgeOldDeleted`)**: פריטים עם `isDeleted == true` שעברו 30 יום נמחקים לצמיתות – כולל הוצאות.
-4. שמירה מקומית + העלאה חזרה לדרייב (update אם קיים, create אם לא).
-
-**הגנה מריצה כפולה:** `syncData()` נקרא מ-13 מקומות ב-UI. דגל `_isSyncing` מונע שני מחזורים חופפים; בקשה שמגיעה באמצע מסומנת ב-`_resyncQueued` ורצה שוב בסיום, כדי שהשינויים שלה לא ילכו לאיבוד.
-
-**דיווח תוצאה:** הפונקציה מחזירה `SyncStatus` (`success` / `notSignedIn` / `failed`), ושומרת `lastSyncTime` ו-`lastSyncError`. מסך ההגדרות מציג את התוצאה האמיתית ואת שעת הסנכרון האחרון.
-
-**אימות לפי פלטפורמה:**
-- **אנדרואיד:** `google_sign_in` + `signInSilently()` בהפעלה. החתימה מוגדרת ב-Google Cloud Console – אין מפתחות בקוד.
-- **Windows:** OAuth ידני – פתיחת דפדפן, שרת HTTP מקומי על פורט אקראי ל-callback, ואז `obtainAccessCredentialsViaCodeExchange` + `autoRefreshingClient`.
-  מקורות המפתחות (לפי סדר עדיפות): `--dart-define=GOOGLE_OAUTH_CLIENT_ID/SECRET` בבנייה → `oauth_credentials.json` בתיקיית העבודה → `oauth_credentials.json` ליד ה-exe.
-  הקובץ ב-`.gitignore` ואינו tracked בגיט. יש `oauth_credentials.json.example` כתבנית.
-
-**`_GoogleAuthClient`:** עוטף בקשות ומוסיף כותרות אימות; מטפל ידנית ב-redirects של `GET` ל-googleapis (בגלל אובדן כותרות בהפניה).
+**מה שנשמר:** לוגיקת המיזוג עברה ל-`lib/logic/merge_service.dart` ומשמשת כעת את הייבוא. `netfree_cert.dart` וה-`HttpOverrides` נשארו – הם עדיין נדרשים לבדיקת עדכונים (`auto_updater`).
 
 ---
 

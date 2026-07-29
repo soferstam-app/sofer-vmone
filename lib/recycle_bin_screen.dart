@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'models.dart';
 import 'storage_service.dart';
-import 'sync_service.dart';
 
 class RecycleBinScreen extends StatefulWidget {
   const RecycleBinScreen({super.key});
@@ -41,7 +40,6 @@ class _RecycleBinScreenState extends State<RecycleBinScreen> {
     if (index != -1) {
       allProjects[index] = project.copyWith(isDeleted: false);
       await _storage.saveProjects(allProjects);
-      await SyncService.instance.syncData();
       await _loadDeletedItems();
 
       if (mounted) {
@@ -93,8 +91,7 @@ class _RecycleBinScreenState extends State<RecycleBinScreen> {
             .toList();
         await _storage.saveHistory(updatedHistory);
 
-        await SyncService.instance.syncData();
-        await _loadDeletedItems();
+          await _loadDeletedItems();
       }
     }
   }

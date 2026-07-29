@@ -16,7 +16,6 @@ import 'storage_service.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 import 'summary_screen.dart';
 import 'expenses_screen.dart';
-import 'sync_service.dart';
 import 'notification_service.dart';
 import 'hebrew_utils.dart';
 import 'timer_foreground_task.dart';
@@ -96,9 +95,6 @@ class _SoferHomeState extends State<SoferHome>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     widget.windowsFloatingMode?.addListener(_onWindowsFloatingModeChanged);
-    SyncService.instance.init().then((_) {
-      SyncService.instance.syncData().then((_) => _loadData());
-    });
     _storageService.getDayRolloverHour().then((h) {
       if (mounted) setState(() => _dayRolloverHour = h);
     });
@@ -668,7 +664,6 @@ class _SoferHomeState extends State<SoferHome>
       _storageService.saveHistory(history);
       _storageService.saveLastPosition(
           _selectedProject!.id, _smartCurrentPage, _smartCurrentLine);
-      SyncService.instance.syncData();
 
       _showSuccess(
           context,
@@ -790,7 +785,6 @@ class _SoferHomeState extends State<SoferHome>
       _storageService.saveHistory(history);
       _storageService.saveLastPosition(
           _selectedProject!.id, _smartCurrentPage, _smartCurrentLine);
-      SyncService.instance.syncData();
 
       _showSuccess(
           context,
@@ -1481,7 +1475,6 @@ class _SoferHomeState extends State<SoferHome>
           lastLine: linesPerPage,
           backlogOnly: backlogOnly,
         );
-        SyncService.instance.syncData();
         if (Platform.isAndroid && _checkDailyGoalMet(_selectedProject!)) {
           NotificationService().cancelDailyReminder();
         }
@@ -1639,7 +1632,6 @@ class _SoferHomeState extends State<SoferHome>
       backlogOnly: backlogOnly,
     );
 
-    SyncService.instance.syncData();
 
     if (Platform.isAndroid && _checkDailyGoalMet(_selectedProject!)) {
       NotificationService().cancelDailyReminder();
@@ -1776,7 +1768,6 @@ class _SoferHomeState extends State<SoferHome>
           onProjectAdded: (p) {
             setState(() => projects.add(p));
             _storageService.saveProjects(projects);
-            SyncService.instance.syncData();
           },
           onProjectUpdated: (p) {
             setState(() {
@@ -1790,7 +1781,6 @@ class _SoferHomeState extends State<SoferHome>
               }
             });
             _storageService.saveProjects(projects);
-            SyncService.instance.syncData();
           },
           onProjectDeleted: (p) {
             setState(() {
@@ -1798,7 +1788,6 @@ class _SoferHomeState extends State<SoferHome>
               history.removeWhere((session) => session.projectId == p.id);
             });
             _storageService.saveProjects(projects);
-            SyncService.instance.syncData();
           },
           onResetAllData: _resetAllData,
         ),
@@ -1838,7 +1827,6 @@ class _SoferHomeState extends State<SoferHome>
           onHistoryUpdated: (updatedHistory) {
             setState(() => history = updatedHistory);
             _storageService.saveHistory(history);
-            SyncService.instance.syncData();
           },
           useGregorianDates: _useGregorianDates,
         ),

@@ -3,7 +3,6 @@ import 'logic/id_generator.dart';
 import 'models.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'storage_service.dart';
-import 'sync_service.dart';
 import 'recycle_bin_screen.dart';
 import 'hebrew_utils.dart';
 
@@ -93,7 +92,6 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                 allProjects[index] = updatedProject;
                 await storage.saveProjects(allProjects);
               }
-              await SyncService.instance.syncData();
 
               widget.onProjectDeleted(p);
               if (!ctx.mounted) return;

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'logic/id_generator.dart';
 import 'models.dart';
 import 'storage_service.dart';
-import 'sync_service.dart';
 import 'hebrew_utils.dart';
 
 const List<String> _expenseCategories = [
@@ -67,7 +66,6 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
 
   Future<void> _save() async {
     await _storage.saveExpenses(_all);
-    await SyncService.instance.syncData();
   }
 
   double get _totalExpenses => _expenses.fold(0, (sum, e) => sum + e.amount);
