@@ -189,6 +189,93 @@ void main() {
     });
   });
 
+  group('ProductionCalculator – tefillin', () {
+    WorkSession session({
+      required int amount,
+      String? tefillinType,
+      int? parshiya,
+      int endLine = 0,
+    }) =>
+        WorkSession(
+          id: 'x',
+          projectId: 'p',
+          startTime: DateTime(2026, 1, 1, 9),
+          endTime: DateTime(2026, 1, 1, 10),
+          amount: amount,
+          startLine: 0,
+          endLine: endLine,
+          tefillinType: tefillinType,
+          parshiya: parshiya,
+          description: '',
+          isManual: false,
+        );
+
+    test('a whole set is eight parshiyot', () {
+      expect(ProductionCalculator.parshiyotInSession(session(amount: 2)), 16);
+    });
+
+    test('head or hand alone is four parshiyot', () {
+      expect(
+          ProductionCalculator.parshiyotInSession(
+              session(amount: 3, tefillinType: 'head')),
+          12);
+      expect(
+          ProductionCalculator.parshiyotInSession(
+              session(amount: 1, tefillinType: 'hand')),
+          4);
+    });
+
+    test('an individual parshiya counts as itself', () {
+      expect(
+          ProductionCalculator.parshiyotInSession(
+              session(amount: 1, tefillinType: 'head', parshiya: 2)),
+          1);
+    });
+
+    test('completed-only variant excludes a partial parshiya', () {
+      // Head parshiya has 4 lines; stopping at line 2 is unfinished.
+      expect(
+          ProductionCalculator.completedParshiyotInSession(
+              session(amount: 1, tefillinType: 'head', parshiya: 1, endLine: 2)),
+          isNull);
+      // Reaching the last line counts.
+      expect(
+          ProductionCalculator.completedParshiyotInSession(
+              session(amount: 1, tefillinType: 'head', parshiya: 1, endLine: 4)),
+          1);
+      // Hand parshiya has 7 lines, so line 4 is still partial there.
+      expect(
+          ProductionCalculator.completedParshiyotInSession(
+              session(amount: 1, tefillinType: 'hand', parshiya: 1, endLine: 4)),
+          isNull);
+      // No partial line recorded at all means finished.
+      expect(
+          ProductionCalculator.completedParshiyotInSession(
+              session(amount: 1, tefillinType: 'hand', parshiya: 1)),
+          1);
+    });
+
+    test('whole sets and units are always complete', () {
+      expect(
+          ProductionCalculator.completedParshiyotInSession(session(amount: 2)),
+          16);
+      expect(
+          ProductionCalculator.completedParshiyotInSession(
+              session(amount: 1, tefillinType: 'head')),
+          4);
+    });
+
+    test('totals sum across sessions', () {
+      expect(
+          ProductionCalculator.parshiyotTotal([
+            session(amount: 1), // 8
+            session(amount: 1, tefillinType: 'hand'), // 4
+            session(amount: 1, tefillinType: 'head', parshiya: 3), // 1
+          ]),
+          13);
+    });
+  });
+
   group('BackupService', () {
     test('backup file carries every data list and the settings', () async {
       SharedPreferences.setMockInitialValues({

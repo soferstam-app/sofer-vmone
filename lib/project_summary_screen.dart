@@ -121,28 +121,13 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
         avgTimeStr = "${avg.toStringAsFixed(2)} דקות לשורה";
       }
     } else {
-      int totalParshiyot = 0;
-      for (var s in sessions) {
-        if (s.tefillinType == null && s.parshiya == null) {
-          totalParshiyot += s.amount * 8;
-        } else if (s.parshiya == null) {
-          totalParshiyot += s.amount * 4;
-        } else {
-          totalParshiyot += s.amount;
-        }
-      }
+      final int totalParshiyot =
+          ProductionCalculator.parshiyotTotal(sessions);
       totalWrittenStr = "$totalParshiyot פרשיות (סה\"כ)";
-      int parshiyotForStats = 0;
-      for (var s in sessionsForStats) {
-        if (s.tefillinType == null && s.parshiya == null) {
-          parshiyotForStats += s.amount * 8;
-        } else if (s.parshiya == null) {
-          parshiyotForStats += s.amount * 4;
-        } else {
-          parshiyotForStats += s.amount;
-        }
-      }
-      totalProfit = (parshiyotForStats / 8.0) * (project.price - project.expenses);
+      final int parshiyotForStats =
+          ProductionCalculator.parshiyotTotal(sessionsForStats);
+      totalProfit = (parshiyotForStats / ProductionCalculator.parshiyotPerSet) *
+          (project.price - project.expenses);
 
       if (parshiyotForStats > 0 && totalTime.inSeconds > 0) {
         double avg = totalTime.inMinutes / parshiyotForStats;

@@ -182,14 +182,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
       } else {
         unitsForStats += s.amount;
         if (project.type == ProjectType.tefillin) {
-          if (s.tefillinType == null && s.parshiya == null) {
-            parshiyotForStats += s.amount * 8;
-          } else if ((s.tefillinType == 'head' || s.tefillinType == 'hand') &&
-              s.parshiya == null) {
-            parshiyotForStats += s.amount * 4;
-          } else {
-            parshiyotForStats += s.amount;
-          }
+          parshiyotForStats += ProductionCalculator.parshiyotInSession(s);
         } else if (project.type == ProjectType.mezuza) {
           mezuzaLinesForStats += ProductionCalculator.mezuzaLinesInSession(s);
         }
@@ -718,27 +711,13 @@ class _SummaryScreenState extends State<SummaryScreen> {
         projectText = "${project.name}: $tefillinText";
 
         for (var s in sessions) {
-          bool isWhole = false;
-          int parshiyotCount = 0;
-
-          if (s.tefillinType == null && s.parshiya == null) {
-            isWhole = true;
-            parshiyotCount = s.amount * 8;
-          } else if ((s.tefillinType == 'head' || s.tefillinType == 'hand') &&
-              s.parshiya == null) {
-            isWhole = true;
-            parshiyotCount = s.amount * 4;
-          } else if (s.tefillinType != null && s.parshiya != null) {
-            int max = s.tefillinType == 'head' ? 4 : 7;
-            if (s.endLine == 0 || s.endLine >= max) {
-              isWhole = true;
-              parshiyotCount = s.amount;
-            }
-          }
-
-          if (isWhole) {
+          // Null means the parshiya is only partly written — its time would
+          // skew the per-parshiya average, so the session is skipped entirely.
+          final completed =
+              ProductionCalculator.completedParshiyotInSession(s);
+          if (completed != null) {
             timeForParshiyaAvg += s.duration;
-            totalParshiyotForAvg += parshiyotCount;
+            totalParshiyotForAvg += completed;
           }
         }
 
