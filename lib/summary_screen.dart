@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 import 'logic/production_calculator.dart';
+import 'logic/profit_calculator.dart';
 import 'models.dart';
 import 'project_summary_screen.dart';
 import 'hebrew_utils.dart';
@@ -203,8 +204,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
       outputText = "$pages עמודים ו-$lines שורות";
 
-      double pagesDecimalForProfit = linesForStats / linesPerPage;
-      profit = pagesDecimalForProfit * (project.price - project.expenses);
+      profit = ProfitCalculator.profit(project, sessionsForStats);
 
       if (linesForStats > 0 && totalDuration.inSeconds > 0) {
         double avgMinutes = totalDuration.inMinutes / linesForStats;
@@ -225,16 +225,14 @@ class _SummaryScreenState extends State<SummaryScreen> {
       }
     } else {
       if (project.type == ProjectType.mezuza) {
-        double mezuzotForProfit =
-            mezuzaLinesForStats / ProductionCalculator.linesPerMezuza;
-        profit = mezuzotForProfit * (project.price - project.expenses);
+        profit = ProfitCalculator.profit(project, sessionsForStats);
         double displayAmount =
             totalMezuzaLines / ProductionCalculator.linesPerMezuza;
         outputText = displayAmount % 1 == 0
             ? "${displayAmount.toInt()} מזוזות"
             : "${displayAmount.toStringAsFixed(1)} מזוזות";
       } else {
-        profit = unitsForStats * (project.price - project.expenses);
+        profit = ProfitCalculator.profit(project, sessionsForStats);
         outputText = _generateTefillinSummary(sessions);
       }
 
@@ -679,7 +677,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
             "${project.name}: ${lines ~/ linesPerPage} עמודים ו-${lines % linesPerPage} שורות";
 
         double pages = lines / linesPerPage.toDouble();
-        projectProfit = pages * (project.price - project.expenses);
+        projectProfit = ProfitCalculator.profit(project, sessions);
         actualForGoal = project.dailyGoalInLines ? lines.toDouble() : pages;
       } else if (project.type == ProjectType.mezuza) {
         double totalMezuzot = 0;
@@ -702,7 +700,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
         projectText = "${project.name}: $displayAmount מזוזות";
 
-        projectProfit = totalMezuzot * (project.price - project.expenses);
+        projectProfit = ProfitCalculator.profit(project, sessions);
         actualForGoal = totalMezuzot;
       } else if (project.type == ProjectType.tefillin) {
         String tefillinText = _generateTefillinSummary(sessions);
@@ -723,7 +721,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
         for (var s in sessions) {
           totalUnits += s.amount;
         }
-        projectProfit = totalUnits * (project.price - project.expenses);
+        projectProfit = ProfitCalculator.profit(project, sessions);
         actualForGoal = totalUnits.toDouble();
       }
 
