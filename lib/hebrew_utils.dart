@@ -1,12 +1,56 @@
 import 'package:kosher_dart/kosher_dart.dart';
 
+import 'logic/hebrew_work_calendar.dart';
+
 String formatDisplayDate(DateTime date, bool useGregorian) {
   if (useGregorian) {
     return '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}';
   }
-  final jewishDate = JewishDate.fromDateTime(date);
+  return formatHebrewDate(JewishDate.fromDateTime(date));
+}
+
+/// Formats a Hebrew date that has already been computed.
+///
+/// The completion-date arithmetic works in Hebrew days throughout and hands
+/// back a [JewishDate]; formatting it directly avoids converting to Gregorian
+/// and straight back again just to print it.
+String formatHebrewDate(JewishDate date) {
   final formatter = HebrewDateFormatter()..hebrewFormat = true;
-  return formatter.format(jewishDate);
+  return formatter.format(date);
+}
+
+const List<String> _weekdayNames = [
+  'ראשון',
+  'שני',
+  'שלישי',
+  'רביעי',
+  'חמישי',
+  'שישי',
+  'שבת',
+];
+
+/// Day of week plus date, for a delivery date — "יום שלישי, כ״ג תמוז תשפ״ו".
+///
+/// Which day of the week a job lands on is the first thing a sofer checks,
+/// so a bare date is less useful here than everywhere else.
+String formatDisplayDateWithWeekday(DateTime date, bool useGregorian) {
+  final jewishDate = JewishDate.fromDateTime(date);
+  final weekday = _weekdayNames[jewishDate.getDayOfWeek() - 1];
+  final prefix = jewishDate.getDayOfWeek() == JewishDate.saturday
+      ? weekday
+      : 'יום $weekday';
+  return '$prefix, ${formatDisplayDate(date, useGregorian)}';
+}
+
+/// "שבתות (12) · חול המועד (6) · צומות (2)" — why a delivery date sits where
+/// it does, longest cause first.
+String formatSkippedDays(WorkPlan plan, {int maxReasons = 3}) {
+  final entries = plan.skippedByImpact;
+  if (entries.isEmpty) return '';
+
+  final shown = entries.take(maxReasons).map((e) => '${e.key.label} (${e.value})');
+  final rest = entries.length - maxReasons;
+  return rest > 0 ? '${shown.join(' · ')} ועוד' : shown.join(' · ');
 }
 
 String formatDisplayDateMonth(DateTime date, bool useGregorian) {

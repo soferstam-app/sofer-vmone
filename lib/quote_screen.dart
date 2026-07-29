@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'hebrew_utils.dart';
+import 'logic/expense_logic.dart';
+import 'logic/hebrew_work_calendar.dart';
 import 'logic/project_analytics.dart';
 import 'logic/quote_calculator.dart';
 import 'models.dart';
@@ -38,19 +40,32 @@ class _QuoteScreenState extends State<QuoteScreen> {
   final _hoursCtrl = TextEditingController(text: '6');
   final _expensesCtrl = TextEditingController(text: '0');
 
-  bool _fridayMotzeiHalfDay = false;
+  /// Materials taken from the expenses screen rather than typed in — the
+  /// default whenever there is anything recorded to take them from.
+  bool _expensesFromRecords = true;
+
+  WorkCalendarRules _rules = WorkCalendarRules.standard;
   bool _useGregorianDates = false;
+  List<Expense> _expenses = const [];
 
   @override
   void initState() {
     super.initState();
-    _storage.getFridayMotzeiHalfDay().then((v) {
-      if (mounted) setState(() => _fridayMotzeiHalfDay = v);
+    _storage.getWorkCalendarRules().then((v) {
+      if (mounted) setState(() => _rules = v);
     });
     _storage.getUseGregorianDates().then((v) {
       if (mounted) setState(() => _useGregorianDates = v);
     });
+    _storage.loadExpenses().then((v) {
+      if (mounted) setState(() => _expenses = v);
+    });
   }
+
+  /// What materials have actually cost per unit on work of this type, or null
+  /// when nothing has been recorded against a project yet.
+  double? get _recordedExpensePerUnit => ExpenseLogic.averagePerUnit(
+      _type, widget.projects, widget.history, _expenses);
 
   @override
   void dispose() {
@@ -88,7 +103,11 @@ class _QuoteScreenState extends State<QuoteScreen> {
         _type, widget.projects, widget.history);
 
     final units = double.tryParse(_unitsCtrl.text) ?? 0;
-    final expensesPerUnit = double.tryParse(_expensesCtrl.text) ?? 0;
+
+    final recorded = _recordedExpensePerUnit;
+    final expensesPerUnit = (_expensesFromRecords && recorded != null)
+        ? recorded
+        : (double.tryParse(_expensesCtrl.text) ?? 0);
 
     // When pricing per unit, the hourly rate that price implies is derived and
     // fed back through the same estimator, so both modes produce identical
@@ -115,7 +134,7 @@ class _QuoteScreenState extends State<QuoteScreen> {
             targetHourlyRate: effectiveRate,
             hoursPerDay: double.tryParse(_hoursCtrl.text) ?? 0,
             expensesPerUnit: expensesPerUnit,
-            fridayMotzeiHalfDay: _fridayMotzeiHalfDay,
+            rules: _rules,
           );
 
     return Scaffold(
@@ -204,14 +223,87 @@ class _QuoteScreenState extends State<QuoteScreen> {
               _numberField(_unitPriceCtrl, "מחיר ל$_singularLabel (₪)",
                   Icons.sell),
             _numberField(_hoursCtrl, "שעות כתיבה ביום עבודה", Icons.schedule),
-            _numberField(
-                _expensesCtrl, "עלות חומרים ליחידה (₪)", Icons.shopping_bag),
+            _expensesSection(recorded),
             const SizedBox(height: 16),
             if (estimate != null)
               _resultCard(estimate, derivedRate: derivedRate),
           ],
         ],
       ),
+    );
+  }
+
+  /// Materials cost, either read off the expenses screen or typed in.
+  ///
+  /// The recorded figure is preferred because it is the writer's real cost:
+  /// the parchment expenses they already logged, divided by the units those
+  /// projects produced.
+  Widget _expensesSection(double? recorded) {
+    if (recorded == null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _numberField(
+              _expensesCtrl, "עלות חומרים ל$_singularLabel (₪)", Icons.shopping_bag),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              "עדיין אין הוצאות משוייכות לפרויקטים מסוג זה במסך ההוצאות, "
+              "לכן העלות מוזנת ידנית.",
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text("עלות החומרים:",
+            style: TextStyle(fontSize: 13, color: Colors.black54)),
+        const SizedBox(height: 6),
+        SegmentedButton<bool>(
+          segments: const [
+            ButtonSegment(
+                value: true,
+                label: Text("מההוצאות שלי"),
+                icon: Icon(Icons.receipt_long, size: 16)),
+            ButtonSegment(
+                value: false,
+                label: Text("ידנית"),
+                icon: Icon(Icons.edit, size: 16)),
+          ],
+          selected: {_expensesFromRecords},
+          onSelectionChanged: (v) =>
+              setState(() => _expensesFromRecords = v.first),
+        ),
+        const SizedBox(height: 10),
+        if (_expensesFromRecords)
+          Card(
+            margin: const EdgeInsets.only(bottom: 12),
+            color: Colors.teal.shade50,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  Icon(Icons.receipt_long, color: Colors.teal.shade700),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      "₪${recorded.toStringAsFixed(2)} ל$_singularLabel — "
+                      "לפי ההוצאות שרשמת על פרויקטים מסוג זה",
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          _numberField(_expensesCtrl, "עלות חומרים ל$_singularLabel (₪)",
+              Icons.shopping_bag),
+      ],
     );
   }
 
@@ -245,8 +337,20 @@ class _QuoteScreenState extends State<QuoteScreen> {
             const Divider(),
             _row("זמן עבודה כולל:", _formatDuration(e.totalTime)),
             _row("ימי עבודה:", e.workDays.toStringAsFixed(1)),
-            _row("צפי סיום:",
-                formatDisplayDate(e.estimatedCompletion, _useGregorianDates)),
+            _row(
+                "צפי סיום:",
+                formatDisplayDateWithWeekday(
+                    e.estimatedCompletion, _useGregorianDates)),
+            _row("מהיום:", "${e.plan.calendarDays} ימים"),
+            if (e.plan.skippedTotal > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 2, bottom: 4),
+                child: Text(
+                  "כולל ${e.plan.skippedTotal} ימים שאינם ימי עבודה: "
+                  "${formatSkippedDays(e.plan)}",
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+              ),
             const Divider(),
             // In per-unit mode the interesting result is the reverse: what the
             // price the writer named actually pays them per hour.
@@ -297,9 +401,12 @@ class _QuoteScreenState extends State<QuoteScreen> {
             Text(
               _priceFromHourlyRate
                   ? "המחיר מחושב כך שתגיע לשכר השעה שביקשת, בתוספת עלות החומרים. "
-                      "צפי הסיום מדלג על שבתות וחגים."
+                      "צפי הסיום מחושב בלוח העברי ומדלג על שבתות, חגים, חול "
+                      "המועד וצומות – לפי ההגדרות שלך במסך ימי עבודה."
                   : "לפי המחיר שהזנת ובניכוי עלות החומרים – זה מה שהעבודה "
-                      "משאירה לך לשעה. צפי הסיום מדלג על שבתות וחגים.",
+                      "משאירה לך לשעה. צפי הסיום מחושב בלוח העברי ומדלג על "
+                      "שבתות, חגים, חול המועד וצומות – לפי ההגדרות שלך במסך "
+                      "ימי עבודה.",
               style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
             ),
           ],

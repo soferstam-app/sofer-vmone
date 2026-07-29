@@ -1,4 +1,5 @@
 import '../models.dart';
+import 'profit_calculator.dart';
 
 /// A spending category and how it is normally charged against the work.
 class ExpenseCategory {
@@ -127,6 +128,41 @@ class ExpenseLogic {
     if (overlapDays <= 0) return 0;
 
     return e.amount * (overlapDays / totalDays);
+  }
+
+  /// What materials have actually cost per unit on past work of [type].
+  ///
+  /// Built from the expenses already recorded on the expenses screen and the
+  /// units those projects produced, so a quote charges what parchment really
+  /// costs this writer instead of a number typed from memory.
+  ///
+  /// Only project-allocated expenses count: ink bought for a season and a
+  /// monthly room rental are overheads, not the material cost of one more
+  /// mezuza. Returns null when there is nothing to learn from.
+  static double? averagePerUnit(
+    ProjectType type,
+    Iterable<Project> projects,
+    Iterable<WorkSession> history,
+    Iterable<Expense> expenses,
+  ) {
+    var totalCost = 0.0;
+    var totalUnits = 0.0;
+
+    for (final project in projects.where((p) => p.type == type && !p.isDeleted)) {
+      final cost = totalForProject(project.id, expenses);
+      if (cost <= 0) continue;
+
+      final sessions =
+          history.where((s) => s.projectId == project.id && !s.isDeleted);
+      final units = ProfitCalculator.billableUnits(project, sessions);
+      if (units <= 0) continue;
+
+      totalCost += cost;
+      totalUnits += units;
+    }
+
+    if (totalUnits <= 0 || totalCost <= 0) return null;
+    return totalCost / totalUnits;
   }
 
   /// Expenses that need a project chosen but have none, so the UI can warn

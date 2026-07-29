@@ -6,11 +6,14 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:kosher_dart/kosher_dart.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sofer_vmone/backup_service.dart';
 import 'package:sofer_vmone/hebrew_utils.dart';
 import 'package:sofer_vmone/logic/date_logic.dart';
+import 'package:sofer_vmone/logic/completion_estimator.dart';
 import 'package:sofer_vmone/logic/expense_logic.dart';
+import 'package:sofer_vmone/logic/hebrew_work_calendar.dart';
 import 'package:sofer_vmone/logic/id_generator.dart';
 import 'package:sofer_vmone/logic/merge_service.dart';
 import 'package:sofer_vmone/logic/production_calculator.dart';
@@ -19,6 +22,21 @@ import 'package:sofer_vmone/logic/project_analytics.dart';
 import 'package:sofer_vmone/logic/quote_calculator.dart';
 import 'package:sofer_vmone/logic/session_logic.dart';
 import 'package:sofer_vmone/models.dart';
+
+/// Only the days nobody writes on, so arithmetic tests stay independent of
+/// wherever in the year the sample dates happen to fall. The festival rules
+/// themselves are exercised in the HebrewWorkCalendar group.
+const shabbatOnly = WorkCalendarRules(
+  friday: FridayWork.full,
+  skipCholHamoed: false,
+  skipErevYomTov: false,
+  skipFasts: false,
+  skipErevTishaBeav: false,
+  skipBetweenYomKippurAndSukkot: false,
+  skipWeekBeforePesach: false,
+  skipPurim: false,
+  skipChanukah: false,
+);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -816,7 +834,7 @@ void main() {
         timePerUnit: const Duration(hours: 2), // 20 hours total
         targetHourlyRate: 50,
         hoursPerDay: 5, // 4 working days
-        fridayMotzeiHalfDay: false,
+        rules: shabbatOnly,
       )!;
 
       expect(q.totalTime, const Duration(hours: 20));
@@ -832,7 +850,7 @@ void main() {
         targetHourlyRate: 50,
         hoursPerDay: 5,
         expensesPerUnit: 30,
-        fridayMotzeiHalfDay: false,
+        rules: shabbatOnly,
       )!;
       // 10h x 50 = 500 labour, plus 10 x 30 = 300 materials
       expect(q.suggestedPrice, 800);
@@ -848,7 +866,7 @@ void main() {
           timePerUnit: const Duration(hours: 5),
           targetHourlyRate: 50,
           hoursPerDay: 5,
-          fridayMotzeiHalfDay: false,
+          rules: shabbatOnly,
           startingFrom: start,
         )!;
         expect(q.estimatedCompletion.weekday, isNot(DateTime.saturday),
@@ -864,7 +882,7 @@ void main() {
         timePerUnit: const Duration(hours: 5),
         targetHourlyRate: 50,
         hoursPerDay: 5, // exactly 6 working days
-        fridayMotzeiHalfDay: false,
+        rules: shabbatOnly,
         startingFrom: DateTime(2026, 5, 4),
       )!;
       expect(q.workDays, 6);
@@ -882,7 +900,7 @@ void main() {
               timePerUnit: const Duration(hours: 1),
               targetHourlyRate: 50,
               hoursPerDay: 5,
-              fridayMotzeiHalfDay: false),
+              rules: shabbatOnly),
           isNull);
       expect(
           QuoteCalculator.estimate(
@@ -890,7 +908,7 @@ void main() {
               timePerUnit: Duration.zero,
               targetHourlyRate: 50,
               hoursPerDay: 5,
-              fridayMotzeiHalfDay: false),
+              rules: shabbatOnly),
           isNull);
       expect(
           QuoteCalculator.estimate(
@@ -898,7 +916,7 @@ void main() {
               timePerUnit: const Duration(hours: 1),
               targetHourlyRate: 50,
               hoursPerDay: 0,
-              fridayMotzeiHalfDay: false),
+              rules: shabbatOnly),
           isNull);
     });
 
@@ -1341,6 +1359,482 @@ void main() {
 
       expect((decoded['projects'] as List), isEmpty);
       expect((decoded['expenses'] as List), isEmpty);
+    });
+  });
+
+  group('HebrewWorkCalendar — days off', () {
+    // Stated as Hebrew dates, because that is how the rules themselves are
+    // stated. Nothing here depends on which Gregorian day a festival lands on
+    // in any particular year.
+    const rules = WorkCalendarRules.standard;
+
+    WorkDay day(int year, int month, int dayOfMonth,
+            [WorkCalendarRules r = rules]) =>
+        HebrewWorkCalendar.classifyHebrewDate(year, month, dayOfMonth, r);
+
+    test('Yom Tov is off however the rest is configured', () {
+      // Every optional rule turned off; these days must still be off.
+      const everythingAllowed = WorkCalendarRules(
+        friday: FridayWork.full,
+        skipCholHamoed: false,
+        skipErevYomTov: false,
+        skipFasts: false,
+        skipErevTishaBeav: false,
+        skipBetweenYomKippurAndSukkot: false,
+        skipWeekBeforePesach: false,
+        skipPurim: false,
+        skipChanukah: false,
+      );
+      for (final y in [5785, 5786, 5787]) {
+        expect(day(y, JewishDate.NISSAN, 15, everythingAllowed).reason,
+            NonWorkReason.yomTov,
+            reason: 'first day of Pesach $y');
+        expect(day(y, JewishDate.TISHREI, 1, everythingAllowed).reason,
+            NonWorkReason.yomTov,
+            reason: 'Rosh Hashana $y');
+        expect(day(y, JewishDate.TISHREI, 10, everythingAllowed).reason,
+            NonWorkReason.yomTov,
+            reason: 'Yom Kippur $y');
+        expect(day(y, JewishDate.SIVAN, 6, everythingAllowed).reason,
+            NonWorkReason.yomTov,
+            reason: 'Shavuot $y');
+      }
+    });
+
+    test('Tisha BeAv is off even when fasts are allowed', () {
+      const fastsAllowed = WorkCalendarRules(skipFasts: false);
+      for (final y in [5785, 5786, 5787, 5788]) {
+        // 9 Av unless it fell on Shabbat, in which case the fast is the 10th.
+        final ninth = day(y, JewishDate.AV, 9, fastsAllowed);
+        final tenth = day(y, JewishDate.AV, 10, fastsAllowed);
+        expect(
+          ninth.reason == NonWorkReason.tishaBeav ||
+              (ninth.reason == NonWorkReason.shabbat &&
+                  tenth.reason == NonWorkReason.tishaBeav),
+          isTrue,
+          reason: 'Tisha BeAv $y was $ninth / $tenth',
+        );
+      }
+    });
+
+    test('the eve of Tisha BeAv moves with the fast', () {
+      for (var y = 5780; y <= 5800; y++) {
+        // Find the day the fast is actually kept, then check the day before it.
+        var observed = 0;
+        for (var d = 9; d <= 10; d++) {
+          if (day(y, JewishDate.AV, d).reason == NonWorkReason.tishaBeav) {
+            observed = d;
+            break;
+          }
+        }
+        expect(observed, isNot(0), reason: 'no Tisha BeAv found in $y');
+
+        final before = day(y, JewishDate.AV, observed - 1);
+        expect(
+          before.reason,
+          anyOf(NonWorkReason.erevTishaBeav, NonWorkReason.shabbat),
+          reason: 'day before Tisha BeAv $y',
+        );
+      }
+    });
+
+    test('Chol HaMoed starts a day earlier in Israel', () {
+      const israel = WorkCalendarRules(inIsrael: true);
+      const diaspora = WorkCalendarRules(inIsrael: false);
+
+      expect(day(5786, JewishDate.NISSAN, 16, israel).reason,
+          NonWorkReason.cholHamoed);
+      expect(day(5786, JewishDate.NISSAN, 16, diaspora).reason,
+          NonWorkReason.yomTov);
+    });
+
+    test('the four days between Yom Kippur and Sukkot are off', () {
+      for (var d = 11; d <= 14; d++) {
+        final classified = day(5786, JewishDate.TISHREI, d);
+        expect(classified.isOff, isTrue, reason: '$d Tishrei');
+      }
+      // 14 Tishrei is Erev Sukkot and should be named as such.
+      expect(day(5786, JewishDate.TISHREI, 14).reason, NonWorkReason.erevYomTov);
+    });
+
+    test('the week before Pesach is off', () {
+      for (var d = 8; d <= 14; d++) {
+        expect(day(5786, JewishDate.NISSAN, d).isOff, isTrue,
+            reason: '$d Nisan');
+      }
+      // 7 Nisan is an ordinary day, unless it happens to be Shabbat.
+      final seventh = day(5786, JewishDate.NISSAN, 7);
+      expect(seventh.reason, isNot(NonWorkReason.weekBeforePesach));
+    });
+
+    test('minor fasts are off, and can be turned back on', () {
+      // 10 Tevet never moves, so it is the safest fast to assert on.
+      expect(day(5786, JewishDate.TEVES, 10).reason, NonWorkReason.fast);
+      expect(
+          day(5786, JewishDate.TEVES, 10,
+                  const WorkCalendarRules(skipFasts: false))
+              .isOff,
+          isFalse);
+    });
+
+    test('Purim is in Adar II in a leap year', () {
+      // 5787 is a leap year: 14 Adar I is Purim Katan, 14 Adar II is Purim.
+      final jc = JewishCalendar.initDate(5787, JewishDate.ADAR, 14);
+      expect(jc.isJewishLeapYear(), isTrue);
+
+      expect(day(5787, JewishDate.ADAR_II, 14).reason, NonWorkReason.purim);
+      // Purim Katan is only off when minor days are switched on.
+      expect(day(5787, JewishDate.ADAR, 14).reason, isNot(NonWorkReason.purim));
+      expect(
+          day(5787, JewishDate.ADAR, 14,
+                  const WorkCalendarRules(skipMinorHolidays: true))
+              .reason,
+          NonWorkReason.minorHoliday);
+    });
+
+    test('Chanukah can be worked or not, as configured', () {
+      expect(day(5786, JewishDate.KISLEV, 25).reason, NonWorkReason.chanukah);
+      expect(
+          day(5786, JewishDate.KISLEV, 25,
+                  const WorkCalendarRules(skipChanukah: false))
+              .isOff,
+          isFalse);
+    });
+
+    test('Friday is worth none, half or a full day as set', () {
+      // 20 Iyar 5786 — an ordinary stretch with no festival in it.
+      for (var d = 15; d <= 28; d++) {
+        final jc = JewishCalendar.initDate(5786, JewishDate.IYAR, d);
+        if (jc.getDayOfWeek() != JewishDate.friday) continue;
+
+        expect(day(5786, JewishDate.IYAR, d).value, 0);
+        expect(
+            day(5786, JewishDate.IYAR, d,
+                    const WorkCalendarRules(friday: FridayWork.half))
+                .value,
+            0.5);
+        expect(
+            day(5786, JewishDate.IYAR, d,
+                    const WorkCalendarRules(friday: FridayWork.full))
+                .value,
+            1);
+        return;
+      }
+      fail('no Friday found in the sample range');
+    });
+
+    test('Isru Chag is a day later outside Israel', () {
+      const israel = WorkCalendarRules(inIsrael: true, skipMinorHolidays: true);
+      const diaspora =
+          WorkCalendarRules(inIsrael: false, skipMinorHolidays: true);
+
+      expect(day(5786, JewishDate.NISSAN, 22, israel).reason,
+          NonWorkReason.minorHoliday);
+      // 22 Nisan is still Yom Tov abroad; Isru Chag is the 23rd.
+      expect(day(5786, JewishDate.NISSAN, 22, diaspora).reason,
+          NonWorkReason.yomTov);
+      expect(day(5786, JewishDate.NISSAN, 23, diaspora).reason,
+          NonWorkReason.minorHoliday);
+    });
+  });
+
+  group('HebrewWorkCalendar — counting and planning', () {
+    test('an ordinary week has six working days without the Friday rule', () {
+      // 15–21 Iyar 5786: seven consecutive days with no festival in them.
+      final from = JewishCalendar.initDate(5786, JewishDate.IYAR, 15)
+          .getGregorianCalendar();
+      final to = JewishCalendar.initDate(5786, JewishDate.IYAR, 21)
+          .getGregorianCalendar();
+
+      expect(HebrewWorkCalendar.countWorkDays(from, to, shabbatOnly), 6);
+      // With Friday off as well, five.
+      expect(
+          HebrewWorkCalendar.countWorkDays(
+              from, to, const WorkCalendarRules(skipChanukah: false)),
+          5);
+    });
+
+    test('counting is inclusive of both ends and never negative', () {
+      final d = DateTime(2026, 5, 4);
+      expect(HebrewWorkCalendar.countWorkDays(d, d, shabbatOnly),
+          inInclusiveRange(0, 1));
+      expect(
+          HebrewWorkCalendar.countWorkDays(
+              d, d.subtract(const Duration(days: 5)), shabbatOnly),
+          0);
+    });
+
+    test('a plan never finishes on a day nobody is writing', () {
+      // Walk a whole year of starting days against the full default rules.
+      for (var offset = 0; offset < 365; offset += 7) {
+        final start = DateTime(2026, 1, 1).add(Duration(days: offset));
+        final plan = HebrewWorkCalendar.plan(
+          from: start,
+          workDaysNeeded: 12,
+          rules: WorkCalendarRules.standard,
+        )!;
+
+        final landed = HebrewWorkCalendar.classify(
+          HebrewWorkCalendar.hebrewDayOf(
+              plan.completionDate, WorkCalendarRules.standard),
+          WorkCalendarRules.standard,
+        );
+        expect(landed.isOff, isFalse,
+            reason: 'starting $start finished on ${landed.reason?.label}');
+      }
+    });
+
+    test('festivals push a delivery date out, and the reasons add up', () {
+      // Ten working days starting on 1 Nisan run straight into Pesach.
+      final start = JewishCalendar.initDate(5786, JewishDate.NISSAN, 1)
+          .getGregorianCalendar();
+      final plan = HebrewWorkCalendar.plan(
+        from: start,
+        workDaysNeeded: 10,
+        rules: WorkCalendarRules.standard,
+      )!;
+
+      expect(plan.calendarDays, greaterThan(10));
+      expect(plan.skippedTotal, plan.calendarDays - 10);
+      expect(plan.skipped.keys, contains(NonWorkReason.weekBeforePesach));
+      expect(plan.skipped.keys, contains(NonWorkReason.yomTov));
+    });
+
+    test('half days accumulate without drifting a day', () {
+      // Fridays and Saturday nights each worth half: two of them make one day.
+      const halves = WorkCalendarRules(
+        friday: FridayWork.half,
+        motzeiShabbatHalfDay: true,
+        skipCholHamoed: false,
+        skipErevYomTov: false,
+        skipFasts: false,
+        skipErevTishaBeav: false,
+        skipBetweenYomKippurAndSukkot: false,
+        skipWeekBeforePesach: false,
+        skipPurim: false,
+        skipChanukah: false,
+      );
+      final start = JewishCalendar.initDate(5786, JewishDate.IYAR, 15)
+          .getGregorianCalendar();
+      final plan =
+          HebrewWorkCalendar.plan(from: start, workDaysNeeded: 7, rules: halves)!;
+
+      // The plan must be the *earliest* day the work is done: seven days of
+      // writing fit into it, and not into a day less.
+      expect(HebrewWorkCalendar.countWorkDays(start, plan.completionDate, halves),
+          greaterThanOrEqualTo(7));
+      expect(
+          HebrewWorkCalendar.countWorkDays(
+              start,
+              plan.completionDate.subtract(const Duration(days: 1)),
+              halves),
+          lessThan(7));
+    });
+
+    test('nothing to do yields no plan rather than today', () {
+      expect(
+          HebrewWorkCalendar.plan(
+              from: DateTime(2026, 5, 4),
+              workDaysNeeded: 0,
+              rules: shabbatOnly),
+          isNull);
+      expect(
+          HebrewWorkCalendar.plan(
+              from: DateTime(2026, 5, 4),
+              workDaysNeeded: double.nan,
+              rules: shabbatOnly),
+          isNull);
+    });
+
+    test('rules survive a round trip through storage', () {
+      const original = WorkCalendarRules(
+        inIsrael: false,
+        friday: FridayWork.half,
+        motzeiShabbatHalfDay: true,
+        skipChanukah: false,
+        skipRoshChodesh: true,
+      );
+      final restored = WorkCalendarRules.fromJson(
+          jsonDecode(jsonEncode(original.toJson())) as Map<String, dynamic>);
+
+      expect(restored.inIsrael, isFalse);
+      expect(restored.friday, FridayWork.half);
+      expect(restored.motzeiShabbatHalfDay, isTrue);
+      expect(restored.skipChanukah, isFalse);
+      expect(restored.skipRoshChodesh, isTrue);
+      // Anything missing from an older file falls back to the default.
+      expect(WorkCalendarRules.fromJson(const {}).friday, FridayWork.none);
+      expect(WorkCalendarRules.fromJson(const {}).skipCholHamoed, isTrue);
+    });
+  });
+
+  group('CompletionEstimator', () {
+    Project sefer({int pages = 100, int targetDaily = 0}) => Project(
+          id: 'p1',
+          name: 'ספר',
+          type: ProjectType.sefer,
+          price: 100,
+          expenses: 0,
+          targetDaily: targetDaily,
+          targetMonthly: 0,
+          totalPages: pages,
+          linesPerPage: 42,
+        );
+
+    WorkSession page(int index, DateTime day) => WorkSession(
+          id: 's$index',
+          projectId: 'p1',
+          startTime: DateTime(day.year, day.month, day.day, 9),
+          endTime: DateTime(day.year, day.month, day.day, 13),
+          amount: index,
+          startLine: 1,
+          endLine: 42,
+          description: '',
+          isManual: false,
+        );
+
+    test('no stated size means no estimate', () {
+      final p = Project(
+        id: 'p1',
+        name: 'מזוזות',
+        type: ProjectType.mezuza,
+        price: 100,
+        expenses: 0,
+        targetDaily: 2,
+        targetMonthly: 0,
+      );
+      expect(
+          CompletionEstimator.estimate(
+              project: p, history: const [], rules: shabbatOnly),
+          isNull);
+
+      final sized = p.copyWith(targetUnits: 10);
+      expect(
+          CompletionEstimator.estimate(
+              project: sized, history: const [], rules: shabbatOnly),
+          isNotNull);
+    });
+
+    test('falls back to the daily target when nothing was recorded', () {
+      final e = CompletionEstimator.estimate(
+        project: sefer(pages: 10, targetDaily: 2),
+        history: const [],
+        rules: shabbatOnly,
+        from: DateTime(2026, 5, 4),
+      )!;
+
+      expect(e.paceMeasured, isFalse);
+      expect(e.unitsPerWorkDay, 2);
+      expect(e.remainingUnits, 10);
+      expect(e.workDaysLeft, 5);
+    });
+
+    test('measures the real pace once there is work to measure', () {
+      // Two pages written across a Sunday and a Monday: one page per work day.
+      final history = [
+        page(1, DateTime(2026, 5, 3)),
+        page(2, DateTime(2026, 5, 4)),
+      ];
+      final e = CompletionEstimator.estimate(
+        project: sefer(pages: 10),
+        history: history,
+        rules: shabbatOnly,
+        from: DateTime(2026, 5, 5),
+      )!;
+
+      expect(e.paceMeasured, isTrue);
+      expect(e.doneUnits, 2);
+      expect(e.unitsPerWorkDay, 1);
+      expect(e.remainingUnits, 8);
+    });
+
+    test('a finished project has nothing left to estimate', () {
+      final history =
+          List.generate(10, (i) => page(i + 1, DateTime(2026, 5, 3)));
+      expect(
+          CompletionEstimator.estimate(
+              project: sefer(pages: 10), history: history, rules: shabbatOnly),
+          isNull);
+    });
+
+    test('required pace answers only when the deadline is still reachable', () {
+      expect(
+        CompletionEstimator.paceRequiredFor(
+          remainingUnits: 10,
+          deadline: DateTime(2026, 5, 1),
+          rules: shabbatOnly,
+          from: DateTime(2026, 5, 4),
+        ),
+        isNull,
+      );
+      // 4 May to 9 May inclusive is five working days with only Shabbat off.
+      expect(
+        CompletionEstimator.paceRequiredFor(
+          remainingUnits: 10,
+          deadline: DateTime(2026, 5, 9),
+          rules: shabbatOnly,
+          from: DateTime(2026, 5, 4),
+        ),
+        2,
+      );
+    });
+  });
+
+  group('ExpenseLogic.averagePerUnit', () {
+    test('learns the real material cost from recorded expenses', () {
+      final project = Project(
+        id: 'p1',
+        name: 'מזוזות',
+        type: ProjectType.mezuza,
+        price: 200,
+        expenses: 0,
+        targetDaily: 0,
+        targetMonthly: 0,
+        targetUnits: 10,
+      );
+      final history = <WorkSession>[
+        WorkSession(
+          id: 's1',
+          projectId: 'p1',
+          startTime: DateTime(2026, 5, 3, 9),
+          endTime: DateTime(2026, 5, 3, 13),
+          amount: 5, // five mezuzot
+          startLine: 0,
+          endLine: 0,
+          description: '',
+          isManual: false,
+        ),
+      ];
+      final expenses = [
+        Expense(
+          id: 'e1',
+          product: 'קלף מזוזות',
+          date: DateTime(2026, 5, 1),
+          amount: 250,
+          allocation: ExpenseAllocation.project,
+          projectIds: const ['p1'],
+        ),
+        // A monthly overhead must not be charged to a single mezuza.
+        Expense(
+          id: 'e2',
+          product: 'חדר סופרים',
+          date: DateTime(2026, 5, 1),
+          amount: 900,
+          allocation: ExpenseAllocation.month,
+        ),
+      ];
+
+      expect(
+          ExpenseLogic.averagePerUnit(
+              ProjectType.mezuza, [project], history, expenses),
+          50);
+    });
+
+    test('nothing recorded gives null rather than zero', () {
+      expect(
+          ExpenseLogic.averagePerUnit(
+              ProjectType.tefillin, const [], const [], const []),
+          isNull);
     });
   });
 }

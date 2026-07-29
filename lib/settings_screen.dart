@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'backup_service.dart';
 import 'hebrew_utils.dart';
+import 'logic/hebrew_work_calendar.dart';
 import 'platform_support.dart';
 import 'storage_service.dart';
 import 'notification_service.dart';
+import 'work_calendar_settings_screen.dart';
 import 'package:auto_updater/auto_updater.dart';
 import 'dart:io';
 
@@ -20,7 +22,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   TimeOfDay _notificationTime = const TimeOfDay(hour: 20, minute: 0);
   bool _smartWorkflowEnabled = false;
   int _dayRolloverHour = 0;
-  bool _fridayMotzeiHalfDay = false;
+  WorkCalendarRules _workRules = WorkCalendarRules.standard;
   bool _useGregorianDates = false;
   bool _isExporting = false;
   String _soferName = '';
@@ -37,7 +39,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final time = await _storage.getNotificationTime();
     final smart = await _storage.getSmartWorkflowEnabled();
     final rollover = await _storage.getDayRolloverHour();
-    final fridayHalf = await _storage.getFridayMotzeiHalfDay();
+    final workRules = await _storage.getWorkCalendarRules();
     final useGregorian = await _storage.getUseGregorianDates();
     final soferName = await _storage.getSoferName();
     if (mounted) {
@@ -46,11 +48,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _notificationTime = time;
         _smartWorkflowEnabled = smart;
         _dayRolloverHour = rollover;
-        _fridayMotzeiHalfDay = fridayHalf;
+        _workRules = workRules;
         _useGregorianDates = useGregorian;
         _soferName = soferName;
       });
     }
+  }
+
+  /// A one-line read of the work-day rules, so the setting is legible without
+  /// opening it.
+  String get _workCalendarSummary {
+    final parts = <String>[
+      switch (_workRules.friday) {
+        FridayWork.none => "שישי חופש",
+        FridayWork.half => "שישי חצי יום",
+        FridayWork.full => "שישי יום מלא",
+      },
+      if (_workRules.motzeiShabbatHalfDay) "מוצ״ש חצי יום",
+      if (_workRules.skipCholHamoed) "חול המועד",
+      if (_workRules.skipFasts) "צומות",
+      if (_workRules.skipChanukah) "חנוכה",
+    ];
+    return "${parts.join(" · ")} — משפיע על כל צפי סיום";
   }
 
   Future<void> _updateNotificationSettings(bool enabled) async {
@@ -431,7 +450,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     SwitchListTile(
                       title: const Text("תאריכים לועזיים"),
                       subtitle: const Text(
-                          "הצגת כל התאריכים בתאריך לועזי (יום.חודש.שנה) במקום עברי"),
+                          "תצוגה בלבד. החישוב — ימי עבודה, חגים וצפי סיום — "
+                          "נעשה תמיד לפי הלוח העברי"),
                       value: _useGregorianDates,
                       onChanged: (v) async {
                         await _storage.setUseGregorianDates(v);
@@ -450,17 +470,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           const Icon(Icons.speed, color: Colors.deepPurple),
                     ),
                     const Divider(),
-                    SwitchListTile(
-                      title: const Text("ימי שישי ומוצאי שבת כחצי יום"),
-                      subtitle: const Text(
-                          "בחישוב ימי עבודה: שישי ומוצאי שבת נספרים כחצי יום כל אחד"),
-                      value: _fridayMotzeiHalfDay,
-                      onChanged: (v) async {
-                        await _storage.setFridayMotzeiHalfDay(v);
-                        if (mounted) setState(() => _fridayMotzeiHalfDay = v);
-                      },
-                      secondary: const Icon(Icons.calendar_today,
+                    ListTile(
+                      title: const Text("ימי עבודה"),
+                      subtitle: Text(_workCalendarSummary),
+                      leading: const Icon(Icons.calendar_today,
                           color: Colors.deepPurple),
+                      trailing: const Icon(Icons.chevron_left),
+                      onTap: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const WorkCalendarSettingsScreen(),
+                          ),
+                        );
+                        // The estimates on every other screen read these rules,
+                        // so the summary here has to reflect a change made
+                        // inside.
+                        await _loadNotificationSettings();
+                      },
                     ),
                     ListTile(
                       title: const Text("שעת מעבר יום"),

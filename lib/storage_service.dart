@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'logic/hebrew_work_calendar.dart';
 import 'models.dart';
 
 class StorageService {
@@ -16,6 +17,7 @@ class StorageService {
   static const String _keyUseGregorianDates = 'use_gregorian_dates';
   static const String _keyExpenses = 'expenses';
   static const String _keySoferName = 'sofer_name';
+  static const String _keyWorkCalendarRules = 'work_calendar_rules';
 
   Future<void> saveProjects(List<Project> projects) async {
     final prefs = await SharedPreferences.getInstance();
@@ -87,6 +89,7 @@ class StorageService {
         _keyFridayMotzeiHalfDay: prefs.getBool(_keyFridayMotzeiHalfDay),
         _keyUseGregorianDates: prefs.getBool(_keyUseGregorianDates),
         _keySoferName: prefs.getString(_keySoferName),
+        _keyWorkCalendarRules: prefs.getString(_keyWorkCalendarRules),
       },
     };
   }
@@ -175,14 +178,40 @@ class StorageService {
     await prefs.setInt(_keyDayRolloverHour, hour.clamp(0, 23));
   }
 
-  Future<bool> getFridayMotzeiHalfDay() async {
+  /// Which days count as writing days, for every completion estimate the app
+  /// makes.
+  ///
+  /// Migrates the single `friday_motzei_half_day` flag this replaced: when it
+  /// was on, Friday counted as half a day and Saturday night as the other
+  /// half. When it was off — the old default, which nobody had to choose — the
+  /// new defaults apply instead, since a full Friday of writing was never a
+  /// deliberate setting.
+  Future<WorkCalendarRules> getWorkCalendarRules() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_keyFridayMotzeiHalfDay) ?? false;
+    final raw = prefs.getString(_keyWorkCalendarRules);
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) {
+          return WorkCalendarRules.fromJson(Map<String, dynamic>.from(decoded));
+        }
+      } catch (_) {
+        // Corrupt settings must not stop the app from opening.
+      }
+    }
+
+    if (prefs.getBool(_keyFridayMotzeiHalfDay) == true) {
+      return const WorkCalendarRules(
+        friday: FridayWork.half,
+        motzeiShabbatHalfDay: true,
+      );
+    }
+    return WorkCalendarRules.standard;
   }
 
-  Future<void> setFridayMotzeiHalfDay(bool value) async {
+  Future<void> setWorkCalendarRules(WorkCalendarRules rules) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_keyFridayMotzeiHalfDay, value);
+    await prefs.setString(_keyWorkCalendarRules, jsonEncode(rules.toJson()));
   }
 
   Future<bool> getUseGregorianDates() async {
