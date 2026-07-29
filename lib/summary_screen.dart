@@ -3,6 +3,7 @@ import 'package:kosher_dart/kosher_dart.dart';
 import 'logic/date_logic.dart';
 import 'logic/production_calculator.dart';
 import 'logic/profit_calculator.dart';
+import 'logic/session_logic.dart';
 import 'models.dart';
 import 'project_summary_screen.dart';
 import 'hebrew_utils.dart';
@@ -1110,18 +1111,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
         ],
       ),
     );
-    DateTime? parseTime(String t) {
-      final parts = t.split(':');
-      if (parts.length < 2) return null;
-      final h = int.tryParse(parts[0].trim());
-      final m = int.tryParse(parts[1].trim());
-      if (h == null || m == null) return null;
-      return DateTime(
-          s.startTime.year, s.startTime.month, s.startTime.day, h, m);
-    }
-
-    final startTime = parseTime(startCtrl.text) ?? s.startTime;
-    final endTime = parseTime(endCtrl.text) ?? s.endTime;
+    final parsedStart = SessionLogic.parseTimeString(startCtrl.text);
+    final parsedEnd = SessionLogic.parseTimeString(endCtrl.text);
     final startLine = int.tryParse(startLineCtrl.text) ?? s.startLine;
     final endLine = int.tryParse(endLineCtrl.text) ?? s.endLine;
     final amount = int.tryParse(amountCtrl.text) ?? s.amount;
@@ -1131,9 +1122,78 @@ class _SummaryScreenState extends State<SummaryScreen> {
     endLineCtrl.dispose();
     amountCtrl.dispose();
     if (ok != true || !mounted) return;
+
+    // Same range builder the entry dialog uses, so a session running past
+    // midnight ends on the next day instead of producing a negative duration.
+    final range = SessionLogic.buildTimeRange(
+      date: s.startTime,
+      startHour: parsedStart?.hour ?? s.startTime.hour,
+      startMinute: parsedStart?.minute ?? s.startTime.minute,
+      endHour: parsedEnd?.hour ?? s.endTime.hour,
+      endMinute: parsedEnd?.minute ?? s.endTime.minute,
+    );
+
+    final project = widget.projects.firstWhere(
+      (p) => p.id == s.projectId,
+      orElse: () => Project(
+        id: 'unknown',
+        name: '',
+        type: ProjectType.sefer,
+        price: 0,
+        expenses: 0,
+        targetDaily: 0,
+        targetMonthly: 0,
+      ),
+    );
+
+    // Editing used to bypass every check the entry dialog applies.
+    if (project.type == ProjectType.sefer && project.id != 'unknown') {
+      final lineError = SessionLogic.validateSeferLines(
+        startLine: startLine,
+        endLine: endLine,
+        linesPerPage: ProductionCalculator.linesPerPageOf(project),
+      );
+      if (lineError != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(lineError), backgroundColor: Colors.red),
+        );
+        return;
+      }
+
+      final overlaps = SessionLogic.hasSeferOverlap(
+        history: widget.history,
+        projectId: s.projectId,
+        page: amount,
+        startLine: startLine,
+        endLine: endLine,
+        // Without this the session would always clash with itself.
+        excludeSessionId: s.id,
+      );
+      if (overlaps) {
+        final confirm = await showDialog<bool>(
+              context: context,
+              builder: (c) => AlertDialog(
+                title: const Text("שים לב: כפילות"),
+                content: const Text(
+                    "חלק מהשורות בעמוד זה כבר נכתבו ברשומה אחרת. לשמור בכל זאת?"),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(c, false),
+                      child: const Text("ביטול")),
+                  TextButton(
+                      onPressed: () => Navigator.pop(c, true),
+                      child: const Text("שמור בכל זאת")),
+                ],
+              ),
+            ) ??
+            false;
+        if (!confirm || !mounted) return;
+      }
+    }
+
     final updated = s.copyWith(
-      startTime: startTime,
-      endTime: endTime,
+      startTime: range.start,
+      endTime: range.end,
       startLine: startLine,
       endLine: endLine,
       amount: amount,
