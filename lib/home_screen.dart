@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:window_manager/window_manager.dart';
+import 'logic/date_logic.dart';
 import 'logic/production_calculator.dart';
 import 'models.dart';
 import 'settings_screen.dart';
@@ -128,13 +129,8 @@ class _SoferHomeState extends State<SoferHome>
     }
   }
 
-  DateTime _effectiveDate(DateTime now) {
-    if (now.hour < _dayRolloverHour) {
-      return DateTime(now.year, now.month, now.day)
-          .subtract(const Duration(days: 1));
-    }
-    return DateTime(now.year, now.month, now.day);
-  }
+  DateTime _effectiveDate(DateTime now) =>
+      DateLogic.effectiveDate(now, _dayRolloverHour);
 
   void _initAutoUpdater() async {
     if (Platform.isWindows || Platform.isMacOS) {
@@ -1631,9 +1627,11 @@ class _SoferHomeState extends State<SoferHome>
     final todaySessions = history
         .where((s) =>
             s.projectId == project.id &&
-            s.startTime.year == now.year &&
-            s.startTime.month == now.month &&
-            s.startTime.day == now.day)
+            // Backlog entries record work done before the app existed and must
+            // not count towards today's goal. They carry a placeholder date, so
+            // this used to be filtered out only by accident.
+            !s.backlogOnly &&
+            DateLogic.isSameWorkingDay(s.startTime, now, _dayRolloverHour))
         .toList();
 
     int totalDone = 0;

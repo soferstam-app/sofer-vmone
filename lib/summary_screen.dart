@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:kosher_dart/kosher_dart.dart';
+import 'logic/date_logic.dart';
 import 'logic/production_calculator.dart';
 import 'logic/profit_calculator.dart';
 import 'models.dart';
@@ -30,17 +31,27 @@ class _SummaryScreenState extends State<SummaryScreen> {
   bool _viewByMonth = false;
   final StorageService _storage = StorageService();
 
+  /// Kept in sync with the setting so this screen files a session under the
+  /// same working day the home screen displays.
+  int _dayRolloverHour = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _storage.getDayRolloverHour().then((h) {
+      if (mounted) setState(() => _dayRolloverHour = h);
+    });
+  }
+
   List<WorkSession> _getSessionsForDate(DateTime date) {
     return widget.history.where((session) {
       if (session.backlogOnly) return false;
       if (_viewByMonth) {
-        return session.startTime.year == date.year &&
-            session.startTime.month == date.month;
-      } else {
-        return session.startTime.year == date.year &&
-            session.startTime.month == date.month &&
-            session.startTime.day == date.day;
+        return DateLogic.isSameWorkingMonth(
+            session.startTime, date, _dayRolloverHour);
       }
+      return DateLogic.isSameWorkingDay(
+          session.startTime, date, _dayRolloverHour);
     }).toList();
   }
 
