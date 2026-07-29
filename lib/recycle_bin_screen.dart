@@ -76,26 +76,24 @@ class _RecycleBinScreenState extends State<RecycleBinScreen> {
       final allProjects = await _storage.loadProjects();
       final index = allProjects.indexWhere((p) => p.id == project.id);
       if (index != -1) {
-        final oldDate = DateTime.now().subtract(const Duration(days: 365));
-        final forcedOldProject = Project(
-          id: project.id,
-          name: project.name,
-          type: project.type,
-          price: project.price,
-          expenses: project.expenses,
-          targetDaily: project.targetDaily,
-          targetMonthly: project.targetMonthly,
-          dailyGoalInLines: project.dailyGoalInLines,
-          totalPages: project.totalPages,
-          linesPerPage: project.linesPerPage,
-          isDeleted: true,
-          lastUpdated: oldDate,
-        );
-
-        allProjects[index] = forcedOldProject;
+        // Backdating lastUpdated to force a purge used to lose the merge
+        // against any device still holding a newer copy, which brought the
+        // project back to life. copyWith stamps the deletion as the most
+        // recent change instead, so it wins and propagates.
+        allProjects[index] = project.copyWith(isDeleted: true);
         await _storage.saveProjects(allProjects);
-        await SyncService.instance.syncData();
 
+        // Sessions belonging to the project were previously left behind,
+        // referencing a project that no longer exists.
+        final history = await _storage.loadHistory();
+        final updatedHistory = history
+            .map((s) => s.projectId == project.id && !s.isDeleted
+                ? s.copyWith(isDeleted: true)
+                : s)
+            .toList();
+        await _storage.saveHistory(updatedHistory);
+
+        await SyncService.instance.syncData();
         await _loadDeletedItems();
       }
     }

@@ -201,6 +201,7 @@ class WorkSession {
     int? endLine,
     String? description,
     bool? backlogOnly,
+    bool? isDeleted,
   }) {
     return WorkSession(
       id: id,
@@ -216,7 +217,7 @@ class WorkSession {
       isManual: isManual,
       backlogOnly: backlogOnly ?? this.backlogOnly,
       lastUpdated: DateTime.now(),
-      isDeleted: isDeleted,
+      isDeleted: isDeleted ?? this.isDeleted,
     );
   }
 }

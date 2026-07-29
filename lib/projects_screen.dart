@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'logic/id_generator.dart';
 import 'models.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'storage_service.dart';
@@ -653,7 +654,7 @@ class _ProjectDialogState extends State<ProjectDialog> {
     if (_formKey.currentState!.validate()) {
       final email = _clientEmailCtrl.text.trim();
       final p = Project(
-        id: widget.existingProject?.id ?? DateTime.now().toString(),
+        id: widget.existingProject?.id ?? IdGenerator.generate(),
         name: _nameCtrl.text,
         type: _type,
         price: double.tryParse(_priceCtrl.text) ?? 0,
