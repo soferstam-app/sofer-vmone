@@ -5,9 +5,7 @@ import 'logic/production_calculator.dart';
 import 'logic/profit_calculator.dart';
 import 'logic/session_logic.dart';
 import 'models.dart';
-import 'project_comparison_screen.dart';
 import 'project_summary_screen.dart';
-import 'quote_screen.dart';
 import 'hebrew_utils.dart';
 import 'storage_service.dart';
 
@@ -461,24 +459,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
               context,
               MaterialPageRoute(
                 builder: (context) => ProjectSummaryScreen(
-                    projects: widget.projects, history: widget.history),
-              ),
-            );
-          }),
-          _buildActionButton("רווחיות", Icons.leaderboard, () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ProjectComparisonScreen(
-                    projects: widget.projects, history: widget.history),
-              ),
-            );
-          }),
-          _buildActionButton("הצעת מחיר", Icons.calculate, () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => QuoteScreen(
                     projects: widget.projects, history: widget.history),
               ),
             );
