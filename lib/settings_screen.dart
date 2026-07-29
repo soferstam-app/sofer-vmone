@@ -3,7 +3,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'backup_service.dart';
 import 'hebrew_utils.dart';
 import 'platform_support.dart';
-import 'sync_service.dart';
 import 'storage_service.dart';
 import 'notification_service.dart';
 import 'package:auto_updater/auto_updater.dart';
@@ -88,64 +87,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     String feedURL = 'https://github.com/soferstam-app/sofer-vmone/releases';
     await autoUpdater.setFeedURL(feedURL);
     await autoUpdater.checkForUpdates();
-  }
-
-  Future<void> _handleSignIn() async {
-    try {
-      await SyncService.instance.signIn();
-      if (mounted) {
-        setState(() {});
-      }
-    } catch (error) {
-      debugPrint("Sign in error: $error");
-      String errorMessage = "שגיאה בהתחברות: $error";
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(errorMessage)),
-        );
-      }
-    }
-  }
-
-  Future<void> _handleSignOut() async {
-    await SyncService.instance.signOut();
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  Future<void> _forceSync() async {
-    if (!SyncService.instance.isSignedIn) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("מבצע סנכרון...")),
-    );
-
-    final status = await SyncService.instance.syncData();
-    if (!mounted) return;
-    setState(() {});
-
-    switch (status) {
-      case SyncStatus.success:
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("הסנכרון הושלם בהצלחה!"),
-            backgroundColor: Colors.green,
-          ),
-        );
-      case SyncStatus.notSignedIn:
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("יש להתחבר לחשבון Google תחילה")),
-        );
-      case SyncStatus.failed:
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-                "הסנכרון נכשל: ${SyncService.instance.lastSyncError ?? 'שגיאה לא ידועה'}"),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 6),
-          ),
-        );
-    }
   }
 
   Future<void> _editSoferName() async {
@@ -438,42 +379,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bool isSignedIn = SyncService.instance.isSignedIn;
-    final String displayName = SyncService.instance.userEmail;
-
     return Scaffold(
-      persistentFooterButtons: [
-        !isSignedIn
-            ? ElevatedButton(
-                onPressed: _handleSignIn,
-                child: const Text("Sign In Google"),
-              )
-            : Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(displayName),
-                  if (SyncService.instance.lastSyncTime != null)
-                    Text(
-                      "סונכרן לאחרונה: ${TimeOfDay.fromDateTime(SyncService.instance.lastSyncTime!).format(context)}",
-                      style:
-                          TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                    ),
-                  ElevatedButton(
-                    onPressed: _handleSignOut,
-                    child: const Text("Sign Out Google"),
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      ElevatedButton(
-                        onPressed: _forceSync,
-                        child: const Text("סנכרון ידני"),
-                      ),
-                    ],
-                  ),
-                ],
-              )
-      ],
       appBar: AppBar(
         title: const Text("הגדרות"),
         actions: [
