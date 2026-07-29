@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sofer_vmone/backup_service.dart';
 import 'package:sofer_vmone/hebrew_utils.dart';
+import 'package:sofer_vmone/logic/date_logic.dart';
 import 'package:sofer_vmone/logic/production_calculator.dart';
 import 'package:sofer_vmone/logic/profit_calculator.dart';
 import 'package:sofer_vmone/models.dart';
@@ -342,6 +343,51 @@ void main() {
             session(amount: 1, tefillinType: 'head', parshiya: 3), // 1
           ]),
           13);
+    });
+  });
+
+  group('DateLogic', () {
+    test('rollover 0 behaves as the plain calendar date', () {
+      expect(DateLogic.effectiveDate(DateTime(2026, 5, 10, 1, 30), 0),
+          DateTime(2026, 5, 10));
+      expect(DateLogic.effectiveDate(DateTime(2026, 5, 10, 23, 0), 0),
+          DateTime(2026, 5, 10));
+    });
+
+    test('before the rollover hour belongs to the previous day', () {
+      // 01:00 with rollover at 02:00 is still "yesterday"
+      expect(DateLogic.effectiveDate(DateTime(2026, 5, 10, 1, 0), 2),
+          DateTime(2026, 5, 9));
+      // 02:00 exactly starts the new day
+      expect(DateLogic.effectiveDate(DateTime(2026, 5, 10, 2, 0), 2),
+          DateTime(2026, 5, 10));
+    });
+
+    test('crosses a month boundary correctly', () {
+      // 01:00 on the 1st, rollover 3 → belongs to the last day of April
+      expect(DateLogic.effectiveDate(DateTime(2026, 5, 1, 1, 0), 3),
+          DateTime(2026, 4, 30));
+    });
+
+    test('crosses a year boundary correctly', () {
+      expect(DateLogic.effectiveDate(DateTime(2026, 1, 1, 0, 30), 2),
+          DateTime(2025, 12, 31));
+    });
+
+    test('a late-night session and the day it belongs to agree', () {
+      final lateNight = DateTime(2026, 5, 10, 1, 15);
+      final theWorkingDay = DateTime(2026, 5, 9, 20, 0);
+      expect(DateLogic.isSameWorkingDay(lateNight, theWorkingDay, 2), isTrue);
+      // Without the rollover they would be different days
+      expect(DateLogic.isSameWorkingDay(lateNight, theWorkingDay, 0), isFalse);
+    });
+
+    test('month grouping honours the rollover at a boundary', () {
+      final lateNight = DateTime(2026, 5, 1, 1, 0);
+      expect(
+          DateLogic.isSameWorkingMonth(lateNight, DateTime(2026, 4), 3), isTrue);
+      expect(DateLogic.isSameWorkingMonth(lateNight, DateTime(2026, 5), 3),
+          isFalse);
     });
   });
 
