@@ -5,7 +5,9 @@ import 'logic/production_calculator.dart';
 import 'logic/profit_calculator.dart';
 import 'logic/session_logic.dart';
 import 'models.dart';
+import 'project_comparison_screen.dart';
 import 'project_summary_screen.dart';
+import 'quote_screen.dart';
 import 'hebrew_utils.dart';
 import 'storage_service.dart';
 
@@ -441,11 +443,14 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
   Widget _buildBottomButtons() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
       color: Colors.white,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
+      // Five actions do not fit across a phone; scroll rather than overflow.
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
           _buildActionButton(
             "סיכום חודשי",
             Icons.calendar_view_month,
@@ -460,26 +465,55 @@ class _SummaryScreenState extends State<SummaryScreen> {
               ),
             );
           }),
+          _buildActionButton("רווחיות", Icons.leaderboard, () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ProjectComparisonScreen(
+                    projects: widget.projects, history: widget.history),
+              ),
+            );
+          }),
+          _buildActionButton("הצעת מחיר", Icons.calculate, () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => QuoteScreen(
+                    projects: widget.projects, history: widget.history),
+              ),
+            );
+          }),
           _buildActionButton("בחירת תאריך", Icons.date_range, _pickDate),
-        ],
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildActionButton(String label, IconData icon, VoidCallback onTap) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        IconButton(
-          onPressed: onTap,
-          icon: Icon(icon),
-          style: IconButton.styleFrom(
-            backgroundColor: Colors.deepPurple.shade50,
-            foregroundColor: Colors.deepPurple,
+    // A fixed width keeps the labels from running into each other now that
+    // there are five actions in the row.
+    return SizedBox(
+      width: 86,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            onPressed: onTap,
+            icon: Icon(icon),
+            style: IconButton.styleFrom(
+              backgroundColor: Colors.deepPurple.shade50,
+              foregroundColor: Colors.deepPurple,
+            ),
           ),
-        ),
-        Text(label, style: const TextStyle(fontSize: 12)),
-      ],
+          Text(
+            label,
+            style: const TextStyle(fontSize: 11),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+          ),
+        ],
+      ),
     );
   }
 
