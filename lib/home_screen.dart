@@ -560,7 +560,8 @@ class _SoferHomeState extends State<SoferHome>
     await _storageService.saveLastPosition(_selectedProject!.id, p, l);
   }
 
-  void _finishSmartSession({Duration breakDuration = Duration.zero}) {
+  Future<void> _finishSmartSession(
+      {Duration breakDuration = Duration.zero}) async {
     if (_selectedProject == null) return;
 
     // --- Logic for Mezuza Projects ---
@@ -724,6 +725,36 @@ class _SoferHomeState extends State<SoferHome>
       if (totalLinesWritten == 0) {
         _showError(context, "לא נרשמה התקדמות בכתיבה");
         return;
+      }
+
+      // The smart flow wrote straight to history without ever checking for
+      // duplicates, so using "edit position" to jump back and rewriting a
+      // range produced a silent double entry.
+      final overlapping = newSessions
+          .where((s) => _checkOverlap(
+              _selectedProject!.id, s.amount, s.startLine, s.endLine))
+          .toList();
+      if (overlapping.isNotEmpty) {
+        final pages =
+            overlapping.map((s) => formatHebrewNumber(s.amount)).join(', ');
+        final confirm = await showDialog<bool>(
+              context: context,
+              builder: (c) => AlertDialog(
+                title: const Text("שים לב: כפילות"),
+                content: Text(
+                    "חלק מהשורות בעמוד $pages כבר נכתבו בעבר. האם לשמור בכל זאת?"),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(c, false),
+                      child: const Text("ביטול")),
+                  TextButton(
+                      onPressed: () => Navigator.pop(c, true),
+                      child: const Text("שמור בכל זאת")),
+                ],
+              ),
+            ) ??
+            false;
+        if (!confirm || !mounted) return;
       }
 
       DateTime sessionEnd = DateTime.now();
@@ -1441,6 +1472,12 @@ class _SoferHomeState extends State<SoferHome>
           history.addAll(rangeSessions);
           _storageService.saveHistory(history);
         });
+        await _advanceSmartPositionAfterEntry(
+          project: _selectedProject!,
+          page: pageTo,
+          lastLine: linesPerPage,
+          backlogOnly: backlogOnly,
+        );
         SyncService.instance.syncData();
         if (Platform.isAndroid && _checkDailyGoalMet(_selectedProject!)) {
           NotificationService().cancelDailyReminder();
@@ -1585,6 +1622,16 @@ class _SoferHomeState extends State<SoferHome>
       _storageService.saveHistory(history);
     });
 
+    // Keep the smart-workflow position in step with manual entries, otherwise
+    // entering pages by hand and then starting a smart session resumes from
+    // wherever the writer was before and rewrites work already recorded.
+    await _advanceSmartPositionAfterEntry(
+      project: _selectedProject!,
+      page: amount,
+      lastLine: endLine,
+      backlogOnly: backlogOnly,
+    );
+
     SyncService.instance.syncData();
 
     if (Platform.isAndroid && _checkDailyGoalMet(_selectedProject!)) {
@@ -1592,6 +1639,52 @@ class _SoferHomeState extends State<SoferHome>
     }
 
     return true;
+  }
+
+  /// Moves the stored smart-workflow position forward when a manual entry ends
+  /// past it. Never moves it backwards, so filling in an earlier gap does not
+  /// rewind the writer's place.
+  Future<void> _advanceSmartPositionAfterEntry({
+    required Project project,
+    required int page,
+    required int lastLine,
+    required bool backlogOnly,
+  }) async {
+    // Backlog entries describe work done before the app existed and say
+    // nothing about where the writer is now.
+    if (backlogOnly) return;
+    if (project.type != ProjectType.sefer && project.type != ProjectType.mezuza) {
+      return;
+    }
+    if (page <= 0) return;
+
+    final maxLines = project.type == ProjectType.mezuza
+        ? ProductionCalculator.linesPerMezuza
+        : ProductionCalculator.linesPerPageOf(project);
+
+    // Next line after the one just recorded, rolling onto the next page.
+    var nextPage = page;
+    var nextLine = lastLine + 1;
+    if (nextLine > maxLines) {
+      nextPage += 1;
+      nextLine = 1;
+    }
+
+    final stored = await _storageService.getLastPosition(project.id);
+    final storedPage = (stored['page'] as int?) ?? 0;
+    final storedLine = (stored['line'] as int?) ?? 0;
+    final isAhead =
+        nextPage > storedPage || (nextPage == storedPage && nextLine > storedLine);
+    if (!isAhead) return;
+
+    await _storageService.saveLastPosition(project.id, nextPage, nextLine);
+    if (!mounted) return;
+    if (_selectedProject?.id == project.id) {
+      setState(() {
+        _smartCurrentPage = nextPage;
+        _smartCurrentLine = nextLine;
+      });
+    }
   }
 
   bool _checkOverlap(String projId, int page, int start, int end) =>
