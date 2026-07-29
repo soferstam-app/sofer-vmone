@@ -253,6 +253,39 @@ void main() {
           1.0);
     });
 
+    test('a session uses the page size snapshotted when it was recorded', () {
+      final oldSession = WorkSession(
+        id: 'old',
+        projectId: 'p',
+        startTime: DateTime(2026, 1, 1),
+        endTime: DateTime(2026, 1, 1),
+        amount: 1,
+        startLine: 1,
+        endLine: 30,
+        description: '',
+        isManual: false,
+        linesPerPageAtEntry: 30, // written when pages held 30 lines
+      );
+      // Project has since been changed to 42 lines per page.
+      final p = project(linesPerPage: 42);
+
+      expect(ProductionCalculator.linesPerPageForSession(p, oldSession), 30);
+      // A full page then, and still a full page now — not 30/42 of one.
+      expect(ProductionCalculator.seferPages([oldSession], p), 1.0);
+    });
+
+    test('sessions without a snapshot fall back to the project setting', () {
+      final legacy = session(startLine: 1, endLine: 42);
+      expect(legacy.linesPerPageAtEntry, isNull);
+      expect(
+          ProductionCalculator.linesPerPageForSession(
+              project(linesPerPage: 30), legacy),
+          30);
+      // Which is the behaviour that existed before the snapshot field.
+      expect(
+          ProductionCalculator.linesPerPageForSession(project(), legacy), 42);
+    });
+
     test('pages can be fractional', () {
       expect(
           ProductionCalculator.seferPages(

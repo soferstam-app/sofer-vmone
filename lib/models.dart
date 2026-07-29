@@ -122,6 +122,17 @@ class WorkSession {
   final String projectId;
   final DateTime startTime;
   final DateTime endTime;
+
+  /// Quantity, whose meaning depends on the project type — use the named
+  /// accessors below rather than reading this directly:
+  ///
+  /// * sefer    → the **page number** this session was written on
+  /// * mezuza   → the **count** of mezuzot
+  /// * tefillin → the **count** of sets, head/hand units, or parshiyot,
+  ///              depending on [tefillinType] and [parshiya]
+  ///
+  /// The three meanings share one field for historical reasons; changing the
+  /// storage shape would break every existing backup.
   final int amount;
   final int startLine;
   final int endLine;
@@ -131,6 +142,15 @@ class WorkSession {
   final bool isManual;
   /// When true: counts only for project total written (הספק); excluded from profit, averages, daily goal.
   final bool backlogOnly;
+
+  /// Lines per page as configured when this session was recorded (sefer only).
+  ///
+  /// Production and profit are derived from lines divided by page size, so
+  /// changing the project setting later would otherwise rewrite what the
+  /// writer earned in past months. Snapshotting the value keeps history
+  /// stable. Null on sessions recorded before this field existed, which fall
+  /// back to the project's current setting.
+  final int? linesPerPageAtEntry;
   final DateTime lastUpdated;
   final bool isDeleted;
 
@@ -147,11 +167,26 @@ class WorkSession {
     required this.description,
     required this.isManual,
     this.backlogOnly = false,
+    this.linesPerPageAtEntry,
     DateTime? lastUpdated,
     this.isDeleted = false,
   }) : lastUpdated = lastUpdated ?? DateTime.now();
 
   Duration get duration => endTime.difference(startTime);
+
+  /// The page this session was written on. Sefer projects only — reading it
+  /// for another type is a bug, since [amount] means a count there.
+  int get pageNumber {
+    assert(
+      linesPerPageAtEntry != null || startLine > 0 || endLine > 0,
+      'pageNumber read on a session that carries no line information — '
+      'this is almost certainly not a sefer session',
+    );
+    return amount;
+  }
+
+  /// The number of units produced. Mezuza and tefillin projects only.
+  int get unitCount => amount;
 
   Map<String, dynamic> toJson() {
     return {
@@ -167,6 +202,7 @@ class WorkSession {
       'description': description,
       'isManual': isManual,
       'backlogOnly': backlogOnly,
+      'linesPerPageAtEntry': linesPerPageAtEntry,
       'lastUpdated': lastUpdated.toIso8601String(),
       'isDeleted': isDeleted,
     };
@@ -186,6 +222,7 @@ class WorkSession {
       description: json['description'],
       isManual: json['isManual'],
       backlogOnly: json['backlogOnly'] ?? false,
+      linesPerPageAtEntry: json['linesPerPageAtEntry'] as int?,
       lastUpdated: json['lastUpdated'] != null
           ? DateTime.parse(json['lastUpdated'])
           : DateTime.now(),
@@ -216,6 +253,7 @@ class WorkSession {
       description: description ?? this.description,
       isManual: isManual,
       backlogOnly: backlogOnly ?? this.backlogOnly,
+      linesPerPageAtEntry: linesPerPageAtEntry,
       lastUpdated: DateTime.now(),
       isDeleted: isDeleted ?? this.isDeleted,
     );
