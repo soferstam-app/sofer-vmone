@@ -927,22 +927,43 @@ class _SummaryScreenState extends State<SummaryScreen> {
   }
 
   // --- עריכת היסטוריה ---
+  /// All sessions, newest first, so a mistake from any day can be corrected
+  /// without first navigating the summary to that date.
+  List<WorkSession> _allSessionsNewestFirst() {
+    final all = widget.history.where((s) => !s.isDeleted).toList()
+      ..sort((a, b) => b.startTime.compareTo(a.startTime));
+    return all;
+  }
+
   void _showHistoryEditor() {
-    final sessions = _getSessionsForDate(_selectedDate);
     final selectedIds = <String>{};
+    // Starts on the selected day, which is the common case, but the editor can
+    // switch to the full history.
+    var showAllDays = false;
+    String projectFilter = '';
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setSheetState) {
+          var sessions = showAllDays
+              ? _allSessionsNewestFirst()
+              : _getSessionsForDate(_selectedDate);
+          if (projectFilter.isNotEmpty) {
+            sessions =
+                sessions.where((s) => s.projectId == projectFilter).toList();
+          }
+
           return DraggableScrollableSheet(
             expand: false,
             builder: (context, scrollController) {
               return Column(
                 children: [
                   AppBar(
-                    title: const Text("עריכת רשומות"),
+                    title: Text(showAllDays
+                        ? "עריכת רשומות – כל הימים"
+                        : "עריכת רשומות – יום נבחר"),
                     automaticallyImplyLeading: false,
                     actions: [
                       IconButton(
@@ -950,24 +971,77 @@ class _SummaryScreenState extends State<SummaryScreen> {
                           onPressed: () => Navigator.pop(context)),
                     ],
                   ),
-                  if (sessions.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Row(
-                        children: [
-                          if (selectedIds.isNotEmpty)
-                            TextButton.icon(
+                  Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        SegmentedButton<bool>(
+                          segments: [
+                            ButtonSegment(
+                              value: false,
+                              label: Text(widget.useGregorianDates
+                                  ? formatDisplayDate(_selectedDate, true)
+                                  : _getHebrewDate(_selectedDate)),
+                              icon: const Icon(Icons.today, size: 18),
+                            ),
+                            const ButtonSegment(
+                              value: true,
+                              label: Text("כל הימים"),
+                              icon: Icon(Icons.all_inbox, size: 18),
+                            ),
+                          ],
+                          selected: {showAllDays},
+                          onSelectionChanged: (v) => setSheetState(() {
+                            showAllDays = v.first;
+                            // Selections refer to rows that may no longer be
+                            // listed, so clear them when the view changes.
+                            selectedIds.clear();
+                          }),
+                        ),
+                        if (showAllDays && widget.projects.length > 1)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: DropdownButtonFormField<String>(
+                              initialValue: projectFilter,
+                              isExpanded: true,
+                              decoration: const InputDecoration(
+                                labelText: "סינון לפי פרויקט",
+                                border: OutlineInputBorder(),
+                                isDense: true,
+                              ),
+                              items: [
+                                const DropdownMenuItem(
+                                    value: '', child: Text("כל הפרויקטים")),
+                                ...widget.projects.map((p) => DropdownMenuItem(
+                                    value: p.id, child: Text(p.name))),
+                              ],
+                              onChanged: (v) => setSheetState(() {
+                                projectFilter = v ?? '';
+                                selectedIds.clear();
+                              }),
+                            ),
+                          ),
+                        if (selectedIds.isNotEmpty)
+                          Align(
+                            alignment: AlignmentDirectional.centerStart,
+                            child: TextButton.icon(
                               icon: const Icon(Icons.delete_sweep),
                               label: Text("מחק נבחרים (${selectedIds.length})"),
                               onPressed: () =>
                                   _deleteSelected(ctx, selectedIds),
                             ),
-                        ],
-                      ),
+                          ),
+                      ],
                     ),
+                  ),
                   Expanded(
                     child: sessions.isEmpty
-                        ? const Center(child: Text("אין רשומות ליום זה"))
+                        ? Center(
+                            child: Text(showAllDays
+                                ? "אין רשומות כלל"
+                                : "אין רשומות ליום זה"))
                         : ListView.builder(
                             controller: scrollController,
                             itemCount: sessions.length,
@@ -999,7 +1073,12 @@ class _SummaryScreenState extends State<SummaryScreen> {
                                 ),
                                 title: Text(p.name),
                                 subtitle: Text(
-                                    "${s.description}\n${_formatDuration(s.duration)}"),
+                                  // Across all days the date is essential to
+                                  // tell otherwise-identical rows apart.
+                                  showAllDays
+                                      ? "${formatDisplayDate(s.startTime, widget.useGregorianDates)} · ${s.description}\n${_formatDuration(s.duration)}"
+                                      : "${s.description}\n${_formatDuration(s.duration)}",
+                                ),
                                 isThreeLine: true,
                                 trailing: Row(
                                   mainAxisSize: MainAxisSize.min,
