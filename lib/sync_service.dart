@@ -6,6 +6,7 @@ import 'package:googleapis/drive/v3.dart' as googleapis;
 import 'package:http/http.dart' as http;
 import 'package:googleapis_auth/auth_io.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'logic/merge_service.dart';
 import 'models.dart';
 import 'storage_service.dart';
 
@@ -241,23 +242,18 @@ class SyncService {
         }
       }
 
-      final mergedProjects = _mergeLists<Project>(
-          localProjects, cloudProjects, (p) => p.id, (p) => p.lastUpdated);
-
-      final mergedHistory = _mergeLists<WorkSession>(
-          localHistory, cloudHistory, (s) => s.id, (s) => s.lastUpdated);
-
-      // Merge on lastUpdated, not on the expense date: editing an expense does
-      // not change its date, so the edit would never win the merge.
-      final mergedExpenses = _mergeLists<Expense>(
-          localExpenses, cloudExpenses, (e) => e.id, (e) => e.lastUpdated);
-
-      final cleanProjects = _purgeOldDeleted(
-          mergedProjects, (p) => p.isDeleted, (p) => p.lastUpdated);
-      final cleanHistory = _purgeOldDeleted(
-          mergedHistory, (s) => s.isDeleted, (s) => s.lastUpdated);
-      final cleanExpenses = _purgeOldDeleted(
-          mergedExpenses, (e) => e.isDeleted, (e) => e.lastUpdated);
+      // Same merge rules the file import uses — see MergeService.
+      final outcome = MergeService.mergeBackup(
+        localProjects: localProjects,
+        localHistory: localHistory,
+        localExpenses: localExpenses,
+        incomingProjects: cloudProjects,
+        incomingHistory: cloudHistory,
+        incomingExpenses: cloudExpenses,
+      );
+      final cleanProjects = outcome.projects;
+      final cleanHistory = outcome.history;
+      final cleanExpenses = outcome.expenses;
 
       await _storage.saveProjects(cleanProjects);
       await _storage.saveHistory(cleanHistory);
@@ -303,40 +299,6 @@ class SyncService {
         await syncData();
       }
     }
-  }
-
-  List<T> _mergeLists<T>(List<T> local, List<T> cloud, String Function(T) getId,
-      DateTime Function(T) getLastUpdated) {
-    final Map<String, T> map = {};
-
-    for (var item in local) {
-      map[getId(item)] = item;
-    }
-
-    for (var item in cloud) {
-      final id = getId(item);
-      if (map.containsKey(id)) {
-        final localItem = map[id] as T;
-        if (getLastUpdated(item).isAfter(getLastUpdated(localItem))) {
-          map[id] = item;
-        }
-      } else {
-        map[id] = item;
-      }
-    }
-
-    return map.values.toList();
-  }
-
-  List<T> _purgeOldDeleted<T>(List<T> items, bool Function(T) getIsDeleted,
-      DateTime Function(T) getLastUpdated) {
-    final thirtyDaysAgo = DateTime.now().subtract(const Duration(days: 30));
-    return items.where((item) {
-      if (getIsDeleted(item)) {
-        return getLastUpdated(item).isAfter(thirtyDaysAgo);
-      }
-      return true;
-    }).toList();
   }
 }
 
