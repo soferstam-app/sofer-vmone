@@ -41,4 +41,68 @@ class ProductionCalculator {
   /// Total expressed in mezuzot, including a fractional last one.
   static double mezuzotTotal(Iterable<WorkSession> sessions) =>
       mezuzaLinesTotal(sessions) / linesPerMezuza;
+
+  // --- Tefillin ---
+
+  /// A full set is head + hand, four parshiyot each.
+  static const int parshiyotPerSet = 8;
+  static const int parshiyotPerUnit = 4;
+
+  /// Line counts of a single parshiya, which differ between head and hand.
+  static const int linesPerHeadParshiya = 4;
+  static const int linesPerHandParshiya = 7;
+
+  /// Parshiyot represented by one tefillin session.
+  ///
+  /// The session shape encodes what was written:
+  /// * no type and no parshiya → whole sets, 8 parshiyot each
+  /// * a type but no parshiya  → whole head or hand units, 4 parshiyot each
+  /// * both set               → individual parshiyot, counted as-is
+  static int parshiyotInSession(WorkSession session) {
+    if (session.tefillinType == null && session.parshiya == null) {
+      return session.amount * parshiyotPerSet;
+    }
+    if ((session.tefillinType == 'head' || session.tefillinType == 'hand') &&
+        session.parshiya == null) {
+      return session.amount * parshiyotPerUnit;
+    }
+    return session.amount;
+  }
+
+  /// Total parshiyot across tefillin sessions.
+  static int parshiyotTotal(Iterable<WorkSession> sessions) {
+    var total = 0;
+    for (final session in sessions) {
+      total += parshiyotInSession(session);
+    }
+    return total;
+  }
+
+  /// Parshiyot from a session, but only when the work is *complete*.
+  ///
+  /// Returns null for a partially written individual parshiya. Used for
+  /// per-parshiya time averages, where a half-written parshiya would skew the
+  /// result: its duration is real but the unit is not finished.
+  ///
+  /// Whole sets and whole head/hand units are always complete by definition.
+  static int? completedParshiyotInSession(WorkSession session) {
+    if (session.tefillinType == null && session.parshiya == null) {
+      return session.amount * parshiyotPerSet;
+    }
+    if ((session.tefillinType == 'head' || session.tefillinType == 'hand') &&
+        session.parshiya == null) {
+      return session.amount * parshiyotPerUnit;
+    }
+    if (session.tefillinType != null && session.parshiya != null) {
+      final maxLines = session.tefillinType == 'head'
+          ? linesPerHeadParshiya
+          : linesPerHandParshiya;
+      // endLine 0 means no partial line was recorded, i.e. finished.
+      if (session.endLine == 0 || session.endLine >= maxLines) {
+        return session.amount;
+      }
+      return null;
+    }
+    return null;
+  }
 }
