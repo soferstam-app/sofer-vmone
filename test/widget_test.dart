@@ -12,6 +12,7 @@ import 'package:sofer_vmone/hebrew_utils.dart';
 import 'package:sofer_vmone/logic/date_logic.dart';
 import 'package:sofer_vmone/logic/production_calculator.dart';
 import 'package:sofer_vmone/logic/profit_calculator.dart';
+import 'package:sofer_vmone/logic/session_logic.dart';
 import 'package:sofer_vmone/models.dart';
 
 void main() {
@@ -343,6 +344,166 @@ void main() {
             session(amount: 1, tefillinType: 'head', parshiya: 3), // 1
           ]),
           13);
+    });
+  });
+
+  group('SessionLogic – time range', () {
+    test('a normal session keeps both times on the same day', () {
+      final r = SessionLogic.buildTimeRange(
+        date: DateTime(2026, 5, 10),
+        startHour: 9,
+        startMinute: 0,
+        endHour: 12,
+        endMinute: 30,
+      );
+      expect(r.start, DateTime(2026, 5, 10, 9, 0));
+      expect(r.end, DateTime(2026, 5, 10, 12, 30));
+      expect(r.end.difference(r.start), const Duration(hours: 3, minutes: 30));
+    });
+
+    test('a session past midnight ends on the next day, never negative', () {
+      final r = SessionLogic.buildTimeRange(
+        date: DateTime(2026, 5, 10),
+        startHour: 23,
+        startMinute: 0,
+        endHour: 1,
+        endMinute: 0,
+      );
+      expect(r.end, DateTime(2026, 5, 11, 1, 0));
+      expect(r.end.difference(r.start), const Duration(hours: 2));
+      expect(r.end.isAfter(r.start), isTrue);
+    });
+
+    test('parses HH:MM and rejects nonsense', () {
+      expect(SessionLogic.parseTimeString('09:30'), (hour: 9, minute: 30));
+      expect(SessionLogic.parseTimeString(' 9 : 5 '), (hour: 9, minute: 5));
+      expect(SessionLogic.parseTimeString('nope'), isNull);
+      expect(SessionLogic.parseTimeString('12'), isNull);
+      expect(SessionLogic.parseTimeString('25:00'), isNull);
+      expect(SessionLogic.parseTimeString('10:99'), isNull);
+    });
+  });
+
+  group('SessionLogic – validation', () {
+    test('accepts a valid sefer range', () {
+      expect(
+          SessionLogic.validateSeferLines(
+              startLine: 1, endLine: 42, linesPerPage: 42),
+          isNull);
+    });
+
+    test('rejects zero, out-of-page and reversed ranges', () {
+      expect(
+          SessionLogic.validateSeferLines(
+              startLine: 0, endLine: 10, linesPerPage: 42),
+          isNotNull);
+      expect(
+          SessionLogic.validateSeferLines(
+              startLine: 1, endLine: 100, linesPerPage: 42),
+          isNotNull);
+      expect(
+          SessionLogic.validateSeferLines(
+              startLine: 30, endLine: 10, linesPerPage: 42),
+          isNotNull);
+    });
+
+    test('mezuza and tefillin line limits', () {
+      expect(SessionLogic.validateMezuzaLine(22), isNull);
+      expect(SessionLogic.validateMezuzaLine(23), isNotNull);
+      expect(
+          SessionLogic.validateTefillinLine(tefillinType: 'head', line: 4),
+          isNull);
+      expect(
+          SessionLogic.validateTefillinLine(tefillinType: 'head', line: 5),
+          isNotNull);
+      // Hand parshiyot allow more lines than head
+      expect(
+          SessionLogic.validateTefillinLine(tefillinType: 'hand', line: 7),
+          isNull);
+    });
+  });
+
+  group('SessionLogic – overlap', () {
+    WorkSession s(String id, int page, int from, int to,
+            {bool deleted = false}) =>
+        WorkSession(
+          id: id,
+          projectId: 'p1',
+          startTime: DateTime(2026, 1, 1),
+          endTime: DateTime(2026, 1, 1),
+          amount: page,
+          startLine: from,
+          endLine: to,
+          description: '',
+          isManual: false,
+          isDeleted: deleted,
+        );
+
+    final history = [s('a', 5, 1, 20), s('b', 6, 1, 42)];
+
+    test('detects an overlapping range on the same page', () {
+      expect(
+          SessionLogic.hasSeferOverlap(
+              history: history,
+              projectId: 'p1',
+              page: 5,
+              startLine: 15,
+              endLine: 30),
+          isTrue);
+    });
+
+    test('a range after existing work on the same page is free', () {
+      expect(
+          SessionLogic.hasSeferOverlap(
+              history: history,
+              projectId: 'p1',
+              page: 5,
+              startLine: 21,
+              endLine: 42),
+          isFalse);
+    });
+
+    test('another page and another project do not collide', () {
+      expect(
+          SessionLogic.hasSeferOverlap(
+              history: history,
+              projectId: 'p1',
+              page: 7,
+              startLine: 1,
+              endLine: 42),
+          isFalse);
+      expect(
+          SessionLogic.hasSeferOverlap(
+              history: history,
+              projectId: 'other',
+              page: 5,
+              startLine: 1,
+              endLine: 20),
+          isFalse);
+    });
+
+    test('a session does not overlap itself when being edited', () {
+      // Without the exclusion, editing session "a" would always report a clash
+      expect(
+          SessionLogic.hasSeferOverlap(
+              history: history,
+              projectId: 'p1',
+              page: 5,
+              startLine: 1,
+              endLine: 20,
+              excludeSessionId: 'a'),
+          isFalse);
+    });
+
+    test('deleted sessions are ignored', () {
+      expect(
+          SessionLogic.hasSeferOverlap(
+              history: [s('x', 5, 1, 42, deleted: true)],
+              projectId: 'p1',
+              page: 5,
+              startLine: 1,
+              endLine: 42),
+          isFalse);
     });
   });
 

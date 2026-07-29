@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:window_manager/window_manager.dart';
 import 'logic/date_logic.dart';
 import 'logic/production_calculator.dart';
+import 'logic/session_logic.dart';
 import 'models.dart';
 import 'settings_screen.dart';
 import 'projects_screen.dart';
@@ -1323,25 +1324,15 @@ class _SoferHomeState extends State<SoferHome>
       } else {
         final date = _manualDate!;
         if (_manualIncludeTime) {
-          sessionStart = DateTime(
-            date.year,
-            date.month,
-            date.day,
-            _manualStartTime.hour,
-            _manualStartTime.minute,
+          final range = SessionLogic.buildTimeRange(
+            date: date,
+            startHour: _manualStartTime.hour,
+            startMinute: _manualStartTime.minute,
+            endHour: _manualEndTime.hour,
+            endMinute: _manualEndTime.minute,
           );
-          sessionEnd = DateTime(
-            date.year,
-            date.month,
-            date.day,
-            _manualEndTime.hour,
-            _manualEndTime.minute,
-          );
-          if (sessionEnd.isBefore(sessionStart)) {
-            sessionEnd = sessionEnd.add(
-              const Duration(days: 1),
-            );
-          }
+          sessionStart = range.start;
+          sessionEnd = range.end;
         } else {
           sessionStart = DateTime(date.year, date.month, date.day, 12, 0);
           sessionEnd = sessionStart;
@@ -1459,19 +1450,13 @@ class _SoferHomeState extends State<SoferHome>
 
       startLine = int.tryParse(_lineFromCtrl.text) ?? 0;
       endLine = int.tryParse(_lineToCtrl.text) ?? 0;
-      if (startLine == 0 || endLine == 0) {
-        _showError(dialogContext, "יש להזין שורות תקינות (משורה, עד שורה)");
-        return false;
-      }
-      if (startLine > linesPerPage || endLine > linesPerPage) {
-        _showError(
-          dialogContext,
-          "מספר השורות חורג מהגדרת העמוד ($linesPerPage)",
-        );
-        return false;
-      }
-      if (startLine > endLine) {
-        _showError(dialogContext, "שורה התחלה חייבת להיות קטנה משורה סיום");
+      final lineError = SessionLogic.validateSeferLines(
+        startLine: startLine,
+        endLine: endLine,
+        linesPerPage: linesPerPage,
+      );
+      if (lineError != null) {
+        _showError(dialogContext, lineError);
         return false;
       }
 
@@ -1609,16 +1594,14 @@ class _SoferHomeState extends State<SoferHome>
     return true;
   }
 
-  bool _checkOverlap(String projId, int page, int start, int end) {
-    for (var session in history) {
-      if (session.projectId == projId && session.amount == page) {
-        if (start <= session.endLine && end >= session.startLine) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
+  bool _checkOverlap(String projId, int page, int start, int end) =>
+      SessionLogic.hasSeferOverlap(
+        history: history,
+        projectId: projId,
+        page: page,
+        startLine: start,
+        endLine: end,
+      );
 
   bool _checkDailyGoalMet(Project project) {
     if (project.targetDaily <= 0) return true;
