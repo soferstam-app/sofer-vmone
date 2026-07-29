@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sofer_vmone/backup_service.dart';
 import 'package:sofer_vmone/hebrew_utils.dart';
 import 'package:sofer_vmone/logic/production_calculator.dart';
+import 'package:sofer_vmone/logic/profit_calculator.dart';
 import 'package:sofer_vmone/models.dart';
 
 void main() {
@@ -341,6 +342,100 @@ void main() {
             session(amount: 1, tefillinType: 'head', parshiya: 3), // 1
           ]),
           13);
+    });
+  });
+
+  group('ProfitCalculator', () {
+    Project project(ProjectType type, {double price = 100, double exp = 20}) =>
+        Project(
+          id: 'p',
+          name: 'x',
+          type: type,
+          price: price,
+          expenses: exp,
+          targetDaily: 1,
+          targetMonthly: 20,
+          linesPerPage: type == ProjectType.sefer ? 42 : null,
+        );
+
+    WorkSession s({
+      int amount = 1,
+      int startLine = 0,
+      int endLine = 0,
+      String? tefillinType,
+      int? parshiya,
+    }) =>
+        WorkSession(
+          id: 'x',
+          projectId: 'p',
+          startTime: DateTime(2026, 1, 1, 9),
+          endTime: DateTime(2026, 1, 1, 11),
+          amount: amount,
+          startLine: startLine,
+          endLine: endLine,
+          tefillinType: tefillinType,
+          parshiya: parshiya,
+          description: '',
+          isManual: false,
+        );
+
+    test('sefer is priced per page', () {
+      // One full page of 42 lines, net 80 per page
+      expect(
+          ProfitCalculator.profit(
+              project(ProjectType.sefer), [s(startLine: 1, endLine: 42)]),
+          80);
+      // Half a page
+      expect(
+          ProfitCalculator.profit(
+              project(ProjectType.sefer), [s(startLine: 1, endLine: 21)]),
+          40);
+    });
+
+    test('mezuza is priced per mezuza', () {
+      expect(
+          ProfitCalculator.profit(project(ProjectType.mezuza), [s(amount: 3)]),
+          240);
+    });
+
+    test('tefillin is priced per full set, not per session amount', () {
+      // A whole set
+      expect(
+          ProfitCalculator.profit(project(ProjectType.tefillin), [s(amount: 1)]),
+          80);
+      // Head only is 4 of 8 parshiyot — half a set, not a whole one.
+      // The summary screen used to bill this as a full unit.
+      expect(
+          ProfitCalculator.profit(project(ProjectType.tefillin),
+              [s(amount: 1, tefillinType: 'head')]),
+          40);
+      // A single parshiya is an eighth of a set
+      expect(
+          ProfitCalculator.profit(project(ProjectType.tefillin),
+              [s(amount: 1, tefillinType: 'head', parshiya: 1)]),
+          10);
+    });
+
+    test('expenses are deducted per unit', () {
+      expect(
+          ProfitCalculator.profit(
+              project(ProjectType.mezuza, price: 50, exp: 50), [s(amount: 4)]),
+          0);
+    });
+
+    test('hourly rate divides profit by time worked', () {
+      // 3 mezuzot at net 80 = 240, over 2 hours
+      expect(
+          ProfitCalculator.profitPerHour(project(ProjectType.mezuza),
+              [s(amount: 3)], const Duration(hours: 2)),
+          120);
+    });
+
+    test('hourly rate is null rather than infinite when no time is recorded', () {
+      expect(
+          ProfitCalculator.profitPerHour(
+              project(ProjectType.mezuza), [s(amount: 3)], Duration.zero),
+          isNull);
     });
   });
 

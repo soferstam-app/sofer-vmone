@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'logic/production_calculator.dart';
+import 'logic/profit_calculator.dart';
 import 'models.dart';
 import 'hebrew_utils.dart';
 import 'storage_service.dart';
@@ -98,8 +99,7 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
       for (var s in sessionsForStats) {
         linesForStats += ProductionCalculator.seferLinesInSession(s);
       }
-      double pages = linesForStats / linesPerPage.toDouble();
-      totalProfit = pages * (project.price - project.expenses);
+      totalProfit = ProfitCalculator.profit(project, sessionsForStats);
 
       if (linesForStats > 0 && totalTime.inSeconds > 0) {
         double avg = totalTime.inMinutes / linesForStats;
@@ -112,8 +112,7 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
       totalWrittenStr = "${mezuzot.toStringAsFixed(1)} מזוזות";
       final int mezuzaLinesForStats =
           ProductionCalculator.mezuzaLinesTotal(sessionsForStats);
-      totalProfit = (mezuzaLinesForStats / ProductionCalculator.linesPerMezuza) *
-          (project.price - project.expenses);
+      totalProfit = ProfitCalculator.profit(project, sessionsForStats);
 
       if (mezuzaLinesForStats > 0 && totalTime.inSeconds > 0) {
         double avg = totalTime.inMinutes / mezuzaLinesForStats;
@@ -125,8 +124,7 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
       totalWrittenStr = "$totalParshiyot פרשיות (סה\"כ)";
       final int parshiyotForStats =
           ProductionCalculator.parshiyotTotal(sessionsForStats);
-      totalProfit = (parshiyotForStats / ProductionCalculator.parshiyotPerSet) *
-          (project.price - project.expenses);
+      totalProfit = ProfitCalculator.profit(project, sessionsForStats);
 
       if (parshiyotForStats > 0 && totalTime.inSeconds > 0) {
         double avg = totalTime.inMinutes / parshiyotForStats;
