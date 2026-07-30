@@ -125,6 +125,56 @@ class _RecycleBinScreenState extends State<RecycleBinScreen> {
                         DateTime.now().difference(p.lastUpdated).inDays;
                     final daysLeft = 30 - daysDeleted;
 
+                    final t = SoferTokens.of(context);
+
+                    // The countdown is the point of this screen, so in the
+                    // ruled themes it is the figure and the name is the label.
+                    if (t.isRules) {
+                      return Container(
+                        decoration: BoxDecoration(
+                            border:
+                                Border(bottom: BorderSide(color: t.rule))),
+                        padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(p.name,
+                                      style: TextStyle(
+                                          fontFamily: t.numeralFamily,
+                                          fontSize: 17,
+                                          color: t.ink)),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    daysLeft <= 0
+                                        ? "יימחק לצמיתות בניקוי הבא"
+                                        : "יימחק לצמיתות בעוד $daysLeft ימים",
+                                    style: TextStyle(
+                                        fontFamily: t.labelFamily,
+                                        fontSize: 12,
+                                        color: daysLeft <= 3
+                                            ? t.danger
+                                            : t.inkMuted),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            TextButton(
+                                onPressed: () => _restoreProject(p),
+                                child: const Text("שחזר")),
+                            TextButton(
+                              onPressed: () => _deletePermanently(p),
+                              style: TextButton.styleFrom(
+                                  foregroundColor: t.danger),
+                              child: const Text("מחק"),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
                     return Card(
                       margin: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 8),

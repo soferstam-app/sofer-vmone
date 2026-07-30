@@ -172,21 +172,76 @@ class _WorkCalendarSettingsScreenState
     );
   }
 
-  Widget _intro() => Card(
+  Widget _intro() {
+    final t = SoferTokens.of(context);
+    final text = Text(
+      "כל צפי סיום בתוכנה מדלג על הימים שאינם ימי עבודה כאן.",
+      style: TextStyle(
+          fontFamily: t.labelFamily,
+          fontSize: 14,
+          height: 1.7,
+          color: t.inkMuted),
+    );
+
+    if (t.isCards) {
+      return Card(
         margin: const EdgeInsets.all(12),
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        child: const Padding(
-          padding: EdgeInsets.all(14),
-          child: Text(
-            "כל צפי סיום בתוכנה מדלג על הימים שאינם ימי עבודה כאן.",
-            style: TextStyle(height: 1.4),
-          ),
-        ),
+        child: Padding(padding: const EdgeInsets.all(14), child: text),
       );
+    }
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
+      child: text,
+    );
+  }
 
   /// The days that are never writing days, stated so the list is not a mystery,
   /// but without switches — they override every other setting.
-  Widget _fixedDaysCard() => Card(
+  Widget _fixedDaysCard() {
+    final t = SoferTokens.of(context);
+    // In the ruled themes this is a stated block on the page, bounded by the
+    // heavier rule, rather than a raised card floating on it.
+    if (t.isRules) {
+      return Container(
+        decoration: BoxDecoration(
+          border: Border(
+            top: BorderSide(color: t.ruleStrong),
+            bottom: BorderSide(color: t.ruleStrong),
+          ),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("אינם ימי עבודה — קבוע",
+                style: TextStyle(
+                    fontFamily: t.labelFamily,
+                    fontSize: 12,
+                    letterSpacing: 1.5,
+                    color: t.inkMuted)),
+            const SizedBox(height: 7),
+            Text(
+              "שבת · יום טוב · חול המועד · ערבי חג · פורים ושושן פורים · "
+              "תשעה באב וערבו",
+              style: TextStyle(
+                  fontFamily: t.numeralFamily,
+                  fontSize: 17,
+                  height: 1.7,
+                  color: t.ink),
+            ),
+            const SizedBox(height: 6),
+            Text("גובר על כל הגדרה אחרת — שבת של חנוכה היא שבת.",
+                style: TextStyle(
+                    fontFamily: t.labelFamily,
+                    fontSize: 12,
+                    color: t.inkFaint)),
+          ],
+        ),
+      );
+    }
+
+    return Card(
         margin: const EdgeInsets.symmetric(horizontal: 12),
         child: Padding(
           padding: const EdgeInsets.all(14),
@@ -216,6 +271,7 @@ class _WorkCalendarSettingsScreenState
           ),
         ),
       );
+  }
 
   Widget _pesachTile() {
     final window = _rules.pesachWindow;

@@ -6,6 +6,7 @@ import 'logic/id_generator.dart';
 import 'models.dart';
 import 'storage_service.dart';
 import 'theme/app_theme.dart';
+import 'widgets/sofer_widgets.dart';
 
 class ExpensesScreen extends StatefulWidget {
   /// Needed so an expense can be charged to the work it belongs to.
@@ -360,6 +361,170 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     );
   }
 
+  /// The expenses as an accountant's page, grouped by how each cost is charged.
+  ///
+  /// The modern layout is one flat list of cards, which hides the thing that
+  /// actually matters: whether a cost lands on a commission, on a stretch of
+  /// time, or on the month. Here each of the three is its own ruled block with
+  /// its own subtotal, so where the money is attributed is visible without
+  /// opening anything.
+  Widget _ruledLedger(List<Expense> unassigned) {
+    final t = SoferTokens.of(context);
+
+    List<Expense> of(ExpenseAllocation a) =>
+        _expenses.where((e) => e.allocation == a).toList();
+    double sum(List<Expense> list) =>
+        list.fold(0.0, (total, e) => total + e.amount);
+
+    final groups = <({ExpenseAllocation kind, String title, String note})>[
+      (
+        kind: ExpenseAllocation.project,
+        title: "לפי פרויקט",
+        note: "נכנס לחישוב הרווח של העבודה שהוא נצרך בה"
+      ),
+      (
+        kind: ExpenseAllocation.period,
+        title: "לפי תקופה",
+        note: "מתפרס על פני הימים שבין שני התאריכים"
+      ),
+      (
+        kind: ExpenseAllocation.month,
+        title: "לפי חודש",
+        note: "נכנס במלואו לחודש שבו הוא שולם"
+      ),
+    ];
+
+    return ListView(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Expanded(
+                child: Text("סך ההוצאות",
+                    style: TextStyle(
+                        fontFamily: t.labelFamily,
+                        fontSize: 12,
+                        letterSpacing: 1.5,
+                        color: t.inkMuted)),
+              ),
+              Text("₪${_totalExpenses.toStringAsFixed(0)}",
+                  style: TextStyle(
+                      fontFamily: t.numeralFamily,
+                      fontSize: 34,
+                      color: t.ink)),
+            ],
+          ),
+        ),
+        if (unassigned.isNotEmpty)
+          Container(
+            margin: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+            padding: const EdgeInsetsDirectional.fromSTEB(12, 8, 0, 8),
+            decoration: BoxDecoration(
+              border: BorderDirectional(
+                  end: BorderSide(color: t.danger, width: 2)),
+            ),
+            child: Text(
+              "${unassigned.length} הוצאות מסומנות 'לפי פרויקט' בלי פרויקט, "
+              "ולכן אינן נכנסות לחישוב של אף עבודה.",
+              style: TextStyle(
+                  fontFamily: t.labelFamily,
+                  fontSize: 13,
+                  height: 1.6,
+                  color: t.danger),
+            ),
+          ),
+        const SoferRule(strong: true),
+        if (_expenses.isEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+            child: Text("אין עוד הוצאות רשומות",
+                style: TextStyle(
+                    fontFamily: t.numeralFamily,
+                    fontSize: 19,
+                    color: t.inkMuted)),
+          ),
+        for (final group in groups)
+          if (of(group.kind).isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 2),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Expanded(
+                    child: Text(group.title,
+                        style: TextStyle(
+                            fontFamily: t.numeralFamily,
+                            fontSize: 18,
+                            color: t.ink)),
+                  ),
+                  Text("₪${sum(of(group.kind)).toStringAsFixed(0)}",
+                      style: TextStyle(
+                          fontFamily: t.numeralFamily,
+                          fontSize: 18,
+                          color: t.accent)),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Text(group.note,
+                  style: TextStyle(
+                      fontFamily: t.labelFamily,
+                      fontSize: 12,
+                      color: t.inkFaint)),
+            ),
+            for (final e in of(group.kind)) _ruledExpenseRow(e),
+            const SizedBox(height: 6),
+            const SoferRule(strong: true),
+          ],
+        const SizedBox(height: 80),
+      ],
+    );
+  }
+
+  Widget _ruledExpenseRow(Expense e) {
+    final t = SoferTokens.of(context);
+    return InkWell(
+      onTap: () => _showAddOrEdit(e),
+      child: Container(
+        decoration:
+            BoxDecoration(border: Border(top: BorderSide(color: t.rule))),
+        padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(e.product,
+                      style: TextStyle(
+                          fontFamily: t.numeralFamily,
+                          fontSize: 16,
+                          color: t.ink)),
+                  const SizedBox(height: 2),
+                  Text(_allocationSummary(e),
+                      style: TextStyle(
+                          fontFamily: t.labelFamily,
+                          fontSize: 12,
+                          color: t.inkMuted)),
+                ],
+              ),
+            ),
+            Text("₪${e.amount.toStringAsFixed(0)}",
+                style: TextStyle(
+                    fontFamily: t.numeralFamily, fontSize: 19, color: t.ink)),
+          ],
+        ),
+      ),
+    );
+  }
+
   IconData _allocationIcon(ExpenseAllocation a) => switch (a) {
         ExpenseAllocation.project => Icons.folder,
         ExpenseAllocation.period => Icons.date_range,
@@ -373,6 +538,17 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     }
 
     final unassigned = ExpenseLogic.unassigned(_expenses);
+
+    if (SoferTokens.of(context).isRules) {
+      return Scaffold(
+        appBar: AppBar(title: const Text("הוצאות")),
+        body: SoferPage(maxWidth: 760, child: _ruledLedger(unassigned)),
+        floatingActionButton: FloatingActionButton(
+          onPressed: () => _showAddOrEdit(),
+          child: const Icon(Icons.add),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(title: const Text("הוצאות"), centerTitle: true),
