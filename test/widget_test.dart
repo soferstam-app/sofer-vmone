@@ -23,6 +23,7 @@ import 'package:sofer_vmone/logic/project_analytics.dart';
 import 'package:sofer_vmone/logic/quote_calculator.dart';
 import 'package:sofer_vmone/logic/session_logic.dart';
 import 'package:sofer_vmone/models.dart';
+import 'package:sofer_vmone/project/scroll_map.dart';
 import 'package:sofer_vmone/storage_service.dart';
 
 /// Every configurable category set to a full working day, so arithmetic tests
@@ -1470,6 +1471,80 @@ void main() {
                   workingDateAtEntry: DateTime(2026, 5, 11))
               .workingDateAtEntry,
           DateTime(2026, 5, 11));
+    });
+  });
+
+  group('scroll map runs', () {
+    test('work done in order collapses to two runs', () {
+      final runs = unitRuns(245, {for (var i = 1; i <= 4; i++) i: 1.0});
+
+      expect(runs.length, 2);
+      expect(runs[0].from, 1);
+      expect(runs[0].to, 4);
+      expect(runs[0].isFull, isTrue);
+      expect(runs[1].from, 5);
+      expect(runs[1].to, 245);
+      expect(runs[1].isEmpty, isTrue);
+    });
+
+    test('a part-written unit is a run of its own', () {
+      final runs = unitRuns(10, {1: 1.0, 2: 1.0, 3: 0.5});
+
+      expect(runs.length, 3);
+      expect(runs[0].to, 2);
+      expect(runs[1].from, 3);
+      expect(runs[1].to, 3);
+      expect(runs[1].isFull, isFalse);
+      expect(runs[1].isEmpty, isFalse);
+      expect(runs[2].from, 4);
+    });
+
+    test('a hole in the middle becomes findable', () {
+      // Pages 1–3 and 6–8 written, 4–5 left for a correction.
+      final runs = unitRuns(8, {
+        1: 1.0,
+        2: 1.0,
+        3: 1.0,
+        6: 1.0,
+        7: 1.0,
+        8: 1.0,
+      });
+
+      expect(runs.length, 3);
+      expect(runs[1].from, 4);
+      expect(runs[1].to, 5);
+      expect(runs[1].isEmpty, isTrue);
+      expect(runs[1].length, 2);
+    });
+
+    test('two adjacent partials do not merge into one run', () {
+      // They are different amounts, and reporting them as one range would
+      // claim a uniformity that is not there.
+      final runs = unitRuns(3, {1: 0.25, 2: 0.75});
+
+      expect(runs.length, 3);
+      expect(runs[0].fill, 0.25);
+      expect(runs[1].fill, 0.75);
+      expect(runs[2].isEmpty, isTrue);
+    });
+
+    test('nothing written is one empty run, and no units is none', () {
+      expect(unitRuns(5, const {}).length, 1);
+      expect(unitRuns(5, const {}).single.isEmpty, isTrue);
+      expect(unitRuns(0, const {}), isEmpty);
+    });
+
+    test('runs always cover every unit exactly once', () {
+      final runs = unitRuns(50, {3: 1.0, 4: 0.5, 5: 1.0, 20: 1.0});
+      var covered = 0;
+      var expected = 1;
+      for (final r in runs) {
+        expect(r.from, expected);
+        covered += r.length;
+        expected = r.to + 1;
+      }
+      expect(covered, 50);
+      expect(runs.last.to, 50);
     });
   });
 

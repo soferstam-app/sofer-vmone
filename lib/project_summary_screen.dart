@@ -7,6 +7,8 @@ import 'logic/production_calculator.dart';
 import 'logic/profit_calculator.dart';
 import 'models.dart';
 import 'hebrew_utils.dart';
+import 'project/commission_timeline.dart';
+import 'project/scroll_map.dart';
 import 'storage_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/sofer_widgets.dart';
@@ -324,10 +326,14 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
             else if (project.plannedUnits == null)
               _missingSizeCard(project),
           ],
-          if (project.type == ProjectType.sefer)
-            _buildSeferGrid(project, sessions),
-          if (project.type == ProjectType.tefillin)
-            _buildTefillinGrid(project, sessions),
+          // The ruled layout reaches the map through the button under the
+          // figures, so it is not also laid out down the screen.
+          if (SoferTokens.of(context).isCards) ...[
+            if (project.type == ProjectType.sefer)
+              _buildSeferGrid(project, sessions),
+            if (project.type == ProjectType.tefillin)
+              _buildTefillinGrid(project, sessions),
+          ],
         ],
       ),
     );
@@ -365,114 +371,267 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
     final t = SoferTokens.of(context);
 
     final net = totalProfit - projectExpenses;
+    final started = _firstSessionDate(project);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SoferRule(strong: true),
 
-        // The answer the writer opened this screen for, before anything else.
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (estimate == null)
-                Text(
-                  project.plannedUnits == null
-                      ? "כדי לחשב צפי סיום צריך להזין את ${_sizeQuestion(project)}"
-                      : "העבודה הושלמה",
-                  style: TextStyle(
-                      fontFamily: t.numeralFamily,
-                      fontSize: 21,
-                      height: 1.4,
-                      color: project.plannedUnits == null
-                          ? t.caution
-                          : t.inkMuted),
-                )
-              else ...[
-                Text("צפי סיום",
+        if (estimate == null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+            child: Text(
+              project.plannedUnits == null
+                  ? "כדי לחשב צפי סיום צריך להזין את ${_sizeQuestion(project)}"
+                  : "העבודה הושלמה",
+              style: TextStyle(
+                  fontFamily: t.numeralFamily,
+                  fontSize: 21,
+                  height: 1.4,
+                  color:
+                      project.plannedUnits == null ? t.caution : t.inkMuted),
+            ),
+          )
+        else ...[
+          // The run from the day it began to the day it lands, with the agreed
+          // deadline on the same line — so whether it will be met is read off
+          // the line rather than worked out from two dates.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 22, 20, 4),
+            child: CommissionTimeline(
+              progress: estimate.progress,
+              marks: _timelineMarks(project, estimate, started),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 6, 20, 18),
+            child: Text.rich(
+              TextSpan(children: [
+                if (_deadlineVerdict(project, estimate) case final verdict?)
+                  TextSpan(
+                    text: "${verdict.text}. ",
                     style: TextStyle(
                         fontFamily: t.labelFamily,
-                        fontSize: 12,
-                        letterSpacing: 1.5,
-                        color: t.inkMuted)),
-                const SizedBox(height: 6),
-                Text(
-                  formatDisplayDateWithWeekday(
-                      estimate.plan.completionDate, _useGregorianDates),
-                  style: TextStyle(
-                      fontFamily: t.numeralFamily,
-                      fontSize: 31,
-                      height: 1.2,
-                      color: t.ink),
-                ),
-                const SizedBox(height: 10),
-                // Stated as a sentence rather than as rows. The reasoning is
-                // prose, and reads as prose.
-                Text(
-                  _deliverySentence(project, estimate, targetPaceStr),
+                        fontSize: 15,
+                        height: 1.8,
+                        color: verdict.late ? t.danger : t.accent),
+                  ),
+                TextSpan(
+                  text: _deliverySentence(project, estimate, targetPaceStr),
                   style: TextStyle(
                       fontFamily: t.labelFamily,
-                      fontSize: 14,
-                      height: 1.75,
+                      fontSize: 15,
+                      height: 1.8,
                       color: t.inkMuted),
                 ),
-              ],
-            ],
-          ),
-        ),
-
-        const SoferRule(),
-
-        // Three figures across, captions beneath. No labels above, no boxes.
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: SoferNumber(totalWrittenStr,
-                    size: 20, caption: "נכתב עד כה"),
-              ),
-              Expanded(
-                child: SoferNumber("₪${net.toStringAsFixed(0)}",
-                    size: 26,
-                    caption: projectExpenses > 0 ? "נטו אחרי הוצאות" : "רווח"),
-              ),
-              Expanded(
-                child: SoferNumber(
-                  hourlyRate == null ? "—" : "₪${hourlyRate.toStringAsFixed(0)}",
-                  size: 26,
-                  emphasise: hourlyRate != null,
-                  caption: "לשעה",
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        if (estimate != null) ...[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
-            child: SoferProgress(estimate.progress),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-            child: Text(
-              "${estimate.doneUnits.toStringAsFixed(0)} מתוך "
-              "${estimate.totalUnits.toStringAsFixed(0)} "
-              "${_unitPlural(project.type)}"
-              "${avgTimeStr.isEmpty ? '' : ' · $avgTimeStr'}"
-              "${projectExpenses > 0 ? ' · הוצאות ₪${projectExpenses.toStringAsFixed(0)}' : ''}",
-              style: TextStyle(
-                  fontFamily: t.labelFamily, fontSize: 12, color: t.inkMuted),
+              ]),
             ),
           ),
         ],
 
+        const SoferRule(),
+
+        // Two columns: the work on one side, the money on the other.
+        LayoutBuilder(builder: (context, box) {
+          final work = Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SoferSectionTitle("העבודה", padding: EdgeInsets.zero),
+                const SizedBox(height: 6),
+                SoferStatRow("נכתב", totalWrittenStr),
+                if (estimate != null)
+                  SoferStatRow("נותרו",
+                      "${estimate.remainingUnits.toStringAsFixed(0)} ${_unitPlural(project.type)}"),
+                if (avgTimeStr.isNotEmpty)
+                  SoferStatRow("ממוצע", avgTimeStr, last: true),
+              ],
+            ),
+          );
+
+          final money = Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SoferSectionTitle("הכסף", padding: EdgeInsets.zero),
+                const SizedBox(height: 6),
+                if (projectExpenses > 0) ...[
+                  SoferStatRow("רווח", "₪${totalProfit.toStringAsFixed(0)}"),
+                  SoferStatRow("הוצאות משויכות",
+                      "₪${projectExpenses.toStringAsFixed(0)}"),
+                ],
+                SoferStatRow(
+                    projectExpenses > 0 ? "נטו" : "רווח",
+                    "₪${net.toStringAsFixed(0)}"),
+                SoferStatRow(
+                    "לשעה",
+                    hourlyRate == null
+                        ? "—"
+                        : "₪${hourlyRate.toStringAsFixed(0)}",
+                    emphasise: hourlyRate != null,
+                    last: true),
+              ],
+            ),
+          );
+
+          if (box.maxWidth <= 620) {
+            return Column(children: [work, const SoferRule(), money]);
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: work),
+              Container(width: 1, color: t.rule),
+              Expanded(child: money),
+            ],
+          );
+        }),
+
         const SoferRule(strong: true),
+
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  estimate == null
+                      ? ""
+                      : "${estimate.plan.skippedTotal} ימים בדרך אינם ימי עבודה",
+                  style: TextStyle(
+                      fontFamily: t.labelFamily,
+                      fontSize: 12,
+                      color: t.inkMuted),
+                ),
+              ),
+              SoferSecondaryButton("מפת העבודה",
+                  icon: Icons.grid_view, onPressed: () => _openMap(project)),
+            ],
+          ),
+        ),
       ],
+    );
+  }
+
+  /// The day the first session on this commission was recorded, or null when
+  /// nothing has been.
+  DateTime? _firstSessionDate(Project project) {
+    DateTime? first;
+    for (final s in widget.history) {
+      if (s.projectId != project.id || s.isDeleted || s.backlogOnly) continue;
+      if (first == null || s.startTime.isBefore(first)) first = s.startTime;
+    }
+    return first;
+  }
+
+  /// Start, now, the estimate and — when there is one — the agreed deadline,
+  /// placed on a run that ends with whichever of the last two is later.
+  List<TimelineMark> _timelineMarks(
+      Project project, CompletionEstimate estimate, DateTime? started) {
+    final from = started ?? DateTime.now();
+    final estimateDate = estimate.plan.completionDate;
+    final target = project.targetCompletionDate;
+
+    var end = estimateDate;
+    if (target != null && target.isAfter(end)) end = target;
+    final span = end.difference(from).inDays;
+
+    double at(DateTime when) {
+      if (span <= 0) return 1;
+      return (when.difference(from).inDays / span).clamp(0.0, 1.0);
+    }
+
+    return [
+      TimelineMark(
+          caption: "התחלה",
+          value: formatDisplayDate(from, _useGregorianDates),
+          at: 0),
+      TimelineMark(
+          caption: "כאן",
+          value: "${(estimate.progress * 100).toStringAsFixed(0)}%",
+          at: at(DateTime.now()),
+          current: true),
+      TimelineMark(
+          caption: "צפי סיום",
+          value: formatDisplayDate(estimateDate, _useGregorianDates),
+          at: at(estimateDate)),
+      if (target != null)
+        TimelineMark(
+            caption: "תאריך יעד",
+            value: formatDisplayDate(target, _useGregorianDates),
+            at: at(target),
+            quiet: true),
+    ];
+  }
+
+  /// Whether the agreed deadline will be met, and by how much.
+  ({String text, bool late})? _deadlineVerdict(
+      Project project, CompletionEstimate estimate) {
+    final target = project.targetCompletionDate;
+    if (target == null) return null;
+
+    final days =
+        target.difference(estimate.plan.completionDate).inDays;
+    if (days.abs() < 3) {
+      return (text: "צפוי להסתיים בדיוק בתאריך היעד", late: false);
+    }
+    final weeks = (days.abs() / 7).floor();
+    final amount = weeks >= 1
+        ? "$weeks ${weeks == 1 ? 'שבוע' : 'שבועות'}"
+        : "${days.abs()} ימים";
+    return days > 0
+        ? (text: "אתה מקדים את תאריך היעד ב-$amount", late: false)
+        : (text: "אתה מאחר מתאריך היעד ב-$amount", late: true);
+  }
+
+  /// Opens the map of the whole commission, in whatever unit it is counted in.
+  void _openMap(Project project) {
+    final sessions = widget.history
+        .where((s) => s.projectId == project.id && !s.isDeleted)
+        .toList();
+
+    if (project.type == ProjectType.sefer) {
+      final linesPerPage = ProductionCalculator.linesPerPageOf(project);
+      final lines = <int, Set<int>>{};
+      for (final s in sessions) {
+        if (s.amount <= 0) continue;
+        final page = lines.putIfAbsent(s.amount, () => <int>{});
+        for (var i = s.startLine; i <= s.endLine; i++) {
+          page.add(i);
+        }
+      }
+      showScrollMap(
+        context,
+        title: "מפת הספר",
+        total: project.totalPages ?? ProductionCalculator.defaultTotalPages,
+        fill: {
+          for (final e in lines.entries)
+            e.key: (e.value.length / linesPerPage).clamp(0.0, 1.0),
+        },
+        unitSingular: "עמוד",
+        unitPlural: "עמודים",
+      );
+      return;
+    }
+
+    // Mezuzot and tefillin are counted, not paginated: the map is how many of
+    // the order are finished, filled from the first.
+    final done = ProfitCalculator.billableUnits(project, sessions);
+    final total = (project.targetUnits ?? done.ceil()).clamp(1, 1 << 20);
+    showScrollMap(
+      context,
+      title: project.type == ProjectType.mezuza ? "מפת המזוזות" : "מפת הסטים",
+      total: total,
+      fill: {
+        for (var i = 1; i <= total; i++)
+          i: (done - (i - 1)).clamp(0.0, 1.0),
+      },
+      unitSingular: project.type == ProjectType.mezuza ? "מזוזה" : "סט",
+      unitPlural: project.type == ProjectType.mezuza ? "מזוזות" : "סטים",
+      hebrewNumerals: false,
     );
   }
 
