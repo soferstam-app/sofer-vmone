@@ -8,6 +8,7 @@ import 'logic/quote_calculator.dart';
 import 'models.dart';
 import 'storage_service.dart';
 import 'theme/app_theme.dart';
+import 'widgets/sofer_widgets.dart';
 
 /// Works out what a job would take and what to charge for it, from the
 /// writer's own measured pace rather than a guess.
@@ -138,6 +139,22 @@ class _QuoteScreenState extends State<QuoteScreen> {
             rules: _rules,
           );
 
+    if (SoferTokens.of(context).isRules) {
+      return Scaffold(
+        appBar: AppBar(title: const Text("הצעת מחיר")),
+        body: SoferPage(
+          maxWidth: 720,
+          child: _ruledQuote(
+            pace: pace,
+            estimate: estimate,
+            recorded: recorded,
+            derivedRate: derivedRate,
+            expensesPerUnit: expensesPerUnit,
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(title: const Text("מחשבון הצעת מחיר"), centerTitle: true),
       body: ListView(
@@ -239,6 +256,268 @@ class _QuoteScreenState extends State<QuoteScreen> {
   /// The recorded figure is preferred because it is the writer's real cost:
   /// the parchment expenses they already logged, divided by the units those
   /// projects produced.
+  /// The quote with the answer first.
+  ///
+  /// The modern layout runs inputs down the screen and puts the result at the
+  /// bottom, which means the number you are trying to influence scrolls out of
+  /// sight exactly when you change something. Here the price sits at the top and
+  /// the inputs sit under it, so it moves while you watch.
+  Widget _ruledQuote({
+    required Duration? pace,
+    required QuoteEstimate? estimate,
+    required double? recorded,
+    required double? derivedRate,
+    required double expensesPerUnit,
+  }) {
+    final t = SoferTokens.of(context);
+
+    if (pace == null) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _typeChoice(),
+            const SizedBox(height: 26),
+            Text("אין עוד ממה ללמוד",
+                style: TextStyle(
+                    fontFamily: t.numeralFamily, fontSize: 23, color: t.ink)),
+            const SizedBox(height: 8),
+            Text(
+              "המחשבון לומד את קצב הכתיבה שלך מהעבודה שתיעדת. אחרי שתמדוד זמן "
+              "על עבודה מסוג זה, תקבל כאן הצעה שמבוססת על הקצב שלך ולא על ניחוש.",
+              style: TextStyle(
+                  fontFamily: t.labelFamily,
+                  fontSize: 14,
+                  height: 1.8,
+                  color: t.inkMuted),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
+          child: _typeChoice(),
+        ),
+        const SoferRule(strong: true),
+
+        // The answer.
+        if (estimate != null) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                    _priceFromHourlyRate
+                        ? "מחיר מוצע"
+                        : "מה שהעבודה משאירה לך",
+                    style: TextStyle(
+                        fontFamily: t.labelFamily,
+                        fontSize: 12,
+                        letterSpacing: 1.5,
+                        color: t.inkMuted)),
+                const SizedBox(height: 6),
+                Text(
+                  _priceFromHourlyRate
+                      ? "₪${estimate.suggestedPrice.toStringAsFixed(0)}"
+                      : "₪${(derivedRate ?? 0).toStringAsFixed(0)} לשעה",
+                  style: TextStyle(
+                      fontFamily: t.numeralFamily,
+                      fontSize: 44,
+                      height: 1.1,
+                      color: (derivedRate ?? 1) < 0 ? t.danger : t.ink),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  _quoteSentence(estimate, derivedRate, expensesPerUnit),
+                  style: TextStyle(
+                      fontFamily: t.labelFamily,
+                      fontSize: 15,
+                      height: 1.8,
+                      color: t.inkMuted),
+                ),
+              ],
+            ),
+          ),
+          const SoferRule(),
+        ],
+
+        // What it rests on.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SoferSectionTitle("הנתונים", padding: EdgeInsets.zero),
+              const SizedBox(height: 4),
+              SoferStatRow("הקצב שלך", "${_formatDuration(pace)} ל$_singularLabel"),
+              _inlineField("כמה $_unitLabel", _unitsCtrl),
+              _inlineChoice(
+                "על מה לבסס",
+                [
+                  (value: true, label: "שכר לשעה"),
+                  (value: false, label: "מחיר ל$_singularLabel"),
+                ],
+                _priceFromHourlyRate,
+                (v) => setState(() => _priceFromHourlyRate = v),
+              ),
+              if (_priceFromHourlyRate)
+                _inlineField("שכר לשעה שאני רוצה (₪)", _rateCtrl)
+              else
+                _inlineField("מחיר ל$_singularLabel (₪)", _unitPriceCtrl),
+              _inlineField("שעות כתיבה ביום", _hoursCtrl),
+              if (recorded == null)
+                _inlineField("עלות חומרים ל$_singularLabel (₪)", _expensesCtrl)
+              else ...[
+                _inlineChoice(
+                  "עלות החומרים",
+                  const [
+                    (value: true, label: "מההוצאות שלי"),
+                    (value: false, label: "ידנית"),
+                  ],
+                  _expensesFromRecords,
+                  (v) => setState(() => _expensesFromRecords = v),
+                ),
+                if (_expensesFromRecords)
+                  SoferStatRow("₪ ל$_singularLabel",
+                      "₪${recorded.toStringAsFixed(2)}", last: true)
+                else
+                  _inlineField(
+                      "עלות חומרים ל$_singularLabel (₪)", _expensesCtrl),
+              ],
+            ],
+          ),
+        ),
+
+        if (estimate != null) ...[
+          const SoferRule(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SoferSectionTitle("הפירוט", padding: EdgeInsets.zero),
+                const SizedBox(height: 4),
+                SoferStatRow("זמן עבודה כולל", _formatDuration(estimate.totalTime)),
+                SoferStatRow("ימי עבודה", estimate.workDays.toStringAsFixed(1)),
+                SoferStatRow("צפי סיום",
+                    formatDisplayDate(estimate.estimatedCompletion, _useGregorianDates)),
+                SoferStatRow("עבודה", "₪${estimate.labour.toStringAsFixed(0)}"),
+                SoferStatRow("חומרים", "₪${estimate.materials.toStringAsFixed(0)}"),
+                SoferStatRow("מחיר ל$_singularLabel",
+                    "₪${estimate.pricePerUnit.toStringAsFixed(2)}",
+                    last: true),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// The quote written out: how long, when, and what the calendar takes away.
+  String _quoteSentence(
+      QuoteEstimate e, double? derivedRate, double expensesPerUnit) {
+    final parts = <String>[
+      "${e.units.toStringAsFixed(0)} $_unitLabel בקצב שלך הם "
+          "${_formatDuration(e.totalTime)}, כלומר ${e.workDays.toStringAsFixed(1)} ימי עבודה",
+      "בהתחלה מהיום העבודה תסתיים ב-"
+          "${formatDisplayDate(e.estimatedCompletion, _useGregorianDates)}, "
+          "בעוד ${e.plan.calendarDays} ימים",
+    ];
+    if (e.plan.skippedTotal > 0) {
+      parts.add("${e.plan.skippedTotal} מהם אינם ימי עבודה "
+          "(${formatSkippedDays(e.plan, maxReasons: 2)})");
+    }
+    if (expensesPerUnit > 0) {
+      parts.add("החומרים — ₪${e.materials.toStringAsFixed(0)} — כלולים במחיר");
+    }
+    return "${parts.join('. ')}.";
+  }
+
+  Widget _typeChoice() => SoferChoice<ProjectType>(
+        selected: _type,
+        options: const [
+          (value: ProjectType.sefer, label: "ספר תורה"),
+          (value: ProjectType.mezuza, label: "מזוזות"),
+          (value: ProjectType.tefillin, label: "תפילין"),
+        ],
+        onChanged: (v) => setState(() {
+          _type = v;
+          _unitsCtrl.text = switch (_type) {
+            ProjectType.sefer => '245',
+            ProjectType.mezuza => '10',
+            ProjectType.tefillin => '1',
+          };
+        }),
+      );
+
+  /// A field that reads as a ruled row: label on one side, the value editable in
+  /// place on the other, instead of a boxed input with a floating label.
+  Widget _inlineField(String label, TextEditingController controller) {
+    final t = SoferTokens.of(context);
+    return Container(
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.rule))),
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(label,
+                style: TextStyle(
+                    fontFamily: t.labelFamily, fontSize: 13, color: t.inkMuted)),
+          ),
+          SizedBox(
+            width: 110,
+            child: TextField(
+              controller: controller,
+              textAlign: TextAlign.end,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              style: TextStyle(
+                  fontFamily: t.numeralFamily, fontSize: 20, color: t.ink),
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _inlineChoice<T>(
+    String label,
+    List<({T value, String label})> options,
+    T selected,
+    ValueChanged<T> onChanged,
+  ) {
+    final t = SoferTokens.of(context);
+    return Container(
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.rule))),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(label,
+                style: TextStyle(
+                    fontFamily: t.labelFamily, fontSize: 13, color: t.inkMuted)),
+          ),
+          SoferChoice<T>(
+              options: options, selected: selected, onChanged: onChanged),
+        ],
+      ),
+    );
+  }
+
   Widget _expensesSection(double? recorded) {
     if (recorded == null) {
       return Column(

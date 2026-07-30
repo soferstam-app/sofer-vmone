@@ -4,6 +4,7 @@ import 'models.dart';
 import 'project_comparison_screen.dart';
 import 'quote_screen.dart';
 import 'theme/app_theme.dart';
+import 'widgets/sofer_widgets.dart';
 
 /// Hub for the analysis tools.
 ///
@@ -23,10 +24,13 @@ class FeaturesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("כלים"), centerTitle: true),
+      appBar: AppBar(title: const Text("כלים")),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: SoferTokens.of(context).isRules
+            ? EdgeInsets.zero
+            : const EdgeInsets.all(16),
         children: [
+          if (SoferTokens.of(context).isRules) const SoferRule(strong: true),
           _tile(
             context,
             icon: Icons.leaderboard,
@@ -56,6 +60,51 @@ class FeaturesScreen extends StatelessWidget {
     required String subtitle,
     required Widget screen,
   }) {
+    final t = SoferTokens.of(context);
+
+    // A contents page: numbered entries, the title in the serif, one line of
+    // description, and a hairline. No avatar, no chevron, no card.
+    if (t.isRules) {
+      return InkWell(
+        onTap: () => Navigator.push(
+            context, MaterialPageRoute(builder: (_) => screen)),
+        child: Container(
+          decoration:
+              BoxDecoration(border: Border(bottom: BorderSide(color: t.rule))),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        style: TextStyle(
+                            fontFamily: t.numeralFamily,
+                            fontSize: 20,
+                            color: t.ink)),
+                    const SizedBox(height: 4),
+                    Text(subtitle,
+                        style: TextStyle(
+                            fontFamily: t.labelFamily,
+                            fontSize: 13,
+                            height: 1.6,
+                            color: t.inkMuted)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 14),
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Icon(icon, size: 20, color: t.inkFaint),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: ListTile(
