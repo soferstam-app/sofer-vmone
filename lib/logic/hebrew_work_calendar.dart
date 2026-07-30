@@ -20,206 +20,283 @@
 ///   n cheap increments
 ///   1 conversion out (only if a caller actually wants a `DateTime`)
 ///
-/// The naive alternative — `JewishCalendar.fromDateTime(d)` inside the loop —
-/// pays a full conversion per day, which is what the old
-/// `work_days_calculator.dart` did. Results here also carry the Hebrew date of
-/// the answer directly ([WorkPlan.completion]), so a screen that displays
-/// Hebrew dates never converts back to Gregorian at all.
+/// Results also carry the Hebrew date of the answer directly
+/// ([WorkPlan.completion]), so a screen that displays Hebrew dates never
+/// converts back to Gregorian at all.
 ///
-/// ## The day boundary
+/// ## Two kinds of day
 ///
-/// A Hebrew day starts at nightfall, which depends on where the writer is. The
-/// app has no location, so a day here is the civil date — the same convention
-/// the rest of the app already uses for filing a work session. This can only
-/// matter for work done between nightfall and midnight on the eve of a
-/// festival, and never affects a completion date, which is a whole number of
-/// days out.
+/// Some days are never writing days and are not offered as a choice: Shabbat,
+/// Yom Tov, Chol HaMoed, the eves of festivals, Purim and Shushan Purim, Tisha
+/// BeAv and its eve. These **override every other rule** — a Shabbat of
+/// Chanukah is Shabbat, whatever Chanukah is set to.
+///
+/// Everything else that soferim actually differ on is a setting with three
+/// states — a full day, half a day, or not a working day. Where more than one
+/// setting applies to the same day, the most restrictive wins: a Friday of
+/// Chanukah is off if either Friday or Chanukah is off.
 library;
 
 import 'package:kosher_dart/kosher_dart.dart';
 
+/// How much of a day is spent writing.
+enum DayWeight {
+  full,
+  half,
+  none;
+
+  double get value => switch (this) {
+        DayWeight.full => 1,
+        DayWeight.half => 0.5,
+        DayWeight.none => 0,
+      };
+
+  String get label => switch (this) {
+        DayWeight.full => 'יום מלא',
+        DayWeight.half => 'חצי יום',
+        DayWeight.none => 'לא עובד',
+      };
+
+  static DayWeight fromName(String? name, DayWeight fallback) =>
+      DayWeight.values.firstWhere((w) => w.name == name, orElse: () => fallback);
+}
+
 /// Why a day is not a full working day.
 enum NonWorkReason {
+  // Fixed — never configurable.
   shabbat,
-  friday,
   yomTov,
   cholHamoed,
   erevYomTov,
-  fast,
+  purim,
   tishaBeav,
   erevTishaBeav,
-  betweenYomKippurAndSukkot,
-  weekBeforePesach,
-  purim,
+
+  // Configurable.
+  friday,
+  motzeiShabbat,
   chanukah,
-  minorHoliday,
-  roshChodesh;
+  fastSeventeenTammuz,
+  fastGedalya,
+  fastTenthTevet,
+  fastEsther,
+  lagBaomer,
+  isruChag,
+  beforePesach,
+  betweenYomKippurAndSukkot;
 
   String get label => switch (this) {
         NonWorkReason.shabbat => 'שבת',
-        NonWorkReason.friday => 'ערב שבת',
         NonWorkReason.yomTov => 'יום טוב',
         NonWorkReason.cholHamoed => 'חול המועד',
         NonWorkReason.erevYomTov => 'ערב חג',
-        NonWorkReason.fast => 'צום',
+        NonWorkReason.purim => 'פורים',
         NonWorkReason.tishaBeav => 'תשעה באב',
         NonWorkReason.erevTishaBeav => 'ערב תשעה באב',
-        NonWorkReason.betweenYomKippurAndSukkot => 'בין כיפור לסוכות',
-        NonWorkReason.weekBeforePesach => 'השבוע שלפני פסח',
-        NonWorkReason.purim => 'פורים',
+        NonWorkReason.friday => 'ערב שבת',
+        NonWorkReason.motzeiShabbat => 'מוצאי שבת',
         NonWorkReason.chanukah => 'חנוכה',
-        NonWorkReason.minorHoliday => 'יום מיוחד',
-        NonWorkReason.roshChodesh => 'ראש חודש',
-      };
-}
-
-/// How much of a Friday is spent writing.
-enum FridayWork {
-  none,
-  half,
-  full;
-
-  double get value => switch (this) {
-        FridayWork.none => 0,
-        FridayWork.half => 0.5,
-        FridayWork.full => 1,
+        NonWorkReason.fastSeventeenTammuz => 'י״ז בתמוז',
+        NonWorkReason.fastGedalya => 'צום גדליה',
+        NonWorkReason.fastTenthTevet => 'י׳ בטבת',
+        NonWorkReason.fastEsther => 'תענית אסתר',
+        NonWorkReason.lagBaomer => 'ל״ג בעומר',
+        NonWorkReason.isruChag => 'איסרו חג',
+        NonWorkReason.beforePesach => 'לפני פסח',
+        NonWorkReason.betweenYomKippurAndSukkot => 'בין כיפור לסוכות',
       };
 
-  String get label => switch (this) {
-        FridayWork.none => 'לא עובד',
-        FridayWork.half => 'חצי יום',
-        FridayWork.full => 'יום מלא',
-      };
+  /// Whether the writer can change how this day is counted.
+  bool get isConfigurable => index >= NonWorkReason.friday.index;
 }
 
 /// Which days the writer treats as time off.
 ///
-/// Shabbat, Yom Tov and Tisha BeAv are not configurable — no writing gets done
-/// on them. The rest are, because soferim genuinely differ on whether they sit
-/// down during Chanukah or on Rosh Chodesh, and a wrong assumption here
-/// silently distorts every delivery date the app produces.
+/// Only the days soferim genuinely differ on appear here. Shabbat, Yom Tov,
+/// Chol HaMoed, the eves of festivals, Purim, Shushan Purim, Tisha BeAv and its
+/// eve are not settings — no writing gets done on them. Rosh Chodesh, Tu
+/// BiShvat, Pesach Sheni, Purim Katan, Tu BeAv and Yom HaAtzmaut are not
+/// settings either — they are ordinary working days.
 class WorkCalendarRules {
-  /// Israel keeps one day of Yom Tov, the diaspora two. This changes both the
-  /// festival days themselves and where Chol HaMoed begins.
+  /// Bumped whenever the stored shape changes. [fromJson] migrates anything
+  /// older, so a settings file written by any past version still opens.
+  static const int currentSchemaVersion = 2;
+
+  /// Israel keeps one day of Yom Tov, the diaspora two. This changes the
+  /// festival days themselves, where Chol HaMoed begins, and when Isru Chag
+  /// falls.
   final bool inIsrael;
 
-  final FridayWork friday;
+  final DayWeight friday;
 
-  /// Saturday night, after Shabbat ends, counted as half a working day.
-  final bool motzeiShabbatHalfDay;
+  /// Saturday night, after Shabbat ends. Never a full day — Shabbat itself is
+  /// not negotiable — so only [DayWeight.half] and [DayWeight.none] apply.
+  final DayWeight motzeiShabbat;
 
-  final bool skipCholHamoed;
-  final bool skipErevYomTov;
+  final DayWeight chanukah;
 
-  /// The minor fasts: 17 Tammuz, Tzom Gedalya, 10 Tevet, Ta'anit Esther.
-  final bool skipFasts;
+  // Each fast separately: a sofer may sit down on the tenth of Tevet and not
+  // on the seventeenth of Tammuz.
+  final DayWeight fastSeventeenTammuz;
+  final DayWeight fastGedalya;
+  final DayWeight fastTenthTevet;
+  final DayWeight fastEsther;
 
-  final bool skipErevTishaBeav;
+  final DayWeight lagBaomer;
+  final DayWeight isruChag;
 
-  /// 11–14 Tishrei, when the sukka is being built.
-  final bool skipBetweenYomKippurAndSukkot;
+  /// How many days before Pesach are cleared for preparation, counting back
+  /// from the first day of the festival. 7 covers 8–14 Nisan. Clamped to 0–14
+  /// so the window can never spill back into Adar.
+  final int daysBeforePesach;
+  final DayWeight beforePesach;
 
-  /// 8–14 Nisan.
-  final bool skipWeekBeforePesach;
-
-  final bool skipPurim;
-  final bool skipChanukah;
-
-  /// Tu BiShvat, Lag BaOmer, Pesach Sheni, Tu BeAv, Purim Katan, Isru Chag.
-  final bool skipMinorHolidays;
-
-  final bool skipRoshChodesh;
+  /// 11–14 Tishrei. The fourteenth is Erev Sukkot and is off regardless.
+  final DayWeight betweenYomKippurAndSukkot;
 
   const WorkCalendarRules({
     this.inIsrael = true,
-    this.friday = FridayWork.none,
-    this.motzeiShabbatHalfDay = false,
-    this.skipCholHamoed = true,
-    this.skipErevYomTov = true,
-    this.skipFasts = true,
-    this.skipErevTishaBeav = true,
-    this.skipBetweenYomKippurAndSukkot = true,
-    this.skipWeekBeforePesach = true,
-    this.skipPurim = true,
-    this.skipChanukah = true,
-    this.skipMinorHolidays = false,
-    this.skipRoshChodesh = false,
+    this.friday = DayWeight.none,
+    this.motzeiShabbat = DayWeight.none,
+    this.chanukah = DayWeight.none,
+    this.fastSeventeenTammuz = DayWeight.none,
+    this.fastGedalya = DayWeight.none,
+    this.fastTenthTevet = DayWeight.none,
+    this.fastEsther = DayWeight.none,
+    this.lagBaomer = DayWeight.none,
+    this.isruChag = DayWeight.none,
+    this.daysBeforePesach = 7,
+    this.beforePesach = DayWeight.none,
+    this.betweenYomKippurAndSukkot = DayWeight.none,
   });
 
   /// The defaults, named for readability at call sites.
   static const WorkCalendarRules standard = WorkCalendarRules();
 
+  /// The window before Pesach, as Hebrew days of Nisan. Empty when the setting
+  /// is zero.
+  ({int from, int to})? get pesachWindow {
+    final days = daysBeforePesach.clamp(0, 14);
+    if (days <= 0) return null;
+    return (from: 15 - days, to: 14);
+  }
+
   WorkCalendarRules copyWith({
     bool? inIsrael,
-    FridayWork? friday,
-    bool? motzeiShabbatHalfDay,
-    bool? skipCholHamoed,
-    bool? skipErevYomTov,
-    bool? skipFasts,
-    bool? skipErevTishaBeav,
-    bool? skipBetweenYomKippurAndSukkot,
-    bool? skipWeekBeforePesach,
-    bool? skipPurim,
-    bool? skipChanukah,
-    bool? skipMinorHolidays,
-    bool? skipRoshChodesh,
+    DayWeight? friday,
+    DayWeight? motzeiShabbat,
+    DayWeight? chanukah,
+    DayWeight? fastSeventeenTammuz,
+    DayWeight? fastGedalya,
+    DayWeight? fastTenthTevet,
+    DayWeight? fastEsther,
+    DayWeight? lagBaomer,
+    DayWeight? isruChag,
+    int? daysBeforePesach,
+    DayWeight? beforePesach,
+    DayWeight? betweenYomKippurAndSukkot,
   }) =>
       WorkCalendarRules(
         inIsrael: inIsrael ?? this.inIsrael,
         friday: friday ?? this.friday,
-        motzeiShabbatHalfDay: motzeiShabbatHalfDay ?? this.motzeiShabbatHalfDay,
-        skipCholHamoed: skipCholHamoed ?? this.skipCholHamoed,
-        skipErevYomTov: skipErevYomTov ?? this.skipErevYomTov,
-        skipFasts: skipFasts ?? this.skipFasts,
-        skipErevTishaBeav: skipErevTishaBeav ?? this.skipErevTishaBeav,
-        skipBetweenYomKippurAndSukkot:
-            skipBetweenYomKippurAndSukkot ?? this.skipBetweenYomKippurAndSukkot,
-        skipWeekBeforePesach: skipWeekBeforePesach ?? this.skipWeekBeforePesach,
-        skipPurim: skipPurim ?? this.skipPurim,
-        skipChanukah: skipChanukah ?? this.skipChanukah,
-        skipMinorHolidays: skipMinorHolidays ?? this.skipMinorHolidays,
-        skipRoshChodesh: skipRoshChodesh ?? this.skipRoshChodesh,
+        motzeiShabbat: motzeiShabbat ?? this.motzeiShabbat,
+        chanukah: chanukah ?? this.chanukah,
+        fastSeventeenTammuz: fastSeventeenTammuz ?? this.fastSeventeenTammuz,
+        fastGedalya: fastGedalya ?? this.fastGedalya,
+        fastTenthTevet: fastTenthTevet ?? this.fastTenthTevet,
+        fastEsther: fastEsther ?? this.fastEsther,
+        lagBaomer: lagBaomer ?? this.lagBaomer,
+        isruChag: isruChag ?? this.isruChag,
+        daysBeforePesach: daysBeforePesach ?? this.daysBeforePesach,
+        beforePesach: beforePesach ?? this.beforePesach,
+        betweenYomKippurAndSukkot:
+            betweenYomKippurAndSukkot ?? this.betweenYomKippurAndSukkot,
       );
 
   Map<String, dynamic> toJson() => {
+        'schemaVersion': currentSchemaVersion,
         'inIsrael': inIsrael,
         'friday': friday.name,
-        'motzeiShabbatHalfDay': motzeiShabbatHalfDay,
-        'skipCholHamoed': skipCholHamoed,
-        'skipErevYomTov': skipErevYomTov,
-        'skipFasts': skipFasts,
-        'skipErevTishaBeav': skipErevTishaBeav,
-        'skipBetweenYomKippurAndSukkot': skipBetweenYomKippurAndSukkot,
-        'skipWeekBeforePesach': skipWeekBeforePesach,
-        'skipPurim': skipPurim,
-        'skipChanukah': skipChanukah,
-        'skipMinorHolidays': skipMinorHolidays,
-        'skipRoshChodesh': skipRoshChodesh,
+        'motzeiShabbat': motzeiShabbat.name,
+        'chanukah': chanukah.name,
+        'fastSeventeenTammuz': fastSeventeenTammuz.name,
+        'fastGedalya': fastGedalya.name,
+        'fastTenthTevet': fastTenthTevet.name,
+        'fastEsther': fastEsther.name,
+        'lagBaomer': lagBaomer.name,
+        'isruChag': isruChag.name,
+        'daysBeforePesach': daysBeforePesach,
+        'beforePesach': beforePesach.name,
+        'betweenYomKippurAndSukkot': betweenYomKippurAndSukkot.name,
       };
 
+  /// Reads a stored settings blob of any version this app has ever written.
+  ///
+  /// Unknown keys are ignored and missing keys take their default, so a file
+  /// from a newer build still opens and a file from an older one is not
+  /// rejected for lacking fields that did not exist yet.
   factory WorkCalendarRules.fromJson(Map<String, dynamic> json) {
-    bool flag(String key, bool fallback) {
-      final v = json[key];
-      return v is bool ? v : fallback;
-    }
+    final version = json['schemaVersion'] is int
+        ? json['schemaVersion'] as int
+        // Version 1 predates the field: it had a single `skip<Thing>` boolean
+        // per category and a `friday` of none/half/full.
+        : 1;
+
+    if (version < 2) return _fromV1(json);
+
+    DayWeight weight(String key, [DayWeight fallback = DayWeight.none]) =>
+        DayWeight.fromName(json[key] as String?, fallback);
 
     return WorkCalendarRules(
-      inIsrael: flag('inIsrael', true),
-      friday: FridayWork.values.firstWhere(
-        (f) => f.name == json['friday'],
-        orElse: () => FridayWork.none,
-      ),
-      motzeiShabbatHalfDay: flag('motzeiShabbatHalfDay', false),
-      skipCholHamoed: flag('skipCholHamoed', true),
-      skipErevYomTov: flag('skipErevYomTov', true),
-      skipFasts: flag('skipFasts', true),
-      skipErevTishaBeav: flag('skipErevTishaBeav', true),
-      skipBetweenYomKippurAndSukkot: flag('skipBetweenYomKippurAndSukkot', true),
-      skipWeekBeforePesach: flag('skipWeekBeforePesach', true),
-      skipPurim: flag('skipPurim', true),
-      skipChanukah: flag('skipChanukah', true),
-      skipMinorHolidays: flag('skipMinorHolidays', false),
-      skipRoshChodesh: flag('skipRoshChodesh', false),
+      inIsrael: json['inIsrael'] is bool ? json['inIsrael'] as bool : true,
+      friday: weight('friday'),
+      motzeiShabbat: weight('motzeiShabbat'),
+      chanukah: weight('chanukah'),
+      fastSeventeenTammuz: weight('fastSeventeenTammuz'),
+      fastGedalya: weight('fastGedalya'),
+      fastTenthTevet: weight('fastTenthTevet'),
+      fastEsther: weight('fastEsther'),
+      lagBaomer: weight('lagBaomer'),
+      isruChag: weight('isruChag'),
+      daysBeforePesach:
+          json['daysBeforePesach'] is int ? json['daysBeforePesach'] as int : 7,
+      beforePesach: weight('beforePesach'),
+      betweenYomKippurAndSukkot: weight('betweenYomKippurAndSukkot'),
+    );
+  }
+
+  /// Migration from the first stored shape.
+  ///
+  /// Version 1 asked yes/no per category; a "yes" becomes [DayWeight.none] —
+  /// the day was skipped — and a "no" becomes [DayWeight.full]. Categories that
+  /// version 1 had and version 2 dropped (Rosh Chodesh, the minor days) are
+  /// discarded, since those are now always working days.
+  static WorkCalendarRules _fromV1(Map<String, dynamic> json) {
+    DayWeight fromSkip(String key, {bool defaultSkip = true}) {
+      final skip = json[key] is bool ? json[key] as bool : defaultSkip;
+      return skip ? DayWeight.none : DayWeight.full;
+    }
+
+    final v1Friday = json['friday'] as String?;
+    final oldMotzei = json['motzeiShabbatHalfDay'] == true;
+    final fasts = fromSkip('skipFasts');
+
+    return WorkCalendarRules(
+      inIsrael: json['inIsrael'] is bool ? json['inIsrael'] as bool : true,
+      friday: DayWeight.fromName(v1Friday, DayWeight.none),
+      motzeiShabbat: oldMotzei ? DayWeight.half : DayWeight.none,
+      chanukah: fromSkip('skipChanukah'),
+      fastSeventeenTammuz: fasts,
+      fastGedalya: fasts,
+      fastTenthTevet: fasts,
+      fastEsther: fasts,
+      // Version 1 grouped these under one "minor days" flag that defaulted to
+      // working.
+      lagBaomer: fromSkip('skipMinorHolidays', defaultSkip: false),
+      isruChag: fromSkip('skipMinorHolidays', defaultSkip: false),
+      daysBeforePesach: 7,
+      beforePesach: fromSkip('skipWeekBeforePesach'),
+      betweenYomKippurAndSukkot: fromSkip('skipBetweenYomKippurAndSukkot'),
     );
   }
 }
@@ -229,7 +306,7 @@ class WorkDay {
   /// 0 for a day off, 1 for a full day, 0.5 for a half day.
   final double value;
 
-  /// Null on an ordinary full working day.
+  /// Null only on an ordinary full working day.
   final NonWorkReason? reason;
 
   const WorkDay(this.value, this.reason);
@@ -253,7 +330,8 @@ class WorkPlan {
   final double workDaysNeeded;
 
   /// How many days were lost to each reason along the way, so the app can say
-  /// *why* a two-week job lands a month out.
+  /// *why* a two-week job lands a month out. Half days are not counted here;
+  /// only days with no writing at all.
   final Map<NonWorkReason, int> skipped;
 
   const WorkPlan({
@@ -309,98 +387,105 @@ class HebrewWorkCalendar {
 
   /// Classifies the day [jc] is currently positioned on.
   ///
-  /// The festival reasons are settled first, and only then the weekday. That
-  /// order matters: a Friday that is also Chol HaMoed has to be off even for a
-  /// writer who works full Fridays, and a Saturday night that is still Yom Tov
-  /// must not be credited as half a day.
+  /// The days that are never writing days are settled first and short-circuit
+  /// everything else. Only then do the configurable categories apply, and where
+  /// several of them cover the same day the most restrictive one decides.
   static WorkDay classify(JewishCalendar jc, WorkCalendarRules rules) {
-    final festival = _festivalReason(jc, rules);
-    if (festival != null) return WorkDay(0, festival);
+    final fixed = fixedReason(jc, rules.inIsrael);
+    if (fixed != null) return WorkDay(0, fixed);
+
+    var weight = DayWeight.full;
+    NonWorkReason? reason;
+
+    void consider(DayWeight candidate, NonWorkReason because) {
+      if (candidate.value < weight.value) {
+        weight = candidate;
+        reason = because;
+      }
+    }
 
     final dayOfWeek = jc.getDayOfWeek();
+    final month = jc.getJewishMonth();
+    final day = jc.getJewishDayOfMonth();
+    final index = jc.getYomTovIndex();
 
     if (dayOfWeek == JewishDate.saturday) {
-      return rules.motzeiShabbatHalfDay
-          ? const WorkDay(0.5, null)
-          : const WorkDay(0, NonWorkReason.shabbat);
-    }
-
-    if (dayOfWeek == JewishDate.friday) {
-      return WorkDay(
-        rules.friday.value,
-        rules.friday == FridayWork.full ? null : NonWorkReason.friday,
+      // Shabbat is never a full day; the only question is whether Saturday
+      // night counts for half.
+      consider(
+        rules.motzeiShabbat == DayWeight.half ? DayWeight.half : DayWeight.none,
+        rules.motzeiShabbat == DayWeight.half
+            ? NonWorkReason.motzeiShabbat
+            : NonWorkReason.shabbat,
       );
+    } else if (dayOfWeek == JewishDate.friday) {
+      consider(rules.friday, NonWorkReason.friday);
     }
 
-    return const WorkDay(1, null);
+    if (index == JewishCalendar.CHANUKAH) {
+      consider(rules.chanukah, NonWorkReason.chanukah);
+    }
+    if (index == JewishCalendar.SEVENTEEN_OF_TAMMUZ) {
+      consider(rules.fastSeventeenTammuz, NonWorkReason.fastSeventeenTammuz);
+    }
+    if (index == JewishCalendar.FAST_OF_GEDALYAH) {
+      consider(rules.fastGedalya, NonWorkReason.fastGedalya);
+    }
+    if (index == JewishCalendar.TENTH_OF_TEVES) {
+      consider(rules.fastTenthTevet, NonWorkReason.fastTenthTevet);
+    }
+    if (index == JewishCalendar.FAST_OF_ESTHER) {
+      consider(rules.fastEsther, NonWorkReason.fastEsther);
+    }
+    if (index == JewishCalendar.LAG_BAOMER) {
+      consider(rules.lagBaomer, NonWorkReason.lagBaomer);
+    }
+    if (_isIsruChag(month, day, rules.inIsrael)) {
+      consider(rules.isruChag, NonWorkReason.isruChag);
+    }
+    if (rules.pesachWindow case final window?) {
+      if (month == JewishDate.NISSAN &&
+          day >= window.from &&
+          day <= window.to) {
+        consider(rules.beforePesach, NonWorkReason.beforePesach);
+      }
+    }
+    if (month == JewishDate.TISHREI && day >= 11 && day <= 14) {
+      consider(rules.betweenYomKippurAndSukkot,
+          NonWorkReason.betweenYomKippurAndSukkot);
+    }
+
+    return WorkDay(weight.value, weight == DayWeight.full ? null : reason);
   }
 
-  /// The Hebrew-calendar reason this day is off, or null if there is none.
+  /// The reason this day can never be a writing day, or null.
   ///
-  /// Tested in order of weight, so Yom Kippur is reported as Yom Tov rather
-  /// than as a fast, and Erev Pesach as an eve rather than as part of the week
-  /// before Pesach. The day is off either way; the label should name the
-  /// strongest reason.
-  static NonWorkReason? _festivalReason(
-      JewishCalendar jc, WorkCalendarRules rules) {
+  /// These override every setting: a Shabbat of Chanukah is Shabbat whatever
+  /// Chanukah is set to, and Chol HaMoed stays closed for a writer who works
+  /// full Fridays.
+  ///
+  /// Ordered by weight, so Yom Kippur reads as Yom Tov rather than as a fast
+  /// and Erev Pesach as an eve rather than as part of the week before Pesach.
+  static NonWorkReason? fixedReason(JewishCalendar jc, bool inIsrael) {
     final month = jc.getJewishMonth();
     final day = jc.getJewishDayOfMonth();
     final index = jc.getYomTovIndex();
 
     if (_isYomTovAssurBemelacha(index)) return NonWorkReason.yomTov;
     if (index == JewishCalendar.TISHA_BEAV) return NonWorkReason.tishaBeav;
-
-    if (rules.skipFasts && _isMinorFast(index)) return NonWorkReason.fast;
-
-    if (rules.skipErevTishaBeav &&
-        _isErevTishaBeav(month, day, jc.getDayOfWeek())) {
+    if (_isErevTishaBeav(month, day, jc.getDayOfWeek())) {
       return NonWorkReason.erevTishaBeav;
     }
-
-    if (rules.skipErevYomTov && _isErevYomTov(index, day)) {
-      return NonWorkReason.erevYomTov;
-    }
-
-    if (rules.skipCholHamoed &&
-        (index == JewishCalendar.CHOL_HAMOED_PESACH ||
-            index == JewishCalendar.CHOL_HAMOED_SUCCOS ||
-            index == JewishCalendar.HOSHANA_RABBA)) {
+    if (_isErevYomTov(index, day)) return NonWorkReason.erevYomTov;
+    if (index == JewishCalendar.CHOL_HAMOED_PESACH ||
+        index == JewishCalendar.CHOL_HAMOED_SUCCOS ||
+        index == JewishCalendar.HOSHANA_RABBA) {
       return NonWorkReason.cholHamoed;
     }
-
-    if (rules.skipBetweenYomKippurAndSukkot &&
-        month == JewishDate.TISHREI &&
-        day >= 11 &&
-        day <= 14) {
-      return NonWorkReason.betweenYomKippurAndSukkot;
-    }
-
-    if (rules.skipWeekBeforePesach &&
-        month == JewishDate.NISSAN &&
-        day >= 8 &&
-        day <= 14) {
-      return NonWorkReason.weekBeforePesach;
-    }
-
-    if (rules.skipPurim &&
-        (index == JewishCalendar.PURIM ||
-            index == JewishCalendar.SHUSHAN_PURIM)) {
+    if (index == JewishCalendar.PURIM ||
+        index == JewishCalendar.SHUSHAN_PURIM) {
       return NonWorkReason.purim;
     }
-
-    if (rules.skipChanukah && index == JewishCalendar.CHANUKAH) {
-      return NonWorkReason.chanukah;
-    }
-
-    if (rules.skipMinorHolidays &&
-        (_isMinorHoliday(index) || _isIsruChag(month, day, rules.inIsrael))) {
-      return NonWorkReason.minorHoliday;
-    }
-
-    if (rules.skipRoshChodesh && jc.isRoshChodesh()) {
-      return NonWorkReason.roshChodesh;
-    }
-
     return null;
   }
 
@@ -481,9 +566,9 @@ class HebrewWorkCalendar {
     return null;
   }
 
-  /// Every non-working day between two dates, for a "why is it so far out"
-  /// breakdown or a calendar strip.
-  static List<({DateTime date, JewishDate hebrew, NonWorkReason reason})> daysOff(
+  /// Every day in a range that is not a full working day, for a "why is it so
+  /// far out" breakdown or a preview strip.
+  static List<({DateTime date, JewishDate hebrew, WorkDay day})> daysOff(
     DateTime from,
     DateTime to,
     WorkCalendarRules rules,
@@ -494,16 +579,15 @@ class HebrewWorkCalendar {
 
     final days = end.difference(start).inDays + 1;
     final jc = hebrewDayOf(start, rules);
-    final result = <({DateTime date, JewishDate hebrew, NonWorkReason reason})>[];
+    final result = <({DateTime date, JewishDate hebrew, WorkDay day})>[];
 
     for (var i = 0; i < days; i++) {
       final classified = classify(jc, rules);
-      final reason = classified.reason;
-      if (classified.isOff && reason != null) {
+      if (classified.reason != null) {
         result.add((
           date: jc.getGregorianCalendar(),
           hebrew: jc.clone(),
-          reason: reason,
+          day: classified,
         ));
       }
       if (i < days - 1) jc.forward();
@@ -524,13 +608,6 @@ class HebrewWorkCalendar {
       index == JewishCalendar.SIMCHAS_TORAH ||
       index == JewishCalendar.ROSH_HASHANA ||
       index == JewishCalendar.YOM_KIPPUR;
-
-  /// Tisha BeAv is handled separately, as it is never a working day.
-  static bool _isMinorFast(int index) =>
-      index == JewishCalendar.SEVENTEEN_OF_TAMMUZ ||
-      index == JewishCalendar.FAST_OF_GEDALYAH ||
-      index == JewishCalendar.TENTH_OF_TEVES ||
-      index == JewishCalendar.FAST_OF_ESTHER;
 
   /// Erev Yom Tov, including 20 Nisan — Chol HaMoed, but also the eve of the
   /// seventh day of Pesach.
@@ -556,14 +633,6 @@ class HebrewWorkCalendar {
     final observed = ninthDayOfWeek == JewishDate.saturday ? 10 : 9;
     return day == observed - 1;
   }
-
-  static bool _isMinorHoliday(int index) =>
-      index == JewishCalendar.TU_BESHVAT ||
-      index == JewishCalendar.LAG_BAOMER ||
-      index == JewishCalendar.PESACH_SHENI ||
-      index == JewishCalendar.TU_BEAV ||
-      index == JewishCalendar.PURIM_KATAN ||
-      index == JewishCalendar.SHUSHAN_PURIM_KATAN;
 
   /// The day after the last day of Pesach, Shavuot and Sukkot.
   ///

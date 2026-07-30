@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 import 'logic/date_logic.dart';
 import 'logic/expense_logic.dart';
+import 'logic/hebrew_clock.dart';
 import 'logic/hebrew_work_calendar.dart';
 import 'logic/production_calculator.dart';
 import 'logic/profit_calculator.dart';
@@ -36,7 +37,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
   /// Kept in sync with the setting so this screen files a session under the
   /// same working day the home screen displays.
-  int _dayRolloverHour = 0;
+  DayStart _dayStart = DayStart.midnight;
 
   /// Used to count the working days in a Hebrew month, so a monthly target is
   /// measured against the days the writer actually writes.
@@ -45,8 +46,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
   @override
   void initState() {
     super.initState();
-    _storage.getDayRolloverHour().then((h) {
-      if (mounted) setState(() => _dayRolloverHour = h);
+    _storage.getDayStart().then((d) {
+      if (mounted) setState(() => _dayStart = d);
     });
     _storage.getWorkCalendarRules().then((r) {
       if (mounted) setState(() => _rules = r);
@@ -58,10 +59,10 @@ class _SummaryScreenState extends State<SummaryScreen> {
       if (session.backlogOnly) return false;
       if (_viewByMonth) {
         return DateLogic.isSameWorkingMonth(
-            session.startTime, date, _dayRolloverHour);
+            session.startTime, date, _dayStart);
       }
       return DateLogic.isSameWorkingDay(
-          session.startTime, date, _dayRolloverHour);
+          session.startTime, date, _dayStart);
     }).toList();
   }
 

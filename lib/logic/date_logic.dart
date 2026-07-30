@@ -1,42 +1,71 @@
+import 'hebrew_clock.dart';
+
 /// Single source of truth for "which day does this belong to".
 ///
-/// A sofer who works past midnight still considers it the same working day.
-/// The "day rollover hour" setting lets them say when a new day starts, e.g.
-/// 02:00 — so writing at 01:00 counts towards the previous day.
+/// A sofer who works past midnight still considers it the same working day; one
+/// who works by the Hebrew calendar may want the day to turn over at nightfall,
+/// as the Hebrew date itself does. [DayStart] holds that choice, and everything
+/// that groups work by day goes through here.
 ///
 /// Before this file the rule was applied in only two of the places that group
-/// by day, so the home screen could show one date while the daily summary
-/// filed the same session under another.
+/// by day, so the home screen could show one date while the daily summary filed
+/// the same session under another.
 class DateLogic {
   const DateLogic._();
 
-  /// The working day [moment] belongs to, given [rolloverHour] (0–23).
+  /// The working day [moment] belongs to, given [dayStart].
   ///
-  /// Returns a date at midnight. With rolloverHour 0 this is simply the
-  /// calendar date, which is the default behaviour.
-  static DateTime effectiveDate(DateTime moment, int rolloverHour) {
+  /// Returns a date at midnight. With the default (midnight) this is simply the
+  /// calendar date.
+  ///
+  /// The two kinds of boundary run in opposite directions, which is why they are
+  /// not one subtraction:
+  ///
+  /// * a morning boundary (02:00) means work before it belongs to *yesterday*;
+  /// * an evening boundary (nightfall) means work after it belongs to
+  ///   *tomorrow*, exactly as the Hebrew date does.
+  static DateTime effectiveDate(DateTime moment, DayStart dayStart) {
     final date = DateTime(moment.year, moment.month, moment.day);
-    if (rolloverHour > 0 && moment.hour < rolloverHour) {
-      return date.subtract(const Duration(days: 1));
+
+    switch (dayStart.boundary) {
+      case DayBoundary.midnight:
+        return date;
+
+      case DayBoundary.fixedHour:
+        if (dayStart.hour > 0 && moment.hour < dayStart.hour) {
+          return date.subtract(const Duration(days: 1));
+        }
+        return date;
+
+      case DayBoundary.sunset:
+      case DayBoundary.nightfall:
+        final boundary = HebrewClock.boundaryOn(date, dayStart);
+        // A location where the sun never sets would give null. It cannot happen
+        // in Israel, but falling back to the calendar date is better than
+        // throwing if the reference point ever changes.
+        if (boundary == null) return date;
+        return moment.isBefore(boundary)
+            ? date
+            : date.add(const Duration(days: 1));
     }
-    return date;
   }
 
-  /// Whether [moment] falls on the working day [day], honouring the rollover.
-  static bool isSameWorkingDay(DateTime moment, DateTime day, int rolloverHour) {
-    final a = effectiveDate(moment, rolloverHour);
-    final b = effectiveDate(day, rolloverHour);
+  /// Whether [moment] falls on the working day [day].
+  static bool isSameWorkingDay(
+      DateTime moment, DateTime day, DayStart dayStart) {
+    final a = effectiveDate(moment, dayStart);
+    final b = effectiveDate(day, dayStart);
     return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 
   /// Whether [moment] falls in the same calendar month as [month], after the
-  /// rollover has been applied.
+  /// day boundary has been applied.
   ///
   /// This matters at a month boundary: work at 01:00 on the 1st belongs to the
-  /// last day of the previous month when the rollover is set past that hour.
+  /// last day of the previous month when the boundary is set past that hour.
   static bool isSameWorkingMonth(
-      DateTime moment, DateTime month, int rolloverHour) {
-    final a = effectiveDate(moment, rolloverHour);
+      DateTime moment, DateTime month, DayStart dayStart) {
+    final a = effectiveDate(moment, dayStart);
     return a.year == month.year && a.month == month.month;
   }
 }
