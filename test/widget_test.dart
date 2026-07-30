@@ -29,7 +29,7 @@ import 'package:sofer_vmone/storage_service.dart';
 /// depend only on the fixed days — Shabbat, Yom Tov and the rest — and not on
 /// wherever in the year the sample dates happen to fall.
 const shabbatOnly = WorkCalendarRules(
-  friday: DayWeight.full,
+  friday: DayWeight.half,
   motzeiShabbat: DayWeight.none,
   chanukah: DayWeight.full,
   fastSeventeenTammuz: DayWeight.full,
@@ -1671,7 +1671,7 @@ void main() {
       fail('no Shabbat found during Chanukah 5786');
     });
 
-    test('Chol HaMoed beats a full working Friday', () {
+    test('Chol HaMoed closes a Friday that would otherwise be half a day', () {
       // Chol HaMoed Pesach in Israel is 16–20 Nisan.
       final jc =
           JewishCalendar.initDate(5786, JewishDate.NISSAN, 16, inIsrael: true);
@@ -1751,11 +1751,10 @@ void main() {
       fail('no weekday $weekday between $from and $to of month $month');
     }
 
-    test('Friday takes each of the three states', () {
+    test('Friday is half a day or nothing, never a full one', () {
       final friday =
           findWeekday(5786, JewishDate.IYAR, 15, 28, JewishDate.friday);
 
-      expect(day(5786, JewishDate.IYAR, friday, shabbatOnly).value, 1);
       expect(
           day(5786, JewishDate.IYAR, friday,
                   shabbatOnly.copyWith(friday: DayWeight.half))
@@ -1766,6 +1765,18 @@ void main() {
                   shabbatOnly.copyWith(friday: DayWeight.none))
               .value,
           0);
+      // A stored `full` is clamped rather than honoured.
+      expect(
+          day(5786, JewishDate.IYAR, friday,
+                  shabbatOnly.copyWith(friday: DayWeight.full))
+              .value,
+          0);
+      // And clamped on the way in from storage too.
+      expect(
+          WorkCalendarRules.fromJson(
+                  const {'schemaVersion': 2, 'friday': 'full'})
+              .friday,
+          DayWeight.none);
     });
 
     test('motzei Shabbat is half a day or nothing, never a full one', () {
@@ -1862,23 +1873,26 @@ void main() {
           HebrewWorkCalendar.classify(friday!,
               shabbatOnly.copyWith(friday: fri, chanukah: chan));
 
-      expect(withRules(DayWeight.full, DayWeight.full).value, 1);
+      // Friday is capped at half, so half is the most this day can ever be.
       expect(withRules(DayWeight.half, DayWeight.full).value, 0.5);
-      expect(withRules(DayWeight.full, DayWeight.none).value, 0);
-      expect(withRules(DayWeight.none, DayWeight.full).value, 0);
+      expect(withRules(DayWeight.half, DayWeight.half).value, 0.5);
+      // Either one saying "not a working day" settles it.
       expect(withRules(DayWeight.half, DayWeight.none).value, 0);
+      expect(withRules(DayWeight.none, DayWeight.full).value, 0);
     });
   });
 
   group('HebrewWorkCalendar — counting and planning', () {
-    test('an ordinary week has six working days, or five without Friday', () {
+    test('an ordinary week is five days, or five and a half with Friday', () {
       // 15–21 Iyar 5786: seven consecutive days with no festival in them.
+      // Sunday to Thursday is five, Shabbat is nothing, and Friday is worth
+      // whatever it is set to — never more than a half.
       final from = JewishCalendar.initDate(5786, JewishDate.IYAR, 15)
           .getGregorianCalendar();
       final to = JewishCalendar.initDate(5786, JewishDate.IYAR, 21)
           .getGregorianCalendar();
 
-      expect(HebrewWorkCalendar.countWorkDays(from, to, shabbatOnly), 6);
+      expect(HebrewWorkCalendar.countWorkDays(from, to, shabbatOnly), 5.5);
       expect(HebrewWorkCalendar.countWorkDays(from, to, shabbatAndFriday), 5);
     });
 
@@ -2198,12 +2212,12 @@ void main() {
         ),
         isNull,
       );
-      // 4 May to 9 May inclusive is five working days with only Shabbat off.
+      // Monday 4 May to Thursday 7 May inclusive is four working days.
       expect(
         CompletionEstimator.paceRequiredFor(
-          remainingUnits: 10,
-          deadline: DateTime(2026, 5, 9),
-          rules: shabbatOnly,
+          remainingUnits: 8,
+          deadline: DateTime(2026, 5, 7),
+          rules: shabbatAndFriday,
           from: DateTime(2026, 5, 4),
         ),
         2,

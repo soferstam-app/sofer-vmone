@@ -127,6 +127,8 @@ class WorkCalendarRules {
   /// falls.
   final bool inIsrael;
 
+  /// Never a full day: a Friday is short and preparing for Shabbat takes the
+  /// rest of it. Only [DayWeight.half] and [DayWeight.none] apply.
   final DayWeight friday;
 
   /// Saturday night, after Shabbat ends. Never a full day — Shabbat itself is
@@ -247,10 +249,17 @@ class WorkCalendarRules {
     DayWeight weight(String key, [DayWeight fallback = DayWeight.none]) =>
         DayWeight.fromName(json[key] as String?, fallback);
 
+    /// Friday and motzei Shabbat are never full days; a stored `full` — from a
+    /// hand-edited file or an older shape — is clamped rather than honoured.
+    DayWeight halfAtMost(String key) {
+      final value = weight(key);
+      return value == DayWeight.half ? DayWeight.half : DayWeight.none;
+    }
+
     return WorkCalendarRules(
       inIsrael: json['inIsrael'] is bool ? json['inIsrael'] as bool : true,
-      friday: weight('friday'),
-      motzeiShabbat: weight('motzeiShabbat'),
+      friday: halfAtMost('friday'),
+      motzeiShabbat: halfAtMost('motzeiShabbat'),
       chanukah: weight('chanukah'),
       fastSeventeenTammuz: weight('fastSeventeenTammuz'),
       fastGedalya: weight('fastGedalya'),
@@ -277,13 +286,16 @@ class WorkCalendarRules {
       return skip ? DayWeight.none : DayWeight.full;
     }
 
-    final v1Friday = json['friday'] as String?;
+    // Version 1 offered a full Friday; it is no longer an option, so it lands
+    // on "not a working day" — the default nobody had to choose.
+    final v1Friday =
+        json['friday'] == 'half' ? DayWeight.half : DayWeight.none;
     final oldMotzei = json['motzeiShabbatHalfDay'] == true;
     final fasts = fromSkip('skipFasts');
 
     return WorkCalendarRules(
       inIsrael: json['inIsrael'] is bool ? json['inIsrael'] as bool : true,
-      friday: DayWeight.fromName(v1Friday, DayWeight.none),
+      friday: v1Friday,
       motzeiShabbat: oldMotzei ? DayWeight.half : DayWeight.none,
       chanukah: fromSkip('skipChanukah'),
       fastSeventeenTammuz: fasts,
@@ -419,7 +431,12 @@ class HebrewWorkCalendar {
             : NonWorkReason.shabbat,
       );
     } else if (dayOfWeek == JewishDate.friday) {
-      consider(rules.friday, NonWorkReason.friday);
+      // Never a full day either: a Friday is short, and preparing for Shabbat
+      // takes the rest of it.
+      consider(
+        rules.friday == DayWeight.half ? DayWeight.half : DayWeight.none,
+        NonWorkReason.friday,
+      );
     }
 
     if (index == JewishCalendar.CHANUKAH) {
