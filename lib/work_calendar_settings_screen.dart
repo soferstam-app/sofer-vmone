@@ -70,12 +70,12 @@ class _WorkCalendarSettingsScreenState
                 icon: Icons.weekend,
                 title: "יום שישי",
                 value: _rules.friday,
+                allowFull: false,
                 onChanged: (w) => _update(_rules.copyWith(friday: w)),
               ),
               _weightTile(
                 icon: Icons.nightlight_round,
                 title: "מוצאי שבת",
-                subtitle: "שבת עצמה אינה יום עבודה, לכן חצי יום או כלום",
                 value: _rules.motzeiShabbat,
                 allowFull: false,
                 onChanged: (w) => _update(_rules.copyWith(motzeiShabbat: w)),
@@ -153,6 +153,15 @@ class _WorkCalendarSettingsScreenState
               ),
               const Divider(),
               _sectionTitle("החודש הקרוב"),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Text(
+                  "תצוגה מקדימה של הימים שידולגו, כדי לראות מיד שההגדרות נותנות "
+                  "את התוצאה שהתכוונת אליה.",
+                  style:
+                      TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+              ),
               ..._preview(),
               const SizedBox(height: 24),
             ],
@@ -168,9 +177,7 @@ class _WorkCalendarSettingsScreenState
         child: const Padding(
           padding: EdgeInsets.all(14),
           child: Text(
-            "כל צפי סיום בתוכנה מדלג על הימים שאינם ימי עבודה. החישוב נעשה תמיד "
-            "לפי הלוח העברי — שבת, חגים, חול המועד וצומות אינם נופלים בתאריך "
-            "לועזי קבוע.",
+            "כל צפי סיום בתוכנה מדלג על הימים שאינם ימי עבודה כאן.",
             style: TextStyle(height: 1.4),
           ),
         ),
@@ -202,12 +209,6 @@ class _WorkCalendarSettingsScreenState
               const SizedBox(height: 6),
               Text(
                 "גובר על כל הגדרה אחרת — שבת של חנוכה היא שבת.",
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                "ראש חודש, ט״ו בשבט, פסח שני, פורים קטן, ט״ו באב ויום העצמאות "
-                "הם ימי עבודה רגילים.",
                 style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
               ),
             ],
