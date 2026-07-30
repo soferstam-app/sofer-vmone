@@ -103,7 +103,10 @@ class RuledHomeBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = SoferTokens.of(context);
 
-    if (snapshot.project == null) {
+    // Only when there is genuinely nothing to write. A project not yet chosen
+    // is the ordinary state on a fresh launch, and the answer to it is the
+    // picker, not an empty screen.
+    if (snapshot.projects.isEmpty) {
       return _EmptyState(hebrewDate: snapshot.hebrewDate);
     }
 
@@ -176,7 +179,10 @@ class _WorkColumn extends StatelessWidget {
             DropdownButtonFormField<Project>(
               initialValue: s.project,
               isExpanded: true,
-              decoration: const InputDecoration(border: UnderlineInputBorder()),
+              decoration: const InputDecoration(
+                border: UnderlineInputBorder(),
+                hintText: "בחר פרויקט להתחלת עבודה",
+              ),
               items: [
                 for (final p in s.projects)
                   DropdownMenuItem(value: p, child: Text(p.name)),
@@ -361,15 +367,19 @@ class _Actions extends StatelessWidget {
     final s = snapshot;
 
     if (!s.isActive) {
+      // Nothing to start or record until a project is chosen.
+      final ready = s.project != null;
       return Column(children: [
         SoferPrimaryButton("תחילת כתיבה",
-            icon: Icons.play_arrow, expand: true, onPressed: actions.onStart),
+            icon: Icons.play_arrow,
+            expand: true,
+            onPressed: ready ? actions.onStart : null),
         const SizedBox(height: 8),
         SoferSecondaryButton("הזנה ידנית",
             icon: Icons.edit_calendar,
             expand: true,
             quiet: true,
-            onPressed: actions.onManualEntry),
+            onPressed: ready ? actions.onManualEntry : null),
       ]);
     }
 

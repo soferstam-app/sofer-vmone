@@ -9,6 +9,7 @@ import 'expenses_screen.dart';
 import 'recycle_bin_screen.dart';
 import 'hebrew_utils.dart';
 import 'theme/app_theme.dart';
+import 'widgets/sofer_widgets.dart';
 
 class ProjectsScreen extends StatefulWidget {
   final List<Project> projects;
@@ -295,6 +296,9 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                       }
 
                       final p = widget.projects[index];
+                      if (SoferTokens.of(context).isRules) {
+                        return _ruledProjectRow(p);
+                      }
                       return Dismissible(
                         key: Key(p.id),
                         direction: DismissDirection.startToEnd,
@@ -392,6 +396,77 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
       floatingActionButton: FloatingActionButton(
         onPressed: () => _openProjectDialog(),
         child: const Icon(Icons.add),
+      ),
+    );
+  }
+
+  /// A commission as an entry in a ledger rather than as a card.
+  ///
+  /// No leading icon and no trailing edit button: the name is set in the serif
+  /// and carries the tap, the size and the estimate sit under it as one quiet
+  /// line each, and a hairline does the work a card outline was doing. The
+  /// progress is a segment against a rule, not a filled pill.
+  Widget _ruledProjectRow(Project p) {
+    final t = SoferTokens.of(context);
+    final estimate = CompletionEstimator.estimate(
+      project: p,
+      history: _history,
+      rules: _rules,
+    );
+
+    return InkWell(
+      onTap: () => _openProjectDialog(project: p),
+      onLongPress: () => _deleteProject(p),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: t.rule)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Expanded(
+                  child: Text(
+                    p.name,
+                    style: TextStyle(
+                        fontFamily: t.numeralFamily,
+                        fontSize: 19,
+                        color: t.ink),
+                  ),
+                ),
+                if (estimate != null)
+                  Text(
+                    "${(estimate.progress * 100).toStringAsFixed(0)}%",
+                    style: TextStyle(
+                        fontFamily: t.numeralFamily,
+                        fontSize: 19,
+                        color: t.accent),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _getProjectSubtitle(p),
+              style: TextStyle(
+                  fontFamily: t.labelFamily, fontSize: 12, color: t.inkMuted),
+            ),
+            if (estimate != null) ...[
+              const SizedBox(height: 9),
+              SoferProgress(estimate.progress),
+              const SizedBox(height: 6),
+              Text(
+                "צפי סיום ${formatDisplayDate(estimate.plan.completionDate, _useGregorianDates)}"
+                " · ${estimate.remainingUnits.toStringAsFixed(0)} נותרו",
+                style: TextStyle(
+                    fontFamily: t.labelFamily, fontSize: 12, color: t.inkMuted),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

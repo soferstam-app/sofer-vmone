@@ -12,6 +12,7 @@ import 'project_summary_screen.dart';
 import 'hebrew_utils.dart';
 import 'storage_service.dart';
 import 'theme/app_theme.dart';
+import 'widgets/sofer_widgets.dart';
 
 class SummaryScreen extends StatefulWidget {
   final List<Project> projects;
@@ -178,6 +179,74 @@ class _SummaryScreenState extends State<SummaryScreen> {
     );
   }
 
+  /// A day's work on one commission, written as an entry in a ledger.
+  ///
+  /// Nothing here is a card. The output figure is set large on the right of the
+  /// name, the money and time run underneath as ruled rows, and the daily
+  /// target is a hairline segment with its remainder as one quiet sentence —
+  /// where the modern layout uses a filled bar and a coloured verdict.
+  Widget _ruledProjectEntry({
+    required Project project,
+    required String outputText,
+    required Duration worked,
+    required String avgTimeText,
+    required double profit,
+    required double? hourlyRate,
+    required double progressPercent,
+    required String remainingText,
+  }) {
+    final t = SoferTokens.of(context);
+    final met = progressPercent >= 1;
+
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: t.ruleStrong)),
+      ),
+      padding: const EdgeInsets.fromLTRB(0, 16, 0, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Expanded(
+                child: Text(project.name,
+                    style: TextStyle(
+                        fontFamily: t.numeralFamily,
+                        fontSize: 19,
+                        color: t.ink)),
+              ),
+              Text(outputText,
+                  style: TextStyle(
+                      fontFamily: t.numeralFamily,
+                      fontSize: 25,
+                      color: t.ink)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          SoferStatRow("זמן עבודה", _formatDuration(worked)),
+          if (avgTimeText.isNotEmpty) SoferStatRow("ממוצע", avgTimeText),
+          SoferStatRow("רווח נקי", "₪${profit.toStringAsFixed(2)}"),
+          if (hourlyRate != null)
+            SoferStatRow("שכר לשעה", "₪${hourlyRate.toStringAsFixed(0)}",
+                emphasise: true, last: true),
+          const SizedBox(height: 14),
+          SoferProgress(progressPercent),
+          const SizedBox(height: 6),
+          Text(
+            "יעד יומי · $remainingText",
+            style: TextStyle(
+              fontFamily: t.labelFamily,
+              fontSize: 12,
+              color: met ? t.positive : t.inkMuted,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildProjectSummaryCard(Project project, List<WorkSession> sessions) {
     final sessionsForStats = sessions.where((s) => !s.backlogOnly).toList();
     Duration totalDuration = Duration.zero;
@@ -292,6 +361,20 @@ class _SummaryScreenState extends State<SummaryScreen> {
             left % 1 == 0 ? left.toInt().toString() : left.toStringAsFixed(1);
         remainingText = left > 0 ? "נותרו $leftStr ליעד" : "היעד הושלם!";
       }
+    }
+
+    final t = SoferTokens.of(context);
+    if (t.isRules) {
+      return _ruledProjectEntry(
+        project: project,
+        outputText: outputText,
+        worked: totalDuration,
+        avgTimeText: avgTimeText,
+        profit: profit,
+        hourlyRate: hourlyRate,
+        progressPercent: progressPercent,
+        remainingText: remainingText,
+      );
     }
 
     return Card(
