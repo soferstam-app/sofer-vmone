@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'logic/hebrew_clock.dart';
 import 'logic/hebrew_work_calendar.dart';
 import 'models.dart';
+import 'theme/app_theme.dart';
 
 class StorageService {
   static const String _keyProjects = 'projects';
@@ -20,6 +21,8 @@ class StorageService {
   static const String _keySoferName = 'sofer_name';
   static const String _keyWorkCalendarRules = 'work_calendar_rules';
   static const String _keyDayStart = 'day_start';
+  static const String _keyAppTheme = 'app_theme';
+  static const String _keyAutoNightTheme = 'auto_night_theme';
 
   Future<void> saveProjects(List<Project> projects) async {
     final prefs = await SharedPreferences.getInstance();
@@ -112,6 +115,8 @@ class StorageService {
         _keySoferName: prefs.getString(_keySoferName),
         _keyWorkCalendarRules: prefs.getString(_keyWorkCalendarRules),
         _keyDayStart: prefs.getString(_keyDayStart),
+        _keyAppTheme: prefs.getString(_keyAppTheme),
+        _keyAutoNightTheme: prefs.getBool(_keyAutoNightTheme),
       },
     };
   }
@@ -277,6 +282,30 @@ class StorageService {
   Future<void> setUseGregorianDates(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyUseGregorianDates, value);
+  }
+
+  /// Which of the three looks the writer picked. Unknown names — from a newer
+  /// build that added a fourth — fall back to the modern one rather than
+  /// leaving the app unthemed.
+  Future<AppTheme> getAppTheme() async {
+    final prefs = await SharedPreferences.getInstance();
+    return AppTheme.fromName(prefs.getString(_keyAppTheme));
+  }
+
+  Future<void> setAppTheme(AppTheme theme) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyAppTheme, theme.name);
+  }
+
+  /// Whether the app dresses for night on its own between nightfall and dawn.
+  Future<bool> getAutoNightTheme() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keyAutoNightTheme) ?? false;
+  }
+
+  Future<void> setAutoNightTheme(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyAutoNightTheme, value);
   }
 
   /// The writer's own name, used to sign the client update email.

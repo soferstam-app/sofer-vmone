@@ -124,6 +124,13 @@ class HebrewClock {
   /// Nightfall on the calendar date of [date], in the device's local clock.
   static DateTime? nightfall(DateTime date) => _calendarFor(date).getTzais();
 
+  /// Dawn on the calendar date of [date], in the device's local clock.
+  ///
+  /// Used to decide when night is over, so the small hours count as night
+  /// rather than as an early morning.
+  static DateTime? dawn(DateTime date) =>
+      _calendarFor(date).getAlosHashachar();
+
   /// The instant on [date]'s calendar day at which the working day turns over,
   /// or null when the boundary is not a time of day (midnight).
   static DateTime? boundaryOn(DateTime date, DayStart dayStart) {

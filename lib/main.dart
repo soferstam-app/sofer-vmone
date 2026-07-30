@@ -7,8 +7,13 @@ import 'package:window_manager/window_manager.dart';
 import 'home_screen.dart';
 import 'netfree_cert.dart';
 import 'notification_service.dart';
+import 'theme/theme_controller.dart';
 
 final ValueNotifier<bool> windowsFloatingMode = ValueNotifier<bool>(false);
+
+/// Which look the app is wearing. Global for the same reason
+/// [windowsFloatingMode] is: one app-wide switch with no owner below the root.
+final ThemeController themeController = ThemeController();
 
 class MyHttpOverrides extends HttpOverrides {
   @override
@@ -72,6 +77,9 @@ void main() async {
     );
   }
 
+  // Read before the first frame, so the app never flashes the wrong look.
+  await themeController.load();
+
   runApp(const MyApp());
 }
 
@@ -80,23 +88,29 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'סופר ומונה',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      supportedLocales: const [
-        Locale('he', 'IL'),
-      ],
-      locale: const Locale('he', 'IL'),
-      home: SoferHome(
-          windowsFloatingMode: Platform.isWindows ? windowsFloatingMode : null),
+    return ListenableBuilder(
+      listenable: themeController,
+      builder: (context, _) {
+        themeController
+            .setSystemBrightness(MediaQuery.platformBrightnessOf(context));
+
+        return MaterialApp(
+          title: 'סופר ומונה',
+          theme: themeController.themeData,
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [
+            Locale('he', 'IL'),
+          ],
+          locale: const Locale('he', 'IL'),
+          home: SoferHome(
+              windowsFloatingMode:
+                  Platform.isWindows ? windowsFloatingMode : null),
+        );
+      },
     );
   }
 }

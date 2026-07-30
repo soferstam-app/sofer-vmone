@@ -5,8 +5,10 @@ import 'hebrew_utils.dart';
 import 'logic/hebrew_clock.dart';
 import 'logic/hebrew_work_calendar.dart';
 import 'platform_support.dart';
+import 'main.dart' show themeController;
 import 'storage_service.dart';
 import 'notification_service.dart';
+import 'theme_settings_screen.dart';
 import 'work_calendar_settings_screen.dart';
 import 'package:auto_updater/auto_updater.dart';
 import 'dart:io';
@@ -21,7 +23,6 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _notificationsEnabled = true;
   TimeOfDay _notificationTime = const TimeOfDay(hour: 20, minute: 0);
-  bool _smartWorkflowEnabled = false;
   DayStart _dayStart = DayStart.midnight;
   WorkCalendarRules _workRules = WorkCalendarRules.standard;
   bool _useGregorianDates = false;
@@ -38,7 +39,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadNotificationSettings() async {
     final enabled = await _storage.getNotificationEnabled();
     final time = await _storage.getNotificationTime();
-    final smart = await _storage.getSmartWorkflowEnabled();
     final dayStart = await _storage.getDayStart();
     final workRules = await _storage.getWorkCalendarRules();
     final useGregorian = await _storage.getUseGregorianDates();
@@ -47,7 +47,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       setState(() {
         _notificationsEnabled = enabled;
         _notificationTime = time;
-        _smartWorkflowEnabled = smart;
         _dayStart = dayStart;
         _workRules = workRules;
         _useGregorianDates = useGregorian;
@@ -80,6 +79,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (fastsOff > 0) "$fastsOff צומות",
     ];
     return "${parts.join(" · ")} — משפיע על כל צפי סיום";
+  }
+
+  String get _themeSummary {
+    final choice = themeController.choice.label;
+    if (themeController.nightByClock) return "$choice · כרגע בערכת לילה";
+    return themeController.autoNight
+        ? "$choice · מעבר אוטומטי ללילה"
+        : choice;
   }
 
   String get _dayStartSummary => switch (_dayStart.boundary) {
@@ -173,13 +180,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
     await _storage.setNotificationEnabled(enabled);
     await NotificationService().scheduleDailyReminder();
-  }
-
-  Future<void> _updateSmartWorkflow(bool enabled) async {
-    if (mounted) {
-      setState(() => _smartWorkflowEnabled = enabled);
-    }
-    await _storage.setSmartWorkflowEnabled(enabled);
   }
 
   Future<void> _pickNotificationTime() async {
@@ -555,14 +555,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       secondary: const Icon(Icons.calendar_month,
                           color: Colors.deepPurple),
                     ),
+                    // The smart/plain workflow switch used to live here. It is
+                    // something the writer flips between sittings, not once at
+                    // setup, so it sits on the home screen next to the tools
+                    // button instead.
                     const Divider(),
-                    SwitchListTile(
-                      title: const Text("זרימת עבודה חכמה"),
-                      subtitle: const Text("ממשק כתיבה בזמן אמת (כניסה/יציאה)"),
-                      value: _smartWorkflowEnabled,
-                      onChanged: _updateSmartWorkflow,
-                      secondary:
-                          const Icon(Icons.speed, color: Colors.deepPurple),
+                    ListTile(
+                      title: const Text("עיצוב"),
+                      subtitle: Text(_themeSummary),
+                      leading: const Icon(Icons.palette_outlined,
+                          color: Colors.deepPurple),
+                      trailing: const Icon(Icons.chevron_left),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const ThemeSettingsScreen(),
+                        ),
+                      ),
                     ),
                     const Divider(),
                     ListTile(
