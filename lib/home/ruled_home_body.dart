@@ -21,8 +21,12 @@ class HomeSnapshot {
   final String elapsed;
 
   /// Smart mode only: where the writer is right now.
-  final int currentPage;
   final int currentLine;
+
+  /// The page, already written out — "עמוד קמ״ה", "מזוזה 3", "סט 2". Which unit
+  /// a commission counts its pages in, and whether the number reads as a Hebrew
+  /// numeral, is a decision the home screen already makes for the other layout.
+  final String pageLabel;
 
   /// What the project counts in — "שורה", "מזוזה", "פרשייה".
   final String positionUnit;
@@ -41,8 +45,8 @@ class HomeSnapshot {
     required this.isRunning,
     required this.isPaused,
     required this.elapsed,
-    required this.currentPage,
     required this.currentLine,
+    required this.pageLabel,
     required this.positionUnit,
     required this.todayOutput,
     this.hourlyRate,
@@ -126,14 +130,20 @@ class RuledHomeBody extends StatelessWidget {
             );
           }
 
+          // IntrinsicHeight because the rule between the columns has to run the
+          // height of the taller one. Without it the row inherits the scroll
+          // view's unbounded height, and since a release build has no
+          // assertions to catch it, the page simply scrolled for ever.
           return SingleChildScrollView(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(child: left),
-                Container(width: 1, color: t.rule),
-                Expanded(child: right),
-              ],
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: left),
+                  Container(width: 1, color: t.rule),
+                  Expanded(child: right),
+                ],
+              ),
             ),
           );
         },
@@ -194,7 +204,13 @@ class _WorkColumn extends StatelessWidget {
           const SoferRule(),
           const SizedBox(height: 16),
 
-          if (isSmart && s.isActive)
+          // Smart mode leads with the position whether or not the timer is
+          // running. Knowing where you are — and being able to correct it — is
+          // the whole point of the mode, and it is wanted most before starting,
+          // not only during. The modern layout has always offered it here; this
+          // one only did while the timer ran, which is a difference in what the
+          // app can do and not only in how it looks.
+          if (isSmart && s.project != null)
             _PositionHero(snapshot: s, onEdit: actions.onEditPosition)
           else
             _ClockHero(snapshot: s),
@@ -222,6 +238,15 @@ class _PositionHero extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (!s.isActive) ...[
+          Text("ממשיך מ",
+              style: TextStyle(
+                  fontFamily: t.labelFamily,
+                  fontSize: 12,
+                  letterSpacing: 1.2,
+                  color: t.inkMuted)),
+          const SizedBox(height: 5),
+        ],
         Row(
           crossAxisAlignment: CrossAxisAlignment.baseline,
           textBaseline: TextBaseline.alphabetic,
@@ -235,50 +260,64 @@ class _PositionHero extends StatelessWidget {
                     BoxDecoration(color: t.accent, shape: BoxShape.circle),
               ),
             ],
-            Text(
-              "${s.positionUnit} ${s.currentLine}",
-              style: TextStyle(
-                fontFamily: t.numeralFamily,
-                fontSize: 58,
-                height: 1,
-                letterSpacing: -2,
-                color: t.ink,
+            // Scaled down rather than clipped: "פרשייה 12" at this size is
+            // wider than a narrow phone.
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: AlignmentDirectional.centerStart,
+                child: Text(
+                  "${s.positionUnit} ${s.currentLine}",
+                  style: TextStyle(
+                    fontFamily: t.numeralFamily,
+                    fontSize: 58,
+                    height: 1,
+                    letterSpacing: -2,
+                    color: t.ink,
+                  ),
+                ),
               ),
             ),
           ],
         ),
         const SizedBox(height: 6),
         Text(
-          s.project!.type == ProjectType.mezuza
-              ? "מזוזה ${s.currentPage}"
-              : "עמוד ${s.currentPage}",
+          s.pageLabel,
           style: TextStyle(
               fontFamily: t.numeralFamily, fontSize: 19, color: t.inkMuted),
         ),
         const SizedBox(height: 12),
-        Row(children: [
-          Text(
-            s.elapsed,
-            style: TextStyle(
-              fontFamily: t.numeralFamily,
-              fontSize: 25,
-              color: s.isPaused ? t.inkMuted : t.ink,
+        if (s.isActive)
+          Row(children: [
+            Text(
+              s.elapsed,
+              style: TextStyle(
+                fontFamily: t.numeralFamily,
+                fontSize: 25,
+                color: s.isPaused ? t.inkMuted : t.ink,
+              ),
             ),
-          ),
-          const SizedBox(width: 12),
-          if (s.isPaused)
-            Text("בהפסקה",
-                style: TextStyle(
-                    fontFamily: t.labelFamily,
-                    fontSize: 13,
-                    color: t.inkMuted)),
-        ]),
+            const SizedBox(width: 12),
+            if (s.isPaused)
+              Text("בהפסקה",
+                  style: TextStyle(
+                      fontFamily: t.labelFamily,
+                      fontSize: 13,
+                      color: t.inkMuted)),
+          ])
+        else
+          Text("מוכן להתחיל",
+              style: TextStyle(
+                  fontFamily: t.labelFamily,
+                  fontSize: 13,
+                  letterSpacing: 1.2,
+                  color: t.inkMuted)),
         const SizedBox(height: 6),
         TextButton.icon(
           onPressed: onEdit,
           style: TextButton.styleFrom(padding: EdgeInsets.zero),
           icon: const Icon(Icons.edit_location_alt, size: 18),
-          label: const Text("ערוך מיקום"),
+          label: const Text("הזנת מיקום ידנית"),
         ),
       ],
     );

@@ -221,6 +221,9 @@ class _SoferHomeState extends State<SoferHome>
     await _storageService.setSmartWorkflowEnabled(next);
     if (!mounted) return;
     setState(() => _isSmartWorkflow = next);
+    // Switching into smart mode with a project already chosen: bring its stored
+    // position along, so the position on screen is the real one immediately.
+    if (next) await _loadSmartPosition();
   }
 
   /// Gathers what the ruled home screen shows.
@@ -300,8 +303,8 @@ class _SoferHomeState extends State<SoferHome>
       elapsed: _formatTime(_effectiveElapsed()),
       // Clamped at the display boundary too: whatever goes wrong upstream, the
       // screen never shows a page or line zero.
-      currentPage: _smartCurrentPage < 1 ? 1 : _smartCurrentPage,
       currentLine: _smartCurrentLine < 1 ? 1 : _smartCurrentLine,
+      pageLabel: _positionPageLabel(project),
       positionUnit: project?.type == ProjectType.tefillin ? "פרשייה" : "שורה",
       todayOutput: todayOutput,
       hourlyRate: hourlyRate,
@@ -310,6 +313,20 @@ class _SoferHomeState extends State<SoferHome>
       completion: completion,
       completionDetail: completionDetail,
     );
+  }
+
+  /// Where the writer is, in the unit the commission is counted in.
+  ///
+  /// A sefer's pages read as Hebrew numerals, the way a sofer refers to them.
+  /// Mezuzot and tefillin sets are counted, and a set is not a page — calling it
+  /// one, as this screen used to, is simply wrong.
+  String _positionPageLabel(Project? project) {
+    final page = _smartCurrentPage < 1 ? 1 : _smartCurrentPage;
+    return switch (project?.type) {
+      ProjectType.mezuza => "מזוזה $page",
+      ProjectType.tefillin => "סט $page",
+      _ => "עמוד ${formatHebrewNumber(page)}",
+    };
   }
 
   /// One app bar for every theme and both workflows.
@@ -383,14 +400,42 @@ class _SoferHomeState extends State<SoferHome>
   }
 
   HomeActions get _homeActions => HomeActions(
-        onStart: _startTimer,
+        // Smart mode picks up the stored position before the clock starts. Going
+        // straight to the timer recorded the sitting from wherever the screen
+        // happened to be — page one, on a fresh launch.
+        onStart: _isSmartWorkflow ? _initSmartSession : _startTimer,
         onStop: _stopTimer,
         onBreak: _onBreakTap,
         onManualEntry: () => _openEntryDialog(isManual: true),
         onNextLine: _smartNextLine,
         onEditPosition: _showEditPositionDialog,
-        onProjectChanged: (p) => setState(() => _selectedProject = p),
+        onProjectChanged: _selectProject,
       );
+
+  /// Choosing a commission in smart mode brings its stored position with it.
+  ///
+  /// Without this the screen showed — and the position dialog opened on — page
+  /// one for every project until a sitting had been started.
+  Future<void> _selectProject(Project? p) async {
+    setState(() => _selectedProject = p);
+    if (_isSmartWorkflow && p != null) await _loadSmartPosition();
+  }
+
+  /// Reads the stored position of the selected commission into the screen.
+  Future<void> _loadSmartPosition() async {
+    final project = _selectedProject;
+    if (project == null) return;
+    final lastPos = await _storageService.getLastPosition(project.id);
+    if (!mounted) return;
+    setState(() {
+      // Clamped rather than trusted: a position stored by an older build, or a
+      // hand-edited backup, could carry a zero.
+      _smartCurrentPage = ((lastPos['page'] as int?) ?? 1).clamp(1, 1 << 20);
+      _smartCurrentLine = ((lastPos['line'] as int?) ?? 1).clamp(1, 1 << 20);
+      _smartStartPage = _smartCurrentPage;
+      _smartStartLine = _smartCurrentLine;
+    });
+  }
 
   void _startTimer() {
     setState(() {
@@ -586,17 +631,9 @@ class _SoferHomeState extends State<SoferHome>
   Future<void> _initSmartSession() async {
     if (_selectedProject == null) return;
 
-    final lastPos = await _storageService.getLastPosition(_selectedProject!.id);
-    setState(() {
-      // Clamped rather than trusted: a position stored by an older build, or a
-      // hand-edited backup, could carry a zero.
-      _smartCurrentPage = ((lastPos['page'] as int?) ?? 1).clamp(1, 1 << 20);
-      _smartCurrentLine = ((lastPos['line'] as int?) ?? 1).clamp(1, 1 << 20);
-      _smartStartPage = _smartCurrentPage;
-      _smartStartLine = _smartCurrentLine;
-      _sessionBreakDuration = Duration.zero;
-    });
-
+    await _loadSmartPosition();
+    if (!mounted) return;
+    setState(() => _sessionBreakDuration = Duration.zero);
     _startTimer();
   }
 
@@ -2383,7 +2420,7 @@ class _SoferHomeState extends State<SoferHome>
                         .map((p) =>
                             DropdownMenuItem(value: p, child: Text(p.name)))
                         .toList(),
-                    onChanged: (val) => setState(() => _selectedProject = val),
+                    onChanged: _selectProject,
                   ),
                 ),
               if (_selectedProject != null) ...[

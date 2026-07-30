@@ -3,7 +3,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'backup_service.dart';
 import 'hebrew_utils.dart';
 import 'logic/hebrew_clock.dart';
-import 'logic/hebrew_work_calendar.dart';
 import 'platform_support.dart';
 import 'main.dart' show themeController;
 import 'storage_service.dart';
@@ -26,7 +25,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _notificationsEnabled = true;
   TimeOfDay _notificationTime = const TimeOfDay(hour: 20, minute: 0);
   DayStart _dayStart = DayStart.midnight;
-  WorkCalendarRules _workRules = WorkCalendarRules.standard;
   bool _useGregorianDates = false;
   bool _isExporting = false;
   String _soferName = '';
@@ -42,7 +40,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final enabled = await _storage.getNotificationEnabled();
     final time = await _storage.getNotificationTime();
     final dayStart = await _storage.getDayStart();
-    final workRules = await _storage.getWorkCalendarRules();
     final useGregorian = await _storage.getUseGregorianDates();
     final soferName = await _storage.getSoferName();
     if (mounted) {
@@ -50,37 +47,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _notificationsEnabled = enabled;
         _notificationTime = time;
         _dayStart = dayStart;
-        _workRules = workRules;
         _useGregorianDates = useGregorian;
         _soferName = soferName;
       });
     }
-  }
-
-  /// A one-line read of the work-day rules, so the setting is legible without
-  /// opening it.
-  String get _workCalendarSummary {
-    String weight(String name, DayWeight w) => switch (w) {
-          DayWeight.full => "$name יום מלא",
-          DayWeight.half => "$name חצי יום",
-          DayWeight.none => "$name חופש",
-        };
-
-    final fastsOff = [
-      _workRules.fastSeventeenTammuz,
-      _workRules.fastGedalya,
-      _workRules.fastTenthTevet,
-      _workRules.fastEsther,
-    ].where((w) => w != DayWeight.full).length;
-
-    final parts = <String>[
-      weight("שישי", _workRules.friday),
-      if (_workRules.motzeiShabbat == DayWeight.half) "מוצ״ש חצי יום",
-      if (_workRules.chanukah != DayWeight.full)
-        weight("חנוכה", _workRules.chanukah),
-      if (fastsOff > 0) "$fastsOff צומות",
-    ];
-    return "${parts.join(" · ")} — משפיע על כל צפי סיום";
   }
 
   String get _themeSummary {
@@ -547,15 +517,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       builder: (_) => const ThemeSettingsScreen()));
               if (mounted) setState(() {});
             }),
-        _entry("ימי עבודה", _workRules.friday.label,
-            note: _workCalendarSummary, onTap: () async {
+        // Stated without a value on purpose. A summary here — Friday in
+        // particular — read as though Friday were set on this screen, which is
+        // the one thing this row must not imply. The rules are stated where
+        // they are changed.
+        _entry("ימי עבודה", "", onTap: () async {
           await Navigator.push(
               context,
               MaterialPageRoute(
                   builder: (_) => const WorkCalendarSettingsScreen()));
-          // The estimates on every other screen read these rules, so the
-          // summary here has to reflect a change made inside.
-          await _loadNotificationSettings();
         }),
         _entry("מעבר יום", _dayStart.summary,
             note: _dayStartSummary, onTap: _pickDayStart),
@@ -620,11 +590,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             if (value.isNotEmpty) ...[
               const SizedBox(width: 14),
-              Text(value,
-                  style: TextStyle(
-                      fontFamily: t.numeralFamily,
-                      fontSize: 17,
-                      color: onTap == null ? t.inkMuted : t.accent)),
+              // Flexible, not fixed: a sofer's name or a long value would
+              // otherwise push the row off the edge of a phone.
+              Flexible(
+                child: Text(value,
+                    textAlign: TextAlign.end,
+                    style: TextStyle(
+                        fontFamily: t.numeralFamily,
+                        fontSize: 17,
+                        color: onTap == null ? t.inkMuted : t.accent)),
+              ),
             ],
           ],
         ),
@@ -738,23 +713,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     const Divider(),
                     ListTile(
+                      // No subtitle, for the same reason as the ruled sheet:
+                      // naming the Friday rule here implied it was set here.
                       title: const Text("ימי עבודה"),
-                      subtitle: Text(_workCalendarSummary),
                       leading: Icon(Icons.calendar_today,
                           color: SoferTokens.of(context).accent),
                       trailing: const Icon(Icons.chevron_left),
-                      onTap: () async {
-                        await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const WorkCalendarSettingsScreen(),
-                          ),
-                        );
-                        // The estimates on every other screen read these rules,
-                        // so the summary here has to reflect a change made
-                        // inside.
-                        await _loadNotificationSettings();
-                      },
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const WorkCalendarSettingsScreen(),
+                        ),
+                      ),
                     ),
                     ListTile(
                       title: const Text("מעבר יום"),

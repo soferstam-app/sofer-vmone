@@ -223,7 +223,7 @@ class _WorkCalendarSettingsScreenState
             const SizedBox(height: 7),
             Text(
               "שבת · יום טוב · חול המועד · ערבי חג · פורים ושושן פורים · "
-              "תשעה באב וערבו",
+              "תשעה באב וערב תשעה באב",
               style: TextStyle(
                   fontFamily: t.numeralFamily,
                   fontSize: 17,
@@ -259,7 +259,7 @@ class _WorkCalendarSettingsScreenState
               const SizedBox(height: 8),
               const Text(
                 "שבת · יום טוב · חול המועד · ערבי חג · פורים ושושן פורים · "
-                "תשעה באב וערבו",
+                "תשעה באב וערב תשעה באב",
                 style: TextStyle(height: 1.5),
               ),
               const SizedBox(height: 6),
@@ -370,52 +370,83 @@ class _WorkCalendarSettingsScreenState
     required ValueChanged<DayWeight> onChanged,
     bool allowFull = true,
   }) {
+    final label = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
+        if (subtitle != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              subtitle,
+              style: TextStyle(
+                  fontSize: 12, color: SoferTokens.of(context).inkMuted),
+            ),
+          ),
+      ],
+    );
+
+    final choice = SegmentedButton<DayWeight>(
+      showSelectedIcon: false,
+      style: const ButtonStyle(
+        visualDensity: VisualDensity.compact,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      segments: [
+        if (allowFull)
+          const ButtonSegment(value: DayWeight.full, label: Text("מלא")),
+        const ButtonSegment(value: DayWeight.half, label: Text("חצי")),
+        const ButtonSegment(value: DayWeight.none, label: Text("לא")),
+      ],
+      selected: {
+        // A stored `full` on a half-only category would leave the control with
+        // nothing selected, which SegmentedButton asserts on.
+        allowFull || value != DayWeight.full ? value : DayWeight.none,
+      },
+      onSelectionChanged: (v) => onChanged(v.first),
+    );
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Icon(icon, color: SoferTokens.of(context).accent),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
+      child: LayoutBuilder(
+        builder: (context, box) {
+          // The longest label on this screen is "הימים שבין יום כיפור לסוכות".
+          // Beside the control on a phone it wraps to three lines; below it, it
+          // reads on one or two. So on a narrow screen it goes below.
+          if (box.maxWidth < 380) {
+            return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style: const TextStyle(fontWeight: FontWeight.w500)),
-                if (subtitle != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Text(
-                      subtitle,
-                      style: TextStyle(
-                          fontSize: 12, color: SoferTokens.of(context).inkMuted),
-                    ),
+                Row(
+                  children: [
+                    Icon(icon, color: SoferTokens.of(context).accent),
+                    const SizedBox(width: 14),
+                    Expanded(child: label),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: choice,
                   ),
+                ),
               ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          SegmentedButton<DayWeight>(
-            showSelectedIcon: false,
-            style: const ButtonStyle(
-              visualDensity: VisualDensity.compact,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            segments: [
-              if (allowFull)
-                const ButtonSegment(value: DayWeight.full, label: Text("מלא")),
-              const ButtonSegment(value: DayWeight.half, label: Text("חצי")),
-              const ButtonSegment(value: DayWeight.none, label: Text("לא")),
+            );
+          }
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(icon, color: SoferTokens.of(context).accent),
+              const SizedBox(width: 14),
+              Expanded(child: label),
+              const SizedBox(width: 8),
+              choice,
             ],
-            selected: {
-              // A stored `full` on a half-only category would leave the control
-              // with nothing selected, which SegmentedButton asserts on.
-              allowFull || value != DayWeight.full ? value : DayWeight.none,
-            },
-            onSelectionChanged: (v) => onChanged(v.first),
-          ),
-        ],
+          );
+        },
       ),
     );
   }

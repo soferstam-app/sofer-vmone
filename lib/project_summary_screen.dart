@@ -400,12 +400,45 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 22, 20, 4),
             child: CommissionTimeline(
-              progress: estimate.progress,
+              elapsed: _elapsedFraction(project, estimate, started),
               marks: _timelineMarks(project, estimate, started),
             ),
           ),
+          // How much is written is a different question from how much of the run
+          // has gone by, and it gets its own row rather than being drawn on the
+          // same line in the same colour.
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 6, 20, 18),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 2),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Text("${(estimate.progress * 100).toStringAsFixed(0)}%",
+                        style: TextStyle(
+                            fontFamily: t.numeralFamily,
+                            fontSize: 27,
+                            height: 1,
+                            color: t.accent)),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Text("מהעבודה נכתבו",
+                          style: TextStyle(
+                              fontFamily: t.labelFamily,
+                              fontSize: 13,
+                              color: t.inkMuted)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 9),
+                SoferProgress(estimate.progress),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
             child: Text.rich(
               TextSpan(children: [
                 if (_deadlineVerdict(project, estimate) case final verdict?)
@@ -480,41 +513,70 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
           if (box.maxWidth <= 620) {
             return Column(children: [work, const SoferRule(), money]);
           }
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(child: work),
-              Container(width: 1, color: t.rule),
-              Expanded(child: money),
-            ],
+          // IntrinsicHeight so the rule between the columns runs the height of
+          // the taller one. Without it the row took the scroll view's unbounded
+          // height, which in a release build pushed everything below it —
+          // including the map — an infinite distance down the page.
+          return IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: work),
+                Container(width: 1, color: t.rule),
+                Expanded(child: money),
+              ],
+            ),
           );
         }),
 
         const SoferRule(strong: true),
 
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  estimate == null
-                      ? ""
-                      : "${estimate.plan.skippedTotal} ימים בדרך אינם ימי עבודה",
-                  style: TextStyle(
-                      fontFamily: t.labelFamily,
-                      fontSize: 12,
-                      color: t.inkMuted),
+        // A row of its own, the full width of the page. As a small outlined
+        // button at the end of a line of text the map was not found at all —
+        // and the line of text beside it only repeated what the sentence above
+        // already says.
+        InkWell(
+          onTap: () => _openMap(project),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+            child: Row(
+              children: [
+                Icon(Icons.grid_view, size: 20, color: t.accent),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("מפת העבודה",
+                          style: TextStyle(
+                              fontFamily: t.numeralFamily,
+                              fontSize: 17,
+                              color: t.ink)),
+                      const SizedBox(height: 2),
+                      Text(_mapSubtitle(project),
+                          style: TextStyle(
+                              fontFamily: t.labelFamily,
+                              fontSize: 12,
+                              color: t.inkMuted)),
+                    ],
+                  ),
                 ),
-              ),
-              SoferSecondaryButton("מפת העבודה",
-                  icon: Icons.grid_view, onPressed: () => _openMap(project)),
-            ],
+                Icon(Icons.chevron_left, color: t.inkFaint),
+              ],
+            ),
           ),
         ),
+        const SoferRule(strong: true),
       ],
     );
   }
+
+  /// What the map is a map of, in the unit the commission is counted in.
+  static String _mapSubtitle(Project project) => switch (project.type) {
+        ProjectType.sefer => "כל עמוד בספר, ומה נכתב בו",
+        ProjectType.mezuza => "כל מזוזה בהזמנה, ומה כבר נכתב",
+        ProjectType.tefillin => "כל סט בהזמנה, ומה כבר נכתב",
+      };
 
   /// The day the first session on this commission was recorded, or null when
   /// nothing has been.
@@ -527,42 +589,57 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
     return first;
   }
 
-  /// Start, now, the estimate and — when there is one — the agreed deadline,
-  /// placed on a run that ends with whichever of the last two is later.
-  List<TimelineMark> _timelineMarks(
+  /// The stretch of time the timeline is drawn on: from the day the work began
+  /// to the day it ends — whichever of the estimate and the agreed deadline is
+  /// later, so that both fit on the line.
+  ({DateTime from, DateTime end}) _timelineRun(
       Project project, CompletionEstimate estimate, DateTime? started) {
     final from = started ?? DateTime.now();
-    final estimateDate = estimate.plan.completionDate;
+    var end = estimate.plan.completionDate;
     final target = project.targetCompletionDate;
-
-    var end = estimateDate;
     if (target != null && target.isAfter(end)) end = target;
-    final span = end.difference(from).inDays;
+    return (from: from, end: end);
+  }
 
-    double at(DateTime when) {
-      if (span <= 0) return 1;
-      return (when.difference(from).inDays / span).clamp(0.0, 1.0);
-    }
+  double _atOnRun(DateTime when, ({DateTime from, DateTime end}) run) {
+    final span = run.end.difference(run.from).inDays;
+    if (span <= 0) return 1;
+    return (when.difference(run.from).inDays / span).clamp(0.0, 1.0);
+  }
+
+  /// How much of the run has already gone by. This, and not how much has been
+  /// written, is what the line is a measure of.
+  double _elapsedFraction(
+          Project project, CompletionEstimate estimate, DateTime? started) =>
+      _atOnRun(
+          DateTime.now(), _timelineRun(project, estimate, started));
+
+  /// Start, today, the estimate and — when there is one — the agreed deadline.
+  ///
+  /// Today carries no date of its own: the caption says which day it is, and
+  /// printing it again only crowds the line.
+  List<TimelineMark> _timelineMarks(
+      Project project, CompletionEstimate estimate, DateTime? started) {
+    final run = _timelineRun(project, estimate, started);
+    final target = project.targetCompletionDate;
 
     return [
       TimelineMark(
           caption: "התחלה",
-          value: formatDisplayDate(from, _useGregorianDates),
+          value: formatDisplayDate(run.from, _useGregorianDates),
           at: 0),
       TimelineMark(
-          caption: "כאן",
-          value: "${(estimate.progress * 100).toStringAsFixed(0)}%",
-          at: at(DateTime.now()),
-          current: true),
+          caption: "היום", at: _atOnRun(DateTime.now(), run), current: true),
       TimelineMark(
           caption: "צפי סיום",
-          value: formatDisplayDate(estimateDate, _useGregorianDates),
-          at: at(estimateDate)),
+          value: formatDisplayDate(
+              estimate.plan.completionDate, _useGregorianDates),
+          at: _atOnRun(estimate.plan.completionDate, run)),
       if (target != null)
         TimelineMark(
             caption: "תאריך יעד",
             value: formatDisplayDate(target, _useGregorianDates),
-            at: at(target),
+            at: _atOnRun(target, run),
             quiet: true),
     ];
   }

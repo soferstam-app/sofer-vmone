@@ -106,8 +106,16 @@ class SoferStatRow extends StatelessWidget {
         textBaseline: TextBaseline.alphabetic,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: labelStyle),
-          Text(value, style: valueStyle),
+          // Both sides flex, loosely: each takes only the width it needs, and
+          // wraps rather than overflowing when it cannot have it. The value gets
+          // the larger share because values here are the longer of the two —
+          // "0 עמודים ו-38 שורות" against "נכתב".
+          Flexible(flex: 2, child: Text(label, style: labelStyle)),
+          const SizedBox(width: 10),
+          Flexible(
+            flex: 3,
+            child: Text(value, textAlign: TextAlign.end, style: valueStyle),
+          ),
         ],
       ),
     );
@@ -217,16 +225,20 @@ class SoferProgress extends StatelessWidget {
       );
     }
 
-    return LayoutBuilder(
-      builder: (context, box) {
-        // A hair of width even at zero, so the bar reads as a scale rather
-        // than as a missing element.
-        final filled = (box.maxWidth * fraction).clamp(2.0, box.maxWidth);
-        return Row(children: [
-          Container(width: filled, height: 3, color: t.accent),
-          Expanded(child: Container(height: 3, color: t.rule)),
-        ]);
-      },
+    // Laid out by flex rather than by a LayoutBuilder. A LayoutBuilder reports
+    // no intrinsic height, and this bar sits inside columns whose height has to
+    // be measurable — a bar that cannot be measured made the whole page
+    // scroll without end. A hair of accent even at zero, so the bar still
+    // reads as a scale rather than as a missing element.
+    const scale = 1000;
+    final filled = (fraction * scale).round().clamp(4, scale);
+    return SizedBox(
+      height: 3,
+      child: Row(children: [
+        Expanded(flex: filled, child: ColoredBox(color: t.accent)),
+        if (filled < scale)
+          Expanded(flex: scale - filled, child: ColoredBox(color: t.rule)),
+      ]),
     );
   }
 }
