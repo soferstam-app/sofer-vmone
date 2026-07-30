@@ -207,6 +207,24 @@ class WorkSession {
   /// stable. Null on sessions recorded before this field existed, which fall
   /// back to the project's current setting.
   final int? linesPerPageAtEntry;
+
+  /// The working day this session was filed under when it was recorded.
+  ///
+  /// Derived once, at entry, from the day-boundary setting in force at the time
+  /// — not recomputed on every read. A sofer who used to write until 00:30 and
+  /// counted it as the previous day, and who later moves his boundary, must not
+  /// have years of past work silently re-filed under different days: what
+  /// matters is how the day was reckoned when the writing actually happened.
+  ///
+  /// This also means a future change to how the boundary is computed — adding a
+  /// city for writers abroad, say, which would shift every nightfall — cannot
+  /// move history.
+  ///
+  /// Null on sessions recorded before this field existed; those fall back to
+  /// deriving the day from the current setting, which is the old behaviour and
+  /// the best available answer for a record that never stated one.
+  final DateTime? workingDateAtEntry;
+
   final DateTime lastUpdated;
   final bool isDeleted;
 
@@ -228,6 +246,7 @@ class WorkSession {
     'isManual',
     'backlogOnly',
     'linesPerPageAtEntry',
+    'workingDateAtEntry',
     'lastUpdated',
     'isDeleted',
   };
@@ -246,6 +265,7 @@ class WorkSession {
     required this.isManual,
     this.backlogOnly = false,
     this.linesPerPageAtEntry,
+    this.workingDateAtEntry,
     DateTime? lastUpdated,
     this.isDeleted = false,
     this.extraFields = const {},
@@ -283,6 +303,7 @@ class WorkSession {
       'isManual': isManual,
       'backlogOnly': backlogOnly,
       'linesPerPageAtEntry': linesPerPageAtEntry,
+      'workingDateAtEntry': workingDateAtEntry?.toIso8601String(),
       'lastUpdated': lastUpdated.toIso8601String(),
       'isDeleted': isDeleted,
     };
@@ -310,6 +331,7 @@ class WorkSession {
       isManual: JsonCompat.boolean(json['isManual'], false),
       backlogOnly: JsonCompat.boolean(json['backlogOnly'], false),
       linesPerPageAtEntry: JsonCompat.intOrNull(json['linesPerPageAtEntry']),
+      workingDateAtEntry: JsonCompat.dateOrNull(json['workingDateAtEntry']),
       lastUpdated: JsonCompat.date(json['lastUpdated'], DateTime.now()),
       isDeleted: JsonCompat.boolean(json['isDeleted'], false),
       extraFields: JsonCompat.unknownKeys(json, _knownKeys),
@@ -325,6 +347,7 @@ class WorkSession {
     String? description,
     bool? backlogOnly,
     bool? isDeleted,
+    DateTime? workingDateAtEntry,
   }) {
     return WorkSession(
       id: id,
@@ -340,6 +363,7 @@ class WorkSession {
       isManual: isManual,
       backlogOnly: backlogOnly ?? this.backlogOnly,
       linesPerPageAtEntry: linesPerPageAtEntry,
+      workingDateAtEntry: workingDateAtEntry ?? this.workingDateAtEntry,
       lastUpdated: DateTime.now(),
       isDeleted: isDeleted ?? this.isDeleted,
       extraFields: extraFields,

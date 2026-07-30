@@ -1385,6 +1385,94 @@ void main() {
     });
   });
 
+  group('the working day is frozen when a session is recorded', () {
+    WorkSession session(DateTime start, {DateTime? filedUnder}) => WorkSession(
+          id: 's1',
+          projectId: 'p1',
+          startTime: start,
+          endTime: start.add(const Duration(hours: 1)),
+          amount: 1,
+          startLine: 1,
+          endLine: 42,
+          description: '',
+          isManual: false,
+          workingDateAtEntry: filedUnder,
+        );
+
+    const oneAm = DayStart(boundary: DayBoundary.fixedHour, hour: 1);
+
+    test('work just after midnight is filed under the previous day', () {
+      expect(DateLogic.effectiveDate(DateTime(2026, 5, 11, 0, 30), oneAm),
+          DateTime(2026, 5, 10));
+      expect(DateLogic.effectiveDate(DateTime(2026, 5, 11, 1, 0), oneAm),
+          DateTime(2026, 5, 11));
+    });
+
+    test('changing the boundary later does not re-file old work', () {
+      // Written at 00:30 back when the day turned over at 01:00, and filed
+      // under the 10th at the time.
+      final old = session(DateTime(2026, 5, 11, 0, 30),
+          filedUnder: DateTime(2026, 5, 10));
+
+      // The writer now works to a different schedule.
+      expect(DateLogic.workingDateOf(old, DayStart.midnight),
+          DateTime(2026, 5, 10));
+      expect(
+          DateLogic.workingDateOf(
+              old, const DayStart(boundary: DayBoundary.nightfall)),
+          DateTime(2026, 5, 10));
+
+      // And it still groups under the day it was counted on.
+      expect(DateLogic.sessionIsOnDay(old, DateTime(2026, 5, 10), DayStart.midnight),
+          isTrue);
+      expect(
+          DateLogic.sessionIsOnDay(old, DateTime(2026, 5, 11), DayStart.midnight),
+          isFalse);
+    });
+
+    test('a session with no snapshot falls back to the current setting', () {
+      // How every record written before this field existed behaves.
+      final legacy = session(DateTime(2026, 5, 11, 0, 30));
+
+      expect(DateLogic.workingDateOf(legacy, DayStart.midnight),
+          DateTime(2026, 5, 11));
+      expect(DateLogic.workingDateOf(legacy, oneAm), DateTime(2026, 5, 10));
+    });
+
+    test('month grouping follows the frozen day across a month boundary', () {
+      // Written 00:30 on 1 June, filed under 31 May.
+      final s = session(DateTime(2026, 6, 1, 0, 30),
+          filedUnder: DateTime(2026, 5, 31));
+
+      expect(DateLogic.sessionIsInMonth(s, DateTime(2026, 5), DayStart.midnight),
+          isTrue);
+      expect(DateLogic.sessionIsInMonth(s, DateTime(2026, 6), DayStart.midnight),
+          isFalse);
+    });
+
+    test('the snapshot survives storage and an unrelated edit', () {
+      final s = session(DateTime(2026, 5, 11, 0, 30),
+          filedUnder: DateTime(2026, 5, 10));
+
+      final restored = WorkSession.fromJson(
+          jsonDecode(jsonEncode(s.toJson())) as Map<String, dynamic>);
+      expect(restored.workingDateAtEntry, DateTime(2026, 5, 10));
+
+      // Editing the description must not disturb which day it belongs to.
+      expect(restored.copyWith(description: 'x').workingDateAtEntry,
+          DateTime(2026, 5, 10));
+
+      // Restating the time does move it, when explicitly passed.
+      expect(
+          restored
+              .copyWith(
+                  startTime: DateTime(2026, 5, 11, 14),
+                  workingDateAtEntry: DateTime(2026, 5, 11))
+              .workingDateAtEntry,
+          DateTime(2026, 5, 11));
+    });
+  });
+
   group('forward compatibility of saved records', () {
     test('a field from a newer version survives a round trip', () {
       // What an older build sees when it opens a file a newer one wrote.

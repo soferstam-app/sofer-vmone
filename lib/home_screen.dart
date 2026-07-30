@@ -131,6 +131,20 @@ class _SoferHomeState extends State<SoferHome>
   DateTime _effectiveDate(DateTime now) =>
       DateLogic.effectiveDate(now, _dayStart);
 
+  /// Freezes onto each session the working day it is being filed under.
+  ///
+  /// Every path that records work goes through here. The day is settled once,
+  /// now, with the boundary the writer has set now — so that changing the
+  /// boundary later cannot re-file work that was already counted under a
+  /// different reckoning.
+  List<WorkSession> _stampWorkingDay(List<WorkSession> sessions) => sessions
+      .map((s) => s.workingDateAtEntry != null
+          ? s
+          : s.copyWith(
+              workingDateAtEntry:
+                  DateLogic.effectiveDate(s.startTime, _dayStart)))
+      .toList();
+
   void _initAutoUpdater() async {
     if (Platform.isWindows || Platform.isMacOS) {
       String feedURL =
@@ -639,7 +653,7 @@ class _SoferHomeState extends State<SoferHome>
         tempEndTime = partStartTime;
       }
 
-      setState(() => history.addAll(newSessions));
+      setState(() => history.addAll(_stampWorkingDay(newSessions)));
       _storageService.saveHistory(history);
       _storageService.saveLastPosition(
           _selectedProject!.id, _smartCurrentPage, _smartCurrentLine);
@@ -760,7 +774,7 @@ class _SoferHomeState extends State<SoferHome>
         tempEndTime = partStartTime;
       }
 
-      setState(() => history.addAll(newSessions));
+      setState(() => history.addAll(_stampWorkingDay(newSessions)));
       _storageService.saveHistory(history);
       _storageService.saveLastPosition(
           _selectedProject!.id, _smartCurrentPage, _smartCurrentLine);
@@ -1445,7 +1459,7 @@ class _SoferHomeState extends State<SoferHome>
           ));
         }
         setState(() {
-          history.addAll(rangeSessions);
+          history.addAll(_stampWorkingDay(rangeSessions));
           _storageService.saveHistory(history);
         });
         await _advanceSmartPositionAfterEntry(
@@ -1596,6 +1610,8 @@ class _SoferHomeState extends State<SoferHome>
               _selectedProject!.type == ProjectType.sefer
                   ? ProductionCalculator.linesPerPageOf(_selectedProject!)
                   : null,
+          workingDateAtEntry:
+              DateLogic.effectiveDate(sessionStart, _dayStart),
         ),
       );
       _storageService.saveHistory(history);
@@ -1686,7 +1702,7 @@ class _SoferHomeState extends State<SoferHome>
             // not count towards today's goal. They carry a placeholder date, so
             // this used to be filtered out only by accident.
             !s.backlogOnly &&
-            DateLogic.isSameWorkingDay(s.startTime, now, _dayStart))
+            DateLogic.sessionIsOnDay(s, now, _dayStart))
         .toList();
 
     int totalDone = 0;

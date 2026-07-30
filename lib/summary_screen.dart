@@ -58,11 +58,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
     return widget.history.where((session) {
       if (session.backlogOnly) return false;
       if (_viewByMonth) {
-        return DateLogic.isSameWorkingMonth(
-            session.startTime, date, _dayStart);
+        return DateLogic.sessionIsInMonth(session, date, _dayStart);
       }
-      return DateLogic.isSameWorkingDay(
-          session.startTime, date, _dayStart);
+      return DateLogic.sessionIsOnDay(session, date, _dayStart);
     }).toList();
   }
 
@@ -659,11 +657,13 @@ class _SummaryScreenState extends State<SummaryScreen> {
   }
 
   Future<void> _showMonthlySummary() async {
-    final monthSessions = widget.history.where((s) {
-      return !s.backlogOnly &&
-          s.startTime.year == _selectedDate.year &&
-          s.startTime.month == _selectedDate.month;
-    }).toList();
+    // Filed by working day, not by clock time, so the monthly total and the sum
+    // of the days it is made of cannot disagree at a month boundary.
+    final monthSessions = widget.history
+        .where((s) =>
+            !s.backlogOnly &&
+            DateLogic.sessionIsInMonth(s, _selectedDate, _dayStart))
+        .toList();
 
     if (monthSessions.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -901,7 +901,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
         DateTime(_selectedDate.year, _selectedDate.month + 1, 0).day;
 
     for (var s in sessions) {
-      int day = s.startTime.day;
+      // The bar a session lands on is the day it was filed under; using the raw
+      // timestamp would put late-night work on the wrong column.
+      final day = DateLogic.workingDateOf(s, _dayStart).day;
       dailyTotals[day] = (dailyTotals[day] ?? Duration.zero) + s.duration;
     }
 
@@ -1113,9 +1115,12 @@ class _SummaryScreenState extends State<SummaryScreen> {
                                 title: Text(p.name),
                                 subtitle: Text(
                                   // Across all days the date is essential to
-                                  // tell otherwise-identical rows apart.
+                                  // tell otherwise-identical rows apart — and it
+                                  // has to be the day the session was filed
+                                  // under, not its clock date, or this list
+                                  // contradicts the day it was opened from.
                                   showAllDays
-                                      ? "${formatDisplayDate(s.startTime, widget.useGregorianDates)} · ${s.description}\n${_formatDuration(s.duration)}"
+                                      ? "${formatDisplayDate(DateLogic.workingDateOf(s, _dayStart), widget.useGregorianDates)} · ${s.description}\n${_formatDuration(s.duration)}"
                                       : "${s.description}\n${_formatDuration(s.duration)}",
                                 ),
                                 isThreeLine: true,
@@ -1316,6 +1321,10 @@ class _SummaryScreenState extends State<SummaryScreen> {
       startLine: startLine,
       endLine: endLine,
       amount: amount,
+      // Re-settled from the new time with today's boundary: the writer is
+      // actively restating when this work happened, so the current reckoning is
+      // the one they mean. Editing a 23:00 session to 00:30 must move it.
+      workingDateAtEntry: DateLogic.effectiveDate(range.start, _dayStart),
     );
     final newHistory =
         widget.history.map((e) => e.id == s.id ? updated : e).toList();
