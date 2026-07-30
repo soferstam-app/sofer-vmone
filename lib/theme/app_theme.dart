@@ -75,6 +75,20 @@ class SoferTokens extends ThemeExtension<SoferTokens> {
   /// running, the hourly rate, and what has been completed.
   final Color accent;
 
+  /// Destructive and error states.
+  ///
+  /// A separate token rather than plain red, because in the parchment theme the
+  /// accent is itself an oxide red — a delete button in the same hue would read
+  /// as decoration instead of as a warning.
+  final Color danger;
+
+  /// A figure that is better than expected: profit, a goal met.
+  final Color positive;
+
+  /// Something that needs attention but is not an error — a missing setting, an
+  /// estimate resting on an assumption.
+  final Color caution;
+
   /// Numbers and titles.
   final String numeralFamily;
 
@@ -93,6 +107,9 @@ class SoferTokens extends ThemeExtension<SoferTokens> {
     required this.inkMuted,
     required this.inkFaint,
     required this.accent,
+    required this.danger,
+    required this.positive,
+    required this.caution,
     required this.numeralFamily,
     required this.labelFamily,
     required this.panelRadius,
@@ -116,6 +133,9 @@ class SoferTokens extends ThemeExtension<SoferTokens> {
     inkMuted: Color(0xFF625B71),
     inkFaint: Color(0xFF938F99),
     accent: Colors.deepPurple,
+    danger: Color(0xFFB3261E),
+    positive: Color(0xFF2E6B4F),
+    caution: Color(0xFF8A5300),
     numeralFamily: 'Heebo',
     labelFamily: 'Heebo',
     panelRadius: 12,
@@ -132,6 +152,9 @@ class SoferTokens extends ThemeExtension<SoferTokens> {
     Color? inkMuted,
     Color? inkFaint,
     Color? accent,
+    Color? danger,
+    Color? positive,
+    Color? caution,
     String? numeralFamily,
     String? labelFamily,
     double? panelRadius,
@@ -146,6 +169,9 @@ class SoferTokens extends ThemeExtension<SoferTokens> {
         inkMuted: inkMuted ?? this.inkMuted,
         inkFaint: inkFaint ?? this.inkFaint,
         accent: accent ?? this.accent,
+        danger: danger ?? this.danger,
+        positive: positive ?? this.positive,
+        caution: caution ?? this.caution,
         numeralFamily: numeralFamily ?? this.numeralFamily,
         labelFamily: labelFamily ?? this.labelFamily,
         panelRadius: panelRadius ?? this.panelRadius,
@@ -169,6 +195,9 @@ class SoferTokens extends ThemeExtension<SoferTokens> {
       inkMuted: Color.lerp(inkMuted, other.inkMuted, t)!,
       inkFaint: Color.lerp(inkFaint, other.inkFaint, t)!,
       accent: Color.lerp(accent, other.accent, t)!,
+      danger: Color.lerp(danger, other.danger, t)!,
+      positive: Color.lerp(positive, other.positive, t)!,
+      caution: Color.lerp(caution, other.caution, t)!,
     );
   }
 }
@@ -212,6 +241,9 @@ class AppThemeBuilder {
           inkMuted: scheme.onSurfaceVariant,
           inkFaint: scheme.outline,
           accent: scheme.primary,
+          danger: scheme.error,
+          positive: dark ? const Color(0xFF7FC4A0) : const Color(0xFF2E6B4F),
+          caution: dark ? const Color(0xFFE0B65C) : const Color(0xFF8A5300),
           numeralFamily: _sans,
           labelFamily: _sans,
           panelRadius: 12,
@@ -238,6 +270,9 @@ class AppThemeBuilder {
         inkMuted: _kMuted,
         inkFaint: _kFaint,
         accent: _kAccent,
+        danger: const Color(0xFF7A1E10),
+        positive: const Color(0xFF3E6B4A),
+        caution: const Color(0xFF9C5A16),
       );
 
   // --- Layla: the same language after dark. ---
@@ -259,6 +294,9 @@ class AppThemeBuilder {
         inkMuted: _nMuted,
         inkFaint: _nFaint,
         accent: _nAccent,
+        danger: const Color(0xFFD4643C),
+        positive: const Color(0xFF8FB08A),
+        caution: const Color(0xFFD9B36A),
       );
 
   /// Shared construction for the two ruled themes: identical in every respect
@@ -272,6 +310,9 @@ class AppThemeBuilder {
     required Color inkMuted,
     required Color inkFaint,
     required Color accent,
+    required Color danger,
+    required Color positive,
+    required Color caution,
   }) {
     final scheme = ColorScheme(
       brightness: brightness,
@@ -413,6 +454,9 @@ class AppThemeBuilder {
           inkMuted: inkMuted,
           inkFaint: inkFaint,
           accent: accent,
+          danger: danger,
+          positive: positive,
+          caution: caution,
           numeralFamily: _serif,
           labelFamily: _sans,
           panelRadius: 2,

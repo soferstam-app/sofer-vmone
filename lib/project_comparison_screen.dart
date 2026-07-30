@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'logic/project_analytics.dart';
 import 'models.dart';
+import 'theme/app_theme.dart';
 
 /// Ranks projects by what they actually pay per hour.
 ///
@@ -41,7 +42,7 @@ class ProjectComparisonScreen extends StatelessWidget {
               children: [
                 if (best != null && worst != null && best != worst)
                   Card(
-                    color: Colors.deepPurple.shade50,
+                    color: SoferTokens.of(context).paper,
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Column(
@@ -50,7 +51,7 @@ class ProjectComparisonScreen extends StatelessWidget {
                           Row(
                             children: [
                               Icon(Icons.lightbulb,
-                                  color: Colors.deepPurple.shade700),
+                                  color: SoferTokens.of(context).accent),
                               const SizedBox(width: 8),
                               const Text("מה משתלם יותר",
                                   style: TextStyle(
@@ -72,7 +73,7 @@ class ProjectComparisonScreen extends StatelessWidget {
                               "הפרש של פי "
                               "${(best.profitPerHour! / worst.profitPerHour!).toStringAsFixed(1)}.",
                               style: TextStyle(
-                                  fontSize: 13, color: Colors.grey.shade700),
+                                  fontSize: 13, color: SoferTokens.of(context).inkMuted),
                             ),
                           ],
                         ],
@@ -85,7 +86,7 @@ class ProjectComparisonScreen extends StatelessWidget {
                 Text(
                   "החישוב מבוסס על זמן שנמדד בפועל. רשומות שהוזנו כהשלמת רקע "
                   "אינן נכללות, מכיוון שאין להן זמן עבודה אמיתי.",
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  style: TextStyle(fontSize: 12, color: SoferTokens.of(context).inkMuted),
                 ),
               ],
             ),
@@ -100,7 +101,7 @@ class ProjectComparisonScreen extends StatelessWidget {
       return Card(
         margin: const EdgeInsets.only(bottom: 10),
         child: ListTile(
-          leading: Icon(Icons.help_outline, color: Colors.grey.shade400),
+          leading: Icon(Icons.help_outline, color: SoferTokens.of(context).inkFaint),
           title: Text(p.project.name),
           subtitle: const Text("אין מספיק נתונים – לא נמדד זמן עבודה"),
         ),
@@ -112,7 +113,7 @@ class ProjectComparisonScreen extends StatelessWidget {
       elevation: isBest ? 3 : 1,
       shape: isBest
           ? RoundedRectangleBorder(
-              side: BorderSide(color: Colors.deepPurple.shade300, width: 1.5),
+              side: BorderSide(color: SoferTokens.of(context).accent, width: 1.5),
               borderRadius: BorderRadius.circular(12))
           : null,
       child: Padding(
@@ -133,31 +134,31 @@ class ProjectComparisonScreen extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                     fontSize: 17,
                     color: isBest
-                        ? Colors.green.shade700
-                        : Colors.deepPurple.shade700,
+                        ? SoferTokens.of(context).positive
+                        : SoferTokens.of(context).accent,
                   ),
                 ),
               ],
             ),
             const Divider(),
-            _row("הופק:",
+            _row(context, "הופק:",
                 "${p.units.toStringAsFixed(1)} ${p.unitNamePlural}"),
-            _row("זמן עבודה:", _formatDuration(p.timeWorked)),
+            _row(context, "זמן עבודה:", _formatDuration(p.timeWorked)),
             if (p.timePerUnit != null)
-              _row("זמן ל${p.unitName}:", _formatDuration(p.timePerUnit!)),
-            _row("רווח:", "₪${p.profit.toStringAsFixed(2)}"),
+              _row(context, "זמן ל${p.unitName}:", _formatDuration(p.timePerUnit!)),
+            _row(context, "רווח:", "₪${p.profit.toStringAsFixed(2)}"),
           ],
         ),
       ),
     );
   }
 
-  Widget _row(String label, String value) => Padding(
+  Widget _row(BuildContext context, String label, String value) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 2),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(label, style: const TextStyle(color: Colors.black54)),
+            Text(label, style: TextStyle(color: SoferTokens.of(context).inkMuted)),
             Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
           ],
         ),

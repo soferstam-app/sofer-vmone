@@ -11,6 +11,7 @@ import 'models.dart';
 import 'project_summary_screen.dart';
 import 'hebrew_utils.dart';
 import 'storage_service.dart';
+import 'theme/app_theme.dart';
 
 class SummaryScreen extends StatefulWidget {
   final List<Project> projects;
@@ -102,7 +103,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(Icons.today_rounded,
-                    color: Colors.deepPurple.shade300, size: 24),
+                    color: SoferTokens.of(context).accent, size: 24),
                 const SizedBox(width: 10),
                 Text(
                   widget.useGregorianDates
@@ -110,10 +111,10 @@ class _SummaryScreenState extends State<SummaryScreen> {
                           ? formatDisplayDateMonth(_selectedDate, true)
                           : formatDisplayDate(_selectedDate, true))
                       : _getHebrewDate(_selectedDate, _viewByMonth),
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
-                    color: Colors.deepPurple,
+                    color: SoferTokens.of(context).accent,
                   ),
                 ),
               ],
@@ -162,7 +163,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
               return Transform.scale(scale: value, child: child);
             },
             child: Icon(Icons.auto_awesome,
-                size: 64, color: Colors.orange.shade300),
+                size: 64, color: SoferTokens.of(context).caution),
           ),
           const SizedBox(height: 20),
           Text(
@@ -170,7 +171,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
             style: TextStyle(
                 fontSize: 18,
                 fontStyle: FontStyle.italic,
-                color: Colors.grey.shade700),
+                color: SoferTokens.of(context).inkMuted),
           ),
         ],
       ),
@@ -322,8 +323,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
             const SizedBox(height: 5),
             LinearProgressIndicator(
               value: progressPercent > 1 ? 1 : progressPercent,
-              backgroundColor: Colors.grey[200],
-              color: progressPercent >= 1 ? Colors.green : Colors.blue,
+              backgroundColor: SoferTokens.of(context).rule,
+              color: progressPercent >= 1 ? SoferTokens.of(context).positive : SoferTokens.of(context).accent,
               minHeight: 8,
             ),
             const SizedBox(height: 5),
@@ -331,7 +332,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
               remainingText,
               style: TextStyle(
                 color:
-                    remainingText.contains("הושלם") ? Colors.green : Colors.red,
+                    remainingText.contains("הושלם") ? SoferTokens.of(context).positive : SoferTokens.of(context).danger,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -438,7 +439,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: Colors.grey[600]),
+          Icon(icon, size: 20, color: SoferTokens.of(context).inkMuted),
           const SizedBox(width: 8),
           Text("$label ", style: const TextStyle(fontWeight: FontWeight.w500)),
           Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -450,7 +451,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
   Widget _buildBottomButtons() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-      color: Colors.white,
+      color: SoferTokens.of(context).paper,
       // Five actions do not fit across a phone; scroll rather than overflow.
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
@@ -490,8 +491,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
             onPressed: onTap,
             icon: Icon(icon),
             style: IconButton.styleFrom(
-              backgroundColor: Colors.deepPurple.shade50,
-              foregroundColor: Colors.deepPurple,
+              backgroundColor: SoferTokens.of(context).paper,
+              foregroundColor: SoferTokens.of(context).accent,
             ),
           ),
           Text(
@@ -793,8 +794,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
             const SizedBox(height: 4),
             LinearProgressIndicator(
               value: progressPercent > 1 ? 1 : progressPercent,
-              backgroundColor: Colors.grey[200],
-              color: progressPercent >= 1 ? Colors.green : Colors.blue,
+              backgroundColor: SoferTokens.of(context).rule,
+              color: progressPercent >= 1 ? SoferTokens.of(context).positive : SoferTokens.of(context).accent,
               minHeight: 6,
             ),
             const SizedBox(height: 2),
@@ -802,7 +803,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
               "יעד: ${actualForGoal.toStringAsFixed(1)} / ${target.toStringAsFixed(1)} ($remainingText)",
               style: TextStyle(
                 fontSize: 12,
-                color: remaining <= 0 ? Colors.green : Colors.red,
+                color: remaining <= 0 ? SoferTokens.of(context).positive : SoferTokens.of(context).danger,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -856,14 +857,14 @@ class _SummaryScreenState extends State<SummaryScreen> {
                     "שכר לשעה (חודש): ₪${(totalMonthlyProfit / (totalMonthTime.inSeconds / 3600)).toStringAsFixed(0)}",
                     style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: Colors.deepPurple.shade700)),
+                        color: SoferTokens.of(context).accent)),
               Text("הוצאות (חודש): ₪${monthlyExpenses.toStringAsFixed(2)}",
                   style: const TextStyle(fontWeight: FontWeight.bold)),
               Text("נטו (לאחר הוצאות): ₪${netAfterExpenses.toStringAsFixed(2)}",
                   style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color:
-                          netAfterExpenses >= 0 ? Colors.green : Colors.red)),
+                          netAfterExpenses >= 0 ? SoferTokens.of(context).positive : SoferTokens.of(context).danger)),
               const Divider(),
               SizedBox(
                 height: 200,
@@ -944,7 +945,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                               return Container(
                                 height: constraints.maxHeight * value,
                                 width: widthPerBar * 0.7,
-                                color: Colors.deepPurple.shade300,
+                                color: SoferTokens.of(context).accent,
                                 child: Tooltip(
                                   message: "יום $day: ${minutes.toInt()} דקות",
                                   child: Container(),
@@ -952,7 +953,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                               );
                             },
                           ),
-                        Container(height: 1, color: Colors.grey.shade300),
+                        Container(height: 1, color: SoferTokens.of(context).inkFaint),
                         if (day % 5 == 0 || day == 1)
                           Text("$day", style: const TextStyle(fontSize: 8)),
                       ],
@@ -1128,13 +1129,13 @@ class _SummaryScreenState extends State<SummaryScreen> {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     IconButton(
-                                      icon: const Icon(Icons.edit,
-                                          color: Colors.blue),
+                                      icon: Icon(Icons.edit,
+                                          color: SoferTokens.of(context).accent),
                                       onPressed: () => _editSession(ctx, s),
                                     ),
                                     IconButton(
-                                      icon: const Icon(Icons.delete,
-                                          color: Colors.red),
+                                      icon: Icon(Icons.delete,
+                                          color: SoferTokens.of(context).danger),
                                       onPressed: () => _deleteSession(ctx, s),
                                     ),
                                   ],
@@ -1172,7 +1173,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
               Navigator.pop(dialogCtx);
               Navigator.pop(ctx);
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: SoferTokens.of(context).danger),
             child: const Text("מחק"),
           ),
         ],
@@ -1278,7 +1279,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
       );
       if (lineError != null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(lineError), backgroundColor: Colors.red),
+          SnackBar(content: Text(lineError), backgroundColor: SoferTokens.of(context).danger),
         );
         return;
       }
@@ -1350,7 +1351,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
               Navigator.pop(dialogCtx);
               Navigator.pop(ctx);
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: SoferTokens.of(context).danger),
             child: const Text("מחק"),
           ),
         ],

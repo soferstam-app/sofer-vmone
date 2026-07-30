@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'models.dart';
 import 'project_comparison_screen.dart';
 import 'quote_screen.dart';
+import 'theme/app_theme.dart';
 
 /// Hub for the analysis tools.
 ///
@@ -61,8 +62,8 @@ class FeaturesScreen extends StatelessWidget {
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         leading: CircleAvatar(
-          backgroundColor: Colors.deepPurple.shade50,
-          child: Icon(icon, color: Colors.deepPurple),
+          backgroundColor: SoferTokens.of(context).paper,
+          child: Icon(icon, color: SoferTokens.of(context).accent),
         ),
         title: Text(title,
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),

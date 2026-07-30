@@ -7,6 +7,7 @@ import 'logic/project_analytics.dart';
 import 'logic/quote_calculator.dart';
 import 'models.dart';
 import 'storage_service.dart';
+import 'theme/app_theme.dart';
 
 /// Works out what a job would take and what to charge for it, from the
 /// writer's own measured pace rather than a guess.
@@ -162,7 +163,7 @@ class _QuoteScreenState extends State<QuoteScreen> {
 
           if (pace == null)
             Card(
-              color: Colors.orange.shade50,
+              color: SoferTokens.of(context).paper,
               child: const Padding(
                 padding: EdgeInsets.all(16),
                 child: Text(
@@ -176,12 +177,12 @@ class _QuoteScreenState extends State<QuoteScreen> {
             )
           else ...[
             Card(
-              color: Colors.deepPurple.shade50,
+              color: SoferTokens.of(context).paper,
               child: Padding(
                 padding: const EdgeInsets.all(14),
                 child: Row(
                   children: [
-                    Icon(Icons.speed, color: Colors.deepPurple.shade700),
+                    Icon(Icons.speed, color: SoferTokens.of(context).accent),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
@@ -197,8 +198,8 @@ class _QuoteScreenState extends State<QuoteScreen> {
             const SizedBox(height: 12),
             _numberField(_unitsCtrl, "כמות ($_unitLabel)", Icons.numbers),
             const SizedBox(height: 4),
-            const Text("על מה לבסס את המחיר:",
-                style: TextStyle(fontSize: 13, color: Colors.black54)),
+            Text("על מה לבסס את המחיר:",
+                style: TextStyle(fontSize: 13, color: SoferTokens.of(context).inkMuted)),
             const SizedBox(height: 6),
             SegmentedButton<bool>(
               segments: [
@@ -250,7 +251,7 @@ class _QuoteScreenState extends State<QuoteScreen> {
             child: Text(
               "עדיין אין הוצאות משוייכות לפרויקטים מסוג זה במסך ההוצאות, "
               "לכן העלות מוזנת ידנית.",
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              style: TextStyle(fontSize: 12, color: SoferTokens.of(context).inkMuted),
             ),
           ),
         ],
@@ -260,8 +261,8 @@ class _QuoteScreenState extends State<QuoteScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text("עלות החומרים:",
-            style: TextStyle(fontSize: 13, color: Colors.black54)),
+        Text("עלות החומרים:",
+            style: TextStyle(fontSize: 13, color: SoferTokens.of(context).inkMuted)),
         const SizedBox(height: 6),
         SegmentedButton<bool>(
           segments: const [
@@ -282,12 +283,12 @@ class _QuoteScreenState extends State<QuoteScreen> {
         if (_expensesFromRecords)
           Card(
             margin: const EdgeInsets.only(bottom: 12),
-            color: Colors.teal.shade50,
+            color: SoferTokens.of(context).paper,
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Row(
                 children: [
-                  Icon(Icons.receipt_long, color: Colors.teal.shade700),
+                  Icon(Icons.receipt_long, color: SoferTokens.of(context).positive),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -348,7 +349,7 @@ class _QuoteScreenState extends State<QuoteScreen> {
                 child: Text(
                   "כולל ${e.plan.skippedTotal} ימים שאינם ימי עבודה: "
                   "${formatSkippedDays(e.plan)}",
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  style: TextStyle(fontSize: 12, color: SoferTokens.of(context).inkMuted),
                 ),
               ),
             const Divider(),
@@ -369,8 +370,8 @@ class _QuoteScreenState extends State<QuoteScreen> {
                         fontWeight: FontWeight.bold,
                         fontSize: 22,
                         color: derivedRate >= 0
-                            ? Colors.green.shade700
-                            : Colors.red.shade700,
+                            ? SoferTokens.of(context).positive
+                            : SoferTokens.of(context).danger,
                       ),
                     ),
                   ],
@@ -391,7 +392,7 @@ class _QuoteScreenState extends State<QuoteScreen> {
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 22,
-                      color: Colors.green.shade700,
+                      color: SoferTokens.of(context).positive,
                     ),
                   ),
                 ],
@@ -407,7 +408,7 @@ class _QuoteScreenState extends State<QuoteScreen> {
                       "משאירה לך לשעה. צפי הסיום מחושב בלוח העברי ומדלג על "
                       "שבתות, חגים, חול המועד וצומות – לפי ההגדרות שלך במסך "
                       "ימי עבודה.",
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              style: TextStyle(fontSize: 12, color: SoferTokens.of(context).inkMuted),
             ),
           ],
         ),
@@ -420,7 +421,7 @@ class _QuoteScreenState extends State<QuoteScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(label, style: const TextStyle(color: Colors.black54)),
+            Text(label, style: TextStyle(color: SoferTokens.of(context).inkMuted)),
             Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
           ],
         ),

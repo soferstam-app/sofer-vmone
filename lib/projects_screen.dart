@@ -8,6 +8,7 @@ import 'storage_service.dart';
 import 'expenses_screen.dart';
 import 'recycle_bin_screen.dart';
 import 'hebrew_utils.dart';
+import 'theme/app_theme.dart';
 
 class ProjectsScreen extends StatefulWidget {
   final List<Project> projects;
@@ -113,7 +114,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
               if (!mounted) return;
               Navigator.pop(context);
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: SoferTokens.of(context).danger),
             child: const Text("מחק"),
           ),
         ],
@@ -137,10 +138,10 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
               const Text('אתר האפליקציה:',
                   style: TextStyle(fontWeight: FontWeight.bold)),
               InkWell(
-                child: const Text(
+                child: Text(
                   'https://soferstam-app.github.io/sofer-vmone/',
                   style: TextStyle(
-                    color: Colors.blue,
+                    color: SoferTokens.of(context).accent,
                     decoration: TextDecoration.underline,
                   ),
                 ),
@@ -151,10 +152,10 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
               const Text('גיטהאב:',
                   style: TextStyle(fontWeight: FontWeight.bold)),
               InkWell(
-                child: const Text(
+                child: Text(
                   'https://github.com/soferstam-app/sofer-vmone',
                   style: TextStyle(
-                    color: Colors.blue,
+                    color: SoferTokens.of(context).accent,
                     decoration: TextDecoration.underline,
                   ),
                 ),
@@ -171,12 +172,12 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.coffee, size: 20, color: Colors.brown.shade700),
+                    Icon(Icons.coffee, size: 20, color: SoferTokens.of(context).accent),
                     const SizedBox(width: 6),
-                    const Text(
+                    Text(
                       'https://buymeacoffee.com/soferstam',
                       style: TextStyle(
-                        color: Colors.blue,
+                        color: SoferTokens.of(context).accent,
                         decoration: TextDecoration.underline,
                       ),
                     ),
@@ -207,10 +208,10 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
+            Text(
               "פעולה זו תמחק את כל הפרויקטים וההיסטוריה לצמיתות!\n"
               "כדי לאשר, הקלד את המילה 'מחיקה' למטה:",
-              style: TextStyle(color: Colors.red),
+              style: TextStyle(color: SoferTokens.of(context).danger),
             ),
             const SizedBox(height: 10),
             TextField(
@@ -232,7 +233,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                 Navigator.pop(context);
               }
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: SoferTokens.of(context).danger),
             child: const Text("אפס הכל"),
           ),
         ],
@@ -286,8 +287,8 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                             icon: const Icon(Icons.delete_forever),
                             label: const Text("איפוס כל הנתונים (זהירות!)"),
                             style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.red,
-                              side: const BorderSide(color: Colors.red),
+                              foregroundColor: SoferTokens.of(context).danger,
+                              side: BorderSide(color: SoferTokens.of(context).danger),
                             ),
                           ),
                         );
@@ -298,7 +299,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                         key: Key(p.id),
                         direction: DismissDirection.startToEnd,
                         background: Container(
-                          color: Colors.red,
+                          color: SoferTokens.of(context).danger,
                           alignment: Alignment.centerRight,
                           padding: const EdgeInsets.only(right: 20),
                           child: const Icon(Icons.delete, color: Colors.white),
@@ -319,7 +320,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                                 ElevatedButton(
                                   onPressed: () => Navigator.of(ctx).pop(true),
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.red,
+                                    backgroundColor: SoferTokens.of(context).danger,
                                   ),
                                   child: const Text("מחק"),
                                 ),
@@ -358,14 +359,14 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                                       children: [
                                         Icon(Icons.event_available,
                                             size: 14,
-                                            color: Colors.deepPurple.shade300),
+                                            color: SoferTokens.of(context).accent),
                                         const SizedBox(width: 4),
                                         Expanded(
                                           child: Text(
                                             line,
                                             style: TextStyle(
                                               fontSize: 12,
-                                              color: Colors.deepPurple.shade400,
+                                              color: SoferTokens.of(context).accent,
                                             ),
                                           ),
                                         ),
@@ -659,9 +660,9 @@ class _ProjectDialogState extends State<ProjectDialog> {
         const SizedBox(height: 10),
         Text(
           _getPriceLabel(),
-          style: const TextStyle(
+          style: TextStyle(
             fontWeight: FontWeight.bold,
-            color: Colors.blueGrey,
+            color: SoferTokens.of(context).inkMuted,
           ),
         ),
         Row(
@@ -692,9 +693,9 @@ class _ProjectDialogState extends State<ProjectDialog> {
         const SizedBox(height: 10),
         Text(
           _getTargetLabel(),
-          style: const TextStyle(
+          style: TextStyle(
             fontWeight: FontWeight.bold,
-            color: Colors.blueGrey,
+            color: SoferTokens.of(context).inkMuted,
           ),
         ),
         Row(

@@ -5,6 +5,7 @@ import 'logic/expense_logic.dart';
 import 'logic/id_generator.dart';
 import 'models.dart';
 import 'storage_service.dart';
+import 'theme/app_theme.dart';
 
 class ExpensesScreen extends StatefulWidget {
   /// Needed so an expense can be charged to the work it belongs to.
@@ -193,8 +194,8 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                   const SizedBox(height: 10),
                   if (allocation == ExpenseAllocation.project) ...[
                     if (widget.projects.where((p) => !p.isDeleted).isEmpty)
-                      const Text("אין פרויקטים לשייך אליהם",
-                          style: TextStyle(color: Colors.red, fontSize: 13))
+                      Text("אין פרויקטים לשייך אליהם",
+                          style: TextStyle(color: SoferTokens.of(context).danger, fontSize: 13))
                     else ...[
                       const Align(
                         alignment: AlignmentDirectional.centerStart,
@@ -343,7 +344,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
           TextButton(
               onPressed: () => Navigator.pop(ctx), child: const Text("ביטול")),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: SoferTokens.of(context).danger),
             onPressed: () {
               // Soft delete so the removal survives a merge.
               final idx = _all.indexWhere((x) => x.id == e.id);
@@ -380,7 +381,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Card(
-              color: Colors.orange.shade50,
+              color: SoferTokens.of(context).paper,
               child: Padding(
                 padding: const EdgeInsets.all(20.0),
                 child: Row(
@@ -390,10 +391,10 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                         style: TextStyle(
                             fontSize: 20, fontWeight: FontWeight.bold)),
                     Text("₪${_totalExpenses.toStringAsFixed(2)}",
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
-                            color: Colors.deepOrange)),
+                            color: SoferTokens.of(context).caution)),
                   ],
                 ),
               ),
@@ -403,9 +404,9 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Card(
-                color: Colors.red.shade50,
+                color: SoferTokens.of(context).paper,
                 child: ListTile(
-                  leading: const Icon(Icons.warning_amber, color: Colors.red),
+                  leading: Icon(Icons.warning_amber, color: SoferTokens.of(context).danger),
                   title: Text(
                       "${unassigned.length} הוצאות מסומנות 'לפי פרויקט' ללא פרויקט",
                       style: const TextStyle(fontSize: 13)),
@@ -421,11 +422,11 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.receipt_long,
-                            size: 64, color: Colors.grey.shade400),
+                            size: 64, color: SoferTokens.of(context).inkFaint),
                         const SizedBox(height: 16),
                         Text("אין הוצאות עדיין",
                             style: TextStyle(
-                                fontSize: 18, color: Colors.grey.shade600)),
+                                fontSize: 18, color: SoferTokens.of(context).inkMuted)),
                         const SizedBox(height: 8),
                         TextButton.icon(
                           onPressed: () => _showAddOrEdit(),
@@ -444,9 +445,9 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                         margin: const EdgeInsets.only(bottom: 8),
                         child: ListTile(
                           leading: CircleAvatar(
-                            backgroundColor: Colors.orange.shade100,
+                            backgroundColor: SoferTokens.of(context).paper,
                             child: Icon(_allocationIcon(e.allocation),
-                                color: Colors.orange.shade800, size: 20),
+                                color: SoferTokens.of(context).caution, size: 20),
                           ),
                           title: Text(e.product),
                           subtitle: Text(
@@ -466,7 +467,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                               ),
                               IconButton(
                                 icon: Icon(Icons.delete,
-                                    size: 20, color: Colors.red.shade700),
+                                    size: 20, color: SoferTokens.of(context).danger),
                                 onPressed: () => _confirmDelete(e),
                               ),
                             ],

@@ -12,6 +12,7 @@ import 'theme_settings_screen.dart';
 import 'work_calendar_settings_screen.dart';
 import 'package:auto_updater/auto_updater.dart';
 import 'dart:io';
+import 'theme/app_theme.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -260,7 +261,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       };
       if (message != null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message), backgroundColor: Colors.red),
+          SnackBar(content: Text(message), backgroundColor: SoferTokens.of(context).danger),
         );
       }
       return;
@@ -323,7 +324,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(summary),
-        backgroundColor: Colors.green,
+        backgroundColor: SoferTokens.of(context).positive,
         duration: const Duration(seconds: 8),
       ),
     );
@@ -346,7 +347,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
             ListTile(
-              leading: const Icon(Icons.save_alt, color: Colors.deepPurple),
+              leading: Icon(Icons.save_alt, color: SoferTokens.of(context).accent),
               title: const Text("שמור במכשיר"),
               subtitle: Text(PlatformSupport.isDesktop
                   ? "בחירת תיקייה לשמירת הקובץ"
@@ -354,7 +355,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onTap: () => Navigator.pop(ctx, 'save'),
             ),
             ListTile(
-              leading: const Icon(Icons.share, color: Colors.deepPurple),
+              leading: Icon(Icons.share, color: SoferTokens.of(context).accent),
               title: const Text("שיתוף"),
               subtitle: const Text(
                   "שליחה לוואטסאפ, מייל, או כל אפליקציה אחרת במכשיר"),
@@ -363,7 +364,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const Divider(),
             ListTile(
               leading:
-                  const Icon(Icons.restore_page, color: Colors.deepPurple),
+                  Icon(Icons.restore_page, color: SoferTokens.of(context).accent),
               title: const Text("שחזור מקובץ גיבוי"),
               subtitle: const Text(
                   "הנתונים מהקובץ יתווספו לקיימים – שום דבר לא נמחק"),
@@ -396,7 +397,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             content: Text(choice == 'save' && result.path != null
                 ? "הגיבוי נשמר:\n${result.path}"
                 : "הגיבוי נוצר בהצלחה"),
-            backgroundColor: Colors.green,
+            backgroundColor: SoferTokens.of(context).positive,
             duration: const Duration(seconds: 6),
           ),
         );
@@ -407,7 +408,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SnackBar(
             content:
                 Text("הגיבוי נכשל: ${result.error ?? 'שגיאה לא ידועה'}"),
-            backgroundColor: Colors.red,
+            backgroundColor: SoferTokens.of(context).danger,
             duration: const Duration(seconds: 6),
           ),
         );
@@ -430,10 +431,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const Text('אתר האפליקציה:',
                   style: TextStyle(fontWeight: FontWeight.bold)),
               InkWell(
-                child: const Text(
+                child: Text(
                   'https://soferstam-app.github.io/sofer-vmone/',
                   style: TextStyle(
-                    color: Colors.blue,
+                    color: SoferTokens.of(context).accent,
                     decoration: TextDecoration.underline,
                   ),
                 ),
@@ -444,10 +445,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const Text('גיטהאב:',
                   style: TextStyle(fontWeight: FontWeight.bold)),
               InkWell(
-                child: const Text(
+                child: Text(
                   'https://github.com/soferstam-app/sofer-vmone',
                   style: TextStyle(
-                    color: Colors.blue,
+                    color: SoferTokens.of(context).accent,
                     decoration: TextDecoration.underline,
                   ),
                 ),
@@ -464,12 +465,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.coffee, size: 20, color: Colors.brown.shade700),
+                    Icon(Icons.coffee, size: 20, color: SoferTokens.of(context).accent),
                     const SizedBox(width: 6),
-                    const Text(
+                    Text(
                       'https://buymeacoffee.com/soferstam',
                       style: TextStyle(
-                        color: Colors.blue,
+                        color: SoferTokens.of(context).accent,
                         decoration: TextDecoration.underline,
                       ),
                     ),
@@ -530,15 +531,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       subtitle: const Text("תזכורת יומית לעמידה ביעדי הכתיבה"),
                       value: _notificationsEnabled,
                       onChanged: _updateNotificationSettings,
-                      secondary: const Icon(Icons.notifications_active,
-                          color: Colors.deepPurple),
+                      secondary: Icon(Icons.notifications_active,
+                          color: SoferTokens.of(context).accent),
                     ),
                     if (_notificationsEnabled)
                       ListTile(
                         title: const Text("שעת תזכורת"),
                         subtitle: Text(_notificationTime.format(context)),
-                        leading: const Icon(Icons.access_time,
-                            color: Colors.deepPurple),
+                        leading: Icon(Icons.access_time,
+                            color: SoferTokens.of(context).accent),
                         onTap: _pickNotificationTime,
                       ),
                     const Divider(),
@@ -552,8 +553,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         await _storage.setUseGregorianDates(v);
                         if (mounted) setState(() => _useGregorianDates = v);
                       },
-                      secondary: const Icon(Icons.calendar_month,
-                          color: Colors.deepPurple),
+                      secondary: Icon(Icons.calendar_month,
+                          color: SoferTokens.of(context).accent),
                     ),
                     // The smart/plain workflow switch used to live here. It is
                     // something the writer flips between sittings, not once at
@@ -563,8 +564,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ListTile(
                       title: const Text("עיצוב"),
                       subtitle: Text(_themeSummary),
-                      leading: const Icon(Icons.palette_outlined,
-                          color: Colors.deepPurple),
+                      leading: Icon(Icons.palette_outlined,
+                          color: SoferTokens.of(context).accent),
                       trailing: const Icon(Icons.chevron_left),
                       onTap: () => Navigator.push(
                         context,
@@ -577,8 +578,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ListTile(
                       title: const Text("ימי עבודה"),
                       subtitle: Text(_workCalendarSummary),
-                      leading: const Icon(Icons.calendar_today,
-                          color: Colors.deepPurple),
+                      leading: Icon(Icons.calendar_today,
+                          color: SoferTokens.of(context).accent),
                       trailing: const Icon(Icons.chevron_left),
                       onTap: () async {
                         await Navigator.push(
@@ -597,7 +598,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       title: const Text("מעבר יום"),
                       subtitle: Text(_dayStartSummary),
                       leading:
-                          const Icon(Icons.schedule, color: Colors.deepPurple),
+                          Icon(Icons.schedule, color: SoferTokens.of(context).accent),
                       onTap: _pickDayStart,
                     ),
                     const Divider(),
@@ -606,8 +607,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       subtitle: Text(_soferName.isEmpty
                           ? "לחתימה בעדכונים ללקוחות (לא הוגדר)"
                           : _soferName),
-                      leading: const Icon(Icons.badge,
-                          color: Colors.deepPurple),
+                      leading: Icon(Icons.badge,
+                          color: SoferTokens.of(context).accent),
                       onTap: _editSoferName,
                     ),
                     const Divider(),
@@ -615,8 +616,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       title: const Text("גיבוי הנתונים"),
                       subtitle: const Text(
                           "ייצוא כל הנתונים לקובץ אחד – פרויקטים, היסטוריה, הוצאות והגדרות"),
-                      leading: const Icon(Icons.backup,
-                          color: Colors.deepPurple),
+                      leading: Icon(Icons.backup,
+                          color: SoferTokens.of(context).accent),
                       trailing: _isExporting
                           ? const SizedBox(
                               width: 20,
@@ -630,7 +631,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ListTile(
                         title: const Text("בדוק עדכונים"),
                         leading:
-                            const Icon(Icons.update, color: Colors.deepPurple),
+                            Icon(Icons.update, color: SoferTokens.of(context).accent),
                         onTap: _checkForUpdates,
                       ),
                   ],

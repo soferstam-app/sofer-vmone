@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'hebrew_utils.dart';
 import 'logic/hebrew_work_calendar.dart';
 import 'storage_service.dart';
+import 'theme/app_theme.dart';
 
 /// Which days the writer actually sits down to write.
 ///
@@ -143,7 +144,7 @@ class _WorkCalendarSettingsScreenState
               const Divider(),
               _sectionTitle("מקום"),
               SwitchListTile(
-                secondary: const Icon(Icons.public, color: Colors.deepPurple),
+                secondary: Icon(Icons.public, color: SoferTokens.of(context).accent),
                 title: const Text("בארץ ישראל"),
                 subtitle: Text(_rules.inIsrael
                     ? "יום טוב אחד — חול המועד מתחיל יום מוקדם יותר"
@@ -159,7 +160,7 @@ class _WorkCalendarSettingsScreenState
                   "תצוגה מקדימה של הימים שידולגו, כדי לראות מיד שההגדרות נותנות "
                   "את התוצאה שהתכוונת אליה.",
                   style:
-                      TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                      TextStyle(fontSize: 12, color: SoferTokens.of(context).inkMuted),
                 ),
               ),
               ..._preview(),
@@ -194,7 +195,7 @@ class _WorkCalendarSettingsScreenState
             children: [
               Row(
                 children: [
-                  Icon(Icons.lock_outline, color: Colors.grey.shade700),
+                  Icon(Icons.lock_outline, color: SoferTokens.of(context).inkMuted),
                   const SizedBox(width: 8),
                   const Text("אינם ימי עבודה — קבוע",
                       style: TextStyle(fontWeight: FontWeight.bold)),
@@ -209,7 +210,7 @@ class _WorkCalendarSettingsScreenState
               const SizedBox(height: 6),
               Text(
                 "גובר על כל הגדרה אחרת — שבת של חנוכה היא שבת.",
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                style: TextStyle(fontSize: 12, color: SoferTokens.of(context).inkMuted),
               ),
             ],
           ),
@@ -232,7 +233,7 @@ class _WorkCalendarSettingsScreenState
           onChanged: (w) => _update(_rules.copyWith(beforePesach: w)),
         ),
         ListTile(
-          leading: const Icon(Icons.tag, color: Colors.deepPurple),
+          leading: Icon(Icons.tag, color: SoferTokens.of(context).accent),
           title: const Text("כמה ימים לפני פסח"),
           subtitle: Text("${_rules.daysBeforePesach} ימים"),
           trailing: SizedBox(
@@ -277,14 +278,14 @@ class _WorkCalendarSettingsScreenState
         leading: Icon(
           half ? Icons.contrast : Icons.circle,
           size: half ? 14 : 8,
-          color: half ? Colors.orange.shade600 : Colors.grey.shade500,
+          color: half ? SoferTokens.of(context).caution : SoferTokens.of(context).inkFaint,
         ),
         title: Text(formatDisplayDate(entry.date, _useGregorianDates)),
         trailing: Text(
           half
               ? "${entry.day.reason?.label ?? ''} · חצי יום"
               : entry.day.reason?.label ?? '',
-          style: TextStyle(color: Colors.grey.shade600),
+          style: TextStyle(color: SoferTokens.of(context).inkMuted),
         ),
       );
     }).toList();
@@ -318,7 +319,7 @@ class _WorkCalendarSettingsScreenState
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Icon(icon, color: Colors.deepPurple),
+          Icon(icon, color: SoferTokens.of(context).accent),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -332,7 +333,7 @@ class _WorkCalendarSettingsScreenState
                     child: Text(
                       subtitle,
                       style: TextStyle(
-                          fontSize: 12, color: Colors.grey.shade600),
+                          fontSize: 12, color: SoferTokens.of(context).inkMuted),
                     ),
                   ),
               ],

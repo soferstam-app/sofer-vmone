@@ -8,6 +8,7 @@ import 'logic/profit_calculator.dart';
 import 'models.dart';
 import 'hebrew_utils.dart';
 import 'storage_service.dart';
+import 'theme/app_theme.dart';
 
 class ProjectSummaryScreen extends StatefulWidget {
   final List<Project> projects;
@@ -267,10 +268,10 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                       // Previously this failed silently, so a user without a
                       // mail app configured saw nothing happen at all.
                       messenger.showSnackBar(
-                        const SnackBar(
+                        SnackBar(
                           content: Text(
                               "לא נמצאה תוכנת מייל במכשיר. ניתן להעתיק את פרטי ההתקדמות ידנית."),
-                          backgroundColor: Colors.red,
+                          backgroundColor: SoferTokens.of(context).danger,
                           duration: Duration(seconds: 5),
                         ),
                       );
@@ -360,7 +361,7 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
           children: [
             Row(
               children: [
-                Icon(Icons.event_available, color: Colors.deepPurple.shade400),
+                Icon(Icons.event_available, color: SoferTokens.of(context).accent),
                 const SizedBox(width: 8),
                 const Text("צפי סיום",
                     style:
@@ -374,14 +375,14 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: Colors.deepPurple.shade700,
+                color: SoferTokens.of(context).accent,
               ),
             ),
             const SizedBox(height: 4),
             Text(
               "בעוד ${plan.calendarDays} ימים · "
               "${estimate.workDaysLeft.toStringAsFixed(1)} ימי עבודה",
-              style: TextStyle(color: Colors.grey.shade700),
+              style: TextStyle(color: SoferTokens.of(context).inkMuted),
             ),
             const SizedBox(height: 12),
             LinearProgressIndicator(
@@ -394,7 +395,7 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
               "${estimate.doneUnits.toStringAsFixed(1)} מתוך "
               "${estimate.totalUnits.toStringAsFixed(0)} $unit "
               "(${(estimate.progress * 100).toStringAsFixed(0)}%)",
-              style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+              style: TextStyle(fontSize: 13, color: SoferTokens.of(context).inkMuted),
             ),
             const Divider(height: 24),
             _statRow(
@@ -405,7 +406,7 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
               Text(
                 "עדיין אין מספיק עבודה מתועדת בפרויקט, לכן החישוב לפי היעד "
                 "היומי שהגדרת ולא לפי הקצב בפועל.",
-                style: TextStyle(fontSize: 12, color: Colors.orange.shade800),
+                style: TextStyle(fontSize: 12, color: SoferTokens.of(context).caution),
               ),
             if (targetPaceStr.isNotEmpty)
               _statRow("נדרש כדי לעמוד בתאריך היעד:", targetPaceStr),
@@ -414,7 +415,7 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
               Text(
                 "${plan.skippedTotal} ימים בדרך אינם ימי עבודה: "
                 "${formatSkippedDays(plan)}",
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                style: TextStyle(fontSize: 12, color: SoferTokens.of(context).inkMuted),
               ),
             ],
           ],
@@ -433,12 +434,12 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
     };
     return Card(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      color: Colors.orange.shade50,
+      color: SoferTokens.of(context).paper,
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Row(
           children: [
-            Icon(Icons.info_outline, color: Colors.orange.shade800),
+            Icon(Icons.info_outline, color: SoferTokens.of(context).caution),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
@@ -487,28 +488,30 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
             onTap: () => _showSeferPageDetails(pageNum, lines, linesPerPage),
             child: Container(
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey),
+                border: Border.all(color: SoferTokens.of(context).rule),
+                // How far into the page the writing got, filled from the top.
+                // The accent marks what is done, here as everywhere.
                 gradient: progress > 0
                     ? LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: [
-                          Colors.green.shade300,
-                          Colors.green.shade300,
-                          Colors.white,
-                          Colors.white,
+                          SoferTokens.of(context).accent,
+                          SoferTokens.of(context).accent,
+                          SoferTokens.of(context).paper,
+                          SoferTokens.of(context).paper,
                         ],
                         stops: [0.0, progress, progress, 1.0],
                       )
                     : null,
-                color: progress == 0 ? Colors.white : null,
+                color: progress == 0 ? SoferTokens.of(context).paper : null,
               ),
               alignment: Alignment.center,
               child: Text(
                 formatHebrewNumber(pageNum),
-                style: const TextStyle(
+                style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  color: Colors.black,
+                  color: SoferTokens.of(context).ink,
                 ),
               ),
             ),
@@ -632,8 +635,8 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
         width: 70,
         height: 70,
         decoration: BoxDecoration(
-          color: count > 0 ? Colors.deepPurple.shade100 : Colors.grey.shade200,
-          border: Border.all(color: Colors.deepPurple),
+          color: count > 0 ? SoferTokens.of(context).paper : SoferTokens.of(context).rule,
+          border: Border.all(color: SoferTokens.of(context).accent),
           borderRadius: BorderRadius.circular(8),
         ),
         alignment: Alignment.center,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'models.dart';
 import 'storage_service.dart';
+import 'theme/app_theme.dart';
 
 class RecycleBinScreen extends StatefulWidget {
   const RecycleBinScreen({super.key});
@@ -63,7 +64,7 @@ class _RecycleBinScreenState extends State<RecycleBinScreen> {
               child: const Text("ביטול")),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: SoferTokens.of(context).danger),
             child: const Text("מחק"),
           ),
         ],
@@ -103,16 +104,16 @@ class _RecycleBinScreenState extends State<RecycleBinScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _deletedProjects.isEmpty
-              ? const Center(
+              ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.delete_outline, size: 64, color: Colors.grey),
+                      Icon(Icons.delete_outline, size: 64, color: SoferTokens.of(context).inkMuted),
                       SizedBox(height: 16),
                       Text("סל המחזור ריק",
-                          style: TextStyle(fontSize: 18, color: Colors.grey)),
+                          style: TextStyle(fontSize: 18, color: SoferTokens.of(context).inkMuted)),
                       Text("פרויקטים שנמחקו ב-30 הימים האחרונים יופיעו כאן",
-                          style: TextStyle(fontSize: 12, color: Colors.grey)),
+                          style: TextStyle(fontSize: 12, color: SoferTokens.of(context).inkMuted)),
                     ],
                   ),
                 )
@@ -129,21 +130,21 @@ class _RecycleBinScreenState extends State<RecycleBinScreen> {
                           horizontal: 16, vertical: 8),
                       child: ListTile(
                         leading:
-                            const Icon(Icons.history, color: Colors.orange),
+                            Icon(Icons.history, color: SoferTokens.of(context).caution),
                         title: Text(p.name),
                         subtitle: Text("יימחק לצמיתות בעוד $daysLeft ימים"),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             IconButton(
-                              icon: const Icon(Icons.restore_from_trash,
-                                  color: Colors.green),
+                              icon: Icon(Icons.restore_from_trash,
+                                  color: SoferTokens.of(context).positive),
                               tooltip: "שחזר",
                               onPressed: () => _restoreProject(p),
                             ),
                             IconButton(
-                              icon: const Icon(Icons.delete_forever,
-                                  color: Colors.red),
+                              icon: Icon(Icons.delete_forever,
+                                  color: SoferTokens.of(context).danger),
                               tooltip: "מחק לצמיתות",
                               onPressed: () => _deletePermanently(p),
                             ),
