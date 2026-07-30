@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sofer_vmone/backup_service.dart';
+import 'package:sofer_vmone/expenses/expense_editor.dart';
 import 'package:sofer_vmone/hebrew_utils.dart';
 import 'package:sofer_vmone/logic/date_logic.dart';
 import 'package:sofer_vmone/logic/completion_estimator.dart';
@@ -2355,6 +2356,30 @@ void main() {
           ExpenseLogic.averagePerUnit(
               ProjectType.tefillin, const [], const [], const []),
           isNull);
+    });
+  });
+
+  group('QuoteExpense', () {
+    test('a cost per unit is the same whatever the quantity', () {
+      const parchment =
+          QuoteExpense(label: 'קלף', amount: 45, perUnit: true);
+      expect(parchment.perUnitOver(1), 45);
+      expect(parchment.perUnitOver(120), 45);
+    });
+
+    test('a cost for the whole job is spread over the quantity', () {
+      const delivery =
+          QuoteExpense(label: 'משלוח', amount: 60, perUnit: false);
+      expect(delivery.perUnitOver(10), 6);
+      expect(delivery.perUnitOver(3), closeTo(20, 0.001));
+    });
+
+    test('a one-off cost with no quantity yet charges nothing', () {
+      // The quantity field is a text field, so it is empty for as long as it
+      // takes to type into. Dividing by it would put an infinity in the price.
+      const delivery =
+          QuoteExpense(label: 'משלוח', amount: 60, perUnit: false);
+      expect(delivery.perUnitOver(0), 0);
     });
   });
 }

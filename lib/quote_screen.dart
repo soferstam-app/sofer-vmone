@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'expenses/expense_editor.dart';
 import 'hebrew_utils.dart';
 import 'logic/expense_logic.dart';
 import 'logic/hebrew_work_calendar.dart';
@@ -40,11 +41,16 @@ class _QuoteScreenState extends State<QuoteScreen> {
   final _rateCtrl = TextEditingController(text: '60');
   final _unitPriceCtrl = TextEditingController(text: '180');
   final _hoursCtrl = TextEditingController(text: '6');
-  final _expensesCtrl = TextEditingController(text: '0');
 
   /// Materials taken from the expenses screen rather than typed in — the
   /// default whenever there is anything recorded to take them from.
   bool _expensesFromRecords = true;
+
+  /// Costs entered by hand for this quote, as lines rather than as one number.
+  ///
+  /// Not persisted: a quote is for work that does not exist yet, so there is no
+  /// commission to charge them to and nothing to keep.
+  final List<QuoteExpense> _quoteExpenses = [];
 
   WorkCalendarRules _rules = WorkCalendarRules.standard;
   bool _useGregorianDates = false;
@@ -75,7 +81,6 @@ class _QuoteScreenState extends State<QuoteScreen> {
     _rateCtrl.dispose();
     _unitPriceCtrl.dispose();
     _hoursCtrl.dispose();
-    _expensesCtrl.dispose();
     super.dispose();
   }
 
@@ -109,7 +114,7 @@ class _QuoteScreenState extends State<QuoteScreen> {
     final recorded = _recordedExpensePerUnit;
     final expensesPerUnit = (_expensesFromRecords && recorded != null)
         ? recorded
-        : (double.tryParse(_expensesCtrl.text) ?? 0);
+        : _manualPerUnit(units);
 
     // When pricing per unit, the hourly rate that price implies is derived and
     // fed back through the same estimator, so both modes produce identical
@@ -150,6 +155,7 @@ class _QuoteScreenState extends State<QuoteScreen> {
             recorded: recorded,
             derivedRate: derivedRate,
             expensesPerUnit: expensesPerUnit,
+            units: units,
           ),
         ),
       );
@@ -241,7 +247,7 @@ class _QuoteScreenState extends State<QuoteScreen> {
               _numberField(_unitPriceCtrl, "מחיר ל$_singularLabel (₪)",
                   Icons.sell),
             _numberField(_hoursCtrl, "שעות כתיבה ביום עבודה", Icons.schedule),
-            _expensesSection(recorded),
+            _expensesSection(recorded, units),
             const SizedBox(height: 16),
             if (estimate != null)
               _resultCard(estimate, derivedRate: derivedRate),
@@ -268,6 +274,7 @@ class _QuoteScreenState extends State<QuoteScreen> {
     required double? recorded,
     required double? derivedRate,
     required double expensesPerUnit,
+    required double units,
   }) {
     final t = SoferTokens.of(context);
 
@@ -371,9 +378,7 @@ class _QuoteScreenState extends State<QuoteScreen> {
               else
                 _inlineField("מחיר ל$_singularLabel (₪)", _unitPriceCtrl),
               _inlineField("שעות כתיבה ביום", _hoursCtrl),
-              if (recorded == null)
-                _inlineField("עלות חומרים ל$_singularLabel (₪)", _expensesCtrl)
-              else ...[
+              if (recorded != null)
                 _inlineChoice(
                   "עלות החומרים",
                   const [
@@ -383,12 +388,16 @@ class _QuoteScreenState extends State<QuoteScreen> {
                   _expensesFromRecords,
                   (v) => setState(() => _expensesFromRecords = v),
                 ),
-                if (_expensesFromRecords)
-                  SoferStatRow("₪ ל$_singularLabel",
-                      "₪${recorded.toStringAsFixed(2)}", last: true)
-                else
-                  _inlineField(
-                      "עלות חומרים ל$_singularLabel (₪)", _expensesCtrl),
+              if (recorded != null && _expensesFromRecords)
+                SoferStatRow("₪ ל$_singularLabel",
+                    "₪${recorded.toStringAsFixed(2)}", last: true)
+              else ...[
+                if (recorded == null) ...[
+                  const SizedBox(height: 10),
+                  const SoferSectionTitle("עלות החומרים",
+                      padding: EdgeInsets.zero),
+                ],
+                _manualExpensesBlock(units),
               ],
             ],
           ),
@@ -501,35 +510,59 @@ class _QuoteScreenState extends State<QuoteScreen> {
     ValueChanged<T> onChanged,
   ) {
     final t = SoferTokens.of(context);
+    final caption = Text(label,
+        style: TextStyle(
+            fontFamily: t.labelFamily, fontSize: 13, color: t.inkMuted));
+    final choice = SoferChoice<T>(
+        options: options, selected: selected, onChanged: onChanged);
+
     return Container(
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.rule))),
+      decoration:
+          BoxDecoration(border: Border(bottom: BorderSide(color: t.rule))),
       padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(label,
-                style: TextStyle(
-                    fontFamily: t.labelFamily, fontSize: 13, color: t.inkMuted)),
-          ),
-          SoferChoice<T>(
-              options: options, selected: selected, onChanged: onChanged),
-        ],
+      child: LayoutBuilder(
+        builder: (context, box) {
+          // Side by side needs room for both. On a phone the control alone is
+          // nearly the width of the screen, so the label goes above it instead
+          // of off the edge — and the control scrolls if even that is not
+          // enough.
+          if (box.maxWidth < 430) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                caption,
+                const SizedBox(height: 7),
+                SizedBox(
+                  width: double.infinity,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: choice,
+                  ),
+                ),
+              ],
+            );
+          }
+          return Row(children: [Expanded(child: caption), choice]);
+        },
       ),
     );
   }
 
-  Widget _expensesSection(double? recorded) {
+  Widget _expensesSection(double? recorded, double units) {
     if (recorded == null) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _numberField(
-              _expensesCtrl, "עלות חומרים ל$_singularLabel (₪)", Icons.shopping_bag),
+          Text("עלות החומרים:",
+              style: TextStyle(
+                  fontSize: 13, color: SoferTokens.of(context).inkMuted)),
+          const SizedBox(height: 6),
+          _manualExpensesBlock(units),
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: Text(
               "עדיין אין הוצאות משוייכות לפרויקטים מסוג זה במסך ההוצאות, "
-              "לכן העלות מוזנת ידנית.",
+              "לכן העלות מוזנת כאן ידנית.",
               style: TextStyle(fontSize: 12, color: SoferTokens.of(context).inkMuted),
             ),
           ),
@@ -581,10 +614,150 @@ class _QuoteScreenState extends State<QuoteScreen> {
             ),
           )
         else
-          _numberField(_expensesCtrl, "עלות חומרים ל$_singularLabel (₪)",
-              Icons.shopping_bag),
+          _manualExpensesBlock(units),
       ],
     );
+  }
+
+  /// What the hand-entered lines come to per unit, over [units] of them.
+  double _manualPerUnit(double units) =>
+      _quoteExpenses.fold(0.0, (sum, e) => sum + e.perUnitOver(units));
+
+  /// The hand-entered costs, as lines rather than as one number.
+  ///
+  /// A single "materials per unit" field cannot say that the parchment is per
+  /// mezuza while the delivery is paid once, which is how a job is actually
+  /// priced. Each line says which of the two it is and the per-unit total is
+  /// worked out from the quantity. Rendered for both layouts from one place, so
+  /// the quote can do the same thing in all three themes.
+  Widget _manualExpensesBlock(double units) {
+    final t = SoferTokens.of(context);
+    final perUnit = _manualPerUnit(units);
+
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var i = 0; i < _quoteExpenses.length; i++)
+          _manualExpenseRow(i, units),
+        if (_quoteExpenses.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Text("לא הוזנו הוצאות — ההצעה מחושבת בלי עלות חומרים",
+                style: TextStyle(
+                    fontFamily: t.labelFamily,
+                    fontSize: 12,
+                    color: t.inkMuted)),
+          ),
+        Row(
+          children: [
+            TextButton.icon(
+              onPressed: _addManualExpense,
+              style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  visualDensity: VisualDensity.compact),
+              icon: const Icon(Icons.add, size: 18),
+              label: Text(_quoteExpenses.isEmpty ? "הוסף הוצאה" : "הוסף עוד"),
+            ),
+            const Spacer(),
+            if (_quoteExpenses.isNotEmpty)
+              Flexible(
+                child: Text(
+                  "₪${perUnit.toStringAsFixed(2)} ל$_singularLabel",
+                  textAlign: TextAlign.end,
+                  style: TextStyle(
+                      fontFamily: t.numeralFamily,
+                      fontSize: 17,
+                      color: t.accent),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+
+    if (t.isCards) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Card(
+          color: t.paper,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+            child: body,
+          ),
+        ),
+      );
+    }
+    return body;
+  }
+
+  Widget _manualExpenseRow(int index, double units) {
+    final t = SoferTokens.of(context);
+    final e = _quoteExpenses[index];
+
+    return Container(
+      decoration: t.isRules
+          ? BoxDecoration(border: Border(bottom: BorderSide(color: t.rule)))
+          : null,
+      child: Row(
+        children: [
+          Expanded(
+            child: InkWell(
+              onTap: () => _editManualExpense(index),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 7),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(e.label,
+                        style: TextStyle(
+                            fontFamily: t.numeralFamily,
+                            fontSize: 15,
+                            color: t.ink)),
+                    const SizedBox(height: 1),
+                    Text(
+                      e.perUnit
+                          ? "לכל $_singularLabel"
+                          : "לכל העבודה · ₪${e.perUnitOver(units).toStringAsFixed(2)} ל$_singularLabel",
+                      style: TextStyle(
+                          fontFamily: t.labelFamily,
+                          fontSize: 11,
+                          color: t.inkMuted),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text("₪${e.amount.toStringAsFixed(0)}",
+              style: TextStyle(
+                  fontFamily: t.numeralFamily, fontSize: 17, color: t.ink)),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            icon: Icon(Icons.close, size: 18, color: t.inkMuted),
+            tooltip: "הסר",
+            onPressed: () => setState(() => _quoteExpenses.removeAt(index)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _addManualExpense() async {
+    final added = await showQuoteExpenseEditor(
+        context: context, unitSingular: _singularLabel);
+    if (added != null && mounted) setState(() => _quoteExpenses.add(added));
+  }
+
+  Future<void> _editManualExpense(int index) async {
+    final edited = await showQuoteExpenseEditor(
+      context: context,
+      unitSingular: _singularLabel,
+      existing: _quoteExpenses[index],
+    );
+    if (edited != null && mounted) {
+      setState(() => _quoteExpenses[index] = edited);
+    }
   }
 
   Widget _numberField(
