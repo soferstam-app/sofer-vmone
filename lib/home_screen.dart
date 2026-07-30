@@ -81,10 +81,12 @@ class _SoferHomeState extends State<SoferHome>
   String _tefillinPartType = 'head';
   int _tefillinParshiyaIndex = 1;
 
-  int _smartCurrentPage = 0;
-  int _smartCurrentLine = 0;
-  int _smartStartPage = 0;
-  int _smartStartLine = 0;
+  // Pages and lines are counted from one. There is no page 0 and no line 0, so
+  // these never start at zero — a zero on screen is always a bug.
+  int _smartCurrentPage = 1;
+  int _smartCurrentLine = 1;
+  int _smartStartPage = 1;
+  int _smartStartLine = 1;
 
   /// Total break duration during current smart session (not counted in writing average).
   Duration _sessionBreakDuration = Duration.zero;
@@ -296,8 +298,10 @@ class _SoferHomeState extends State<SoferHome>
       isRunning: _stopwatch.isRunning,
       isPaused: _isPaused,
       elapsed: _formatTime(_effectiveElapsed()),
-      currentPage: _smartCurrentPage,
-      currentLine: _smartCurrentLine,
+      // Clamped at the display boundary too: whatever goes wrong upstream, the
+      // screen never shows a page or line zero.
+      currentPage: _smartCurrentPage < 1 ? 1 : _smartCurrentPage,
+      currentLine: _smartCurrentLine < 1 ? 1 : _smartCurrentLine,
       positionUnit: project?.type == ProjectType.tefillin ? "פרשייה" : "שורה",
       todayOutput: todayOutput,
       hourlyRate: hourlyRate,
@@ -584,13 +588,10 @@ class _SoferHomeState extends State<SoferHome>
 
     final lastPos = await _storageService.getLastPosition(_selectedProject!.id);
     setState(() {
-      if (lastPos.isNotEmpty) {
-        _smartCurrentPage = lastPos['page'];
-        _smartCurrentLine = lastPos['line'];
-      } else {
-        _smartCurrentPage = 1;
-        _smartCurrentLine = 1;
-      }
+      // Clamped rather than trusted: a position stored by an older build, or a
+      // hand-edited backup, could carry a zero.
+      _smartCurrentPage = ((lastPos['page'] as int?) ?? 1).clamp(1, 1 << 20);
+      _smartCurrentLine = ((lastPos['line'] as int?) ?? 1).clamp(1, 1 << 20);
       _smartStartPage = _smartCurrentPage;
       _smartStartLine = _smartCurrentLine;
       _sessionBreakDuration = Duration.zero;

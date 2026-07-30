@@ -166,11 +166,16 @@ class StorageService {
         : {};
   }
 
+  /// Pages and lines are counted from one, so neither is ever stored as zero —
+  /// a zero would come back out and be displayed as "עמוד 0".
   Future<void> saveLastPosition(String projectId, int page, int line) async {
     final prefs = await SharedPreferences.getInstance();
     final String? data = prefs.getString(_keyLastPositions);
     Map<String, dynamic> allPositions = data != null ? jsonDecode(data) : {};
-    allPositions[projectId] = {'page': page, 'line': line};
+    allPositions[projectId] = {
+      'page': page < 1 ? 1 : page,
+      'line': line < 1 ? 1 : line,
+    };
     await prefs.setString(_keyLastPositions, jsonEncode(allPositions));
   }
 

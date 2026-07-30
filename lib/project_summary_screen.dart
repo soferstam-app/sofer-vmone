@@ -9,6 +9,7 @@ import 'models.dart';
 import 'hebrew_utils.dart';
 import 'storage_service.dart';
 import 'theme/app_theme.dart';
+import 'widgets/sofer_widgets.dart';
 
 class ProjectSummaryScreen extends StatefulWidget {
   final List<Project> projects;
@@ -282,34 +283,47 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                 ),
               ),
             ),
-          Card(
-            margin: const EdgeInsets.all(16),
-            elevation: 4,
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                children: [
-                  _statRow("סך הכל נכתב:", totalWrittenStr),
-                  _statRow(
-                      "סך הכל רווח:", "₪${totalProfit.toStringAsFixed(2)}"),
-                  if (projectExpenses > 0) ...[
-                    _statRow("הוצאות משויכות:",
-                        "₪${projectExpenses.toStringAsFixed(2)}"),
-                    _statRow("נטו (לאחר הוצאות):",
-                        "₪${(totalProfit - projectExpenses).toStringAsFixed(2)}"),
+          if (SoferTokens.of(context).isRules)
+            _ruledLedger(
+              project: project,
+              totalWrittenStr: totalWrittenStr,
+              totalProfit: totalProfit,
+              projectExpenses: projectExpenses,
+              hourlyRate: hourlyRate,
+              avgTimeStr: avgTimeStr,
+              estimate: estimate,
+              targetPaceStr: targetPaceStr,
+            )
+          else ...[
+            Card(
+              margin: const EdgeInsets.all(16),
+              elevation: 4,
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  children: [
+                    _statRow("סך הכל נכתב:", totalWrittenStr),
+                    _statRow(
+                        "סך הכל רווח:", "₪${totalProfit.toStringAsFixed(2)}"),
+                    if (projectExpenses > 0) ...[
+                      _statRow("הוצאות משויכות:",
+                          "₪${projectExpenses.toStringAsFixed(2)}"),
+                      _statRow("נטו (לאחר הוצאות):",
+                          "₪${(totalProfit - projectExpenses).toStringAsFixed(2)}"),
+                    ],
+                    if (hourlyRate != null)
+                      _statRow("שכר לשעה:",
+                          "₪${hourlyRate.toStringAsFixed(0)} לשעה"),
+                    if (avgTimeStr.isNotEmpty) _statRow("ממוצע:", avgTimeStr),
                   ],
-                  if (hourlyRate != null)
-                    _statRow("שכר לשעה:",
-                        "₪${hourlyRate.toStringAsFixed(0)} לשעה"),
-                  if (avgTimeStr.isNotEmpty) _statRow("ממוצע:", avgTimeStr),
-                ],
+                ),
               ),
             ),
-          ),
-          if (estimate != null)
-            _completionCard(project, estimate, targetPaceStr)
-          else if (project.plannedUnits == null)
-            _missingSizeCard(project),
+            if (estimate != null)
+              _completionCard(project, estimate, targetPaceStr)
+            else if (project.plannedUnits == null)
+              _missingSizeCard(project),
+          ],
           if (project.type == ProjectType.sefer)
             _buildSeferGrid(project, sessions),
           if (project.type == ProjectType.tefillin)
@@ -331,6 +345,162 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
       ),
     );
   }
+
+  /// The commission written as a ledger page rather than as a stack of cards.
+  ///
+  /// Two columns once there is room: the money and output on one side as ruled
+  /// rows, the delivery date on the other set large, with the reasoning under
+  /// it. On a phone the two stack. Nothing is boxed, and the only colour is the
+  /// accent on the hourly rate and the date.
+  Widget _ruledLedger({
+    required Project project,
+    required String totalWrittenStr,
+    required double totalProfit,
+    required double projectExpenses,
+    required double? hourlyRate,
+    required String avgTimeStr,
+    required CompletionEstimate? estimate,
+    required String targetPaceStr,
+  }) {
+    final t = SoferTokens.of(context);
+
+    final figures = Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SoferSectionTitle("מה נעשה", padding: EdgeInsets.zero),
+          const SizedBox(height: 8),
+          SoferStatRow("נכתב", totalWrittenStr),
+          SoferStatRow("רווח", "₪${totalProfit.toStringAsFixed(2)}"),
+          if (projectExpenses > 0) ...[
+            SoferStatRow("הוצאות משויכות", "₪${projectExpenses.toStringAsFixed(2)}"),
+            SoferStatRow("נטו",
+                "₪${(totalProfit - projectExpenses).toStringAsFixed(2)}"),
+          ],
+          if (hourlyRate != null)
+            SoferStatRow("שכר לשעה", "₪${hourlyRate.toStringAsFixed(0)}",
+                emphasise: true),
+          if (avgTimeStr.isNotEmpty)
+            SoferStatRow("ממוצע", avgTimeStr, last: true),
+        ],
+      ),
+    );
+
+    final delivery = Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (estimate == null) ...[
+            const SoferSectionTitle("צפי סיום", padding: EdgeInsets.zero),
+            const SizedBox(height: 6),
+            Text(
+              project.plannedUnits == null
+                  ? "כדי לחשב צפי סיום צריך להזין בפרויקט את ${_sizeQuestion(project)}."
+                  : "אין עוד מה לחשב — העבודה הושלמה.",
+              style: TextStyle(
+                  fontFamily: t.labelFamily,
+                  fontSize: 13,
+                  height: 1.6,
+                  color: project.plannedUnits == null ? t.caution : t.inkMuted),
+            ),
+          ] else ...[
+            const SoferSectionTitle("צפי סיום", padding: EdgeInsets.zero),
+            const SizedBox(height: 5),
+            Text(
+              formatDisplayDateWithWeekday(
+                  estimate.plan.completionDate, _useGregorianDates),
+              style: TextStyle(
+                  fontFamily: t.numeralFamily, fontSize: 25, color: t.accent),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              "בעוד ${estimate.plan.calendarDays} ימים · "
+              "${estimate.workDaysLeft.toStringAsFixed(0)} ימי עבודה",
+              style: TextStyle(
+                  fontFamily: t.labelFamily, fontSize: 12, color: t.inkMuted),
+            ),
+            const SizedBox(height: 14),
+            SoferProgress(estimate.progress),
+            const SizedBox(height: 6),
+            Text(
+              "${estimate.doneUnits.toStringAsFixed(0)} מתוך "
+              "${estimate.totalUnits.toStringAsFixed(0)} "
+              "${_unitPlural(project.type)} · "
+              "${(estimate.progress * 100).toStringAsFixed(0)}%",
+              style: TextStyle(
+                  fontFamily: t.labelFamily, fontSize: 12, color: t.inkMuted),
+            ),
+            const SizedBox(height: 16),
+            SoferStatRow(
+              estimate.paceMeasured ? "הקצב שלך" : "לפי היעד היומי",
+              "${estimate.unitsPerWorkDay.toStringAsFixed(2)} ${_unitPlural(project.type)}",
+            ),
+            if (targetPaceStr.isNotEmpty)
+              SoferStatRow("נדרש לתאריך היעד", targetPaceStr, last: true),
+            if (!estimate.paceMeasured) ...[
+              const SizedBox(height: 8),
+              Text(
+                "עדיין אין מספיק עבודה מתועדת, לכן החישוב לפי היעד היומי ולא "
+                "לפי הקצב בפועל.",
+                style: TextStyle(
+                    fontFamily: t.labelFamily,
+                    fontSize: 12,
+                    height: 1.5,
+                    color: t.caution),
+              ),
+            ],
+            if (estimate.plan.skippedTotal > 0) ...[
+              const SizedBox(height: 10),
+              Text(
+                "${estimate.plan.skippedTotal} ימים בדרך אינם ימי עבודה: "
+                "${formatSkippedDays(estimate.plan)}",
+                style: TextStyle(
+                    fontFamily: t.labelFamily,
+                    fontSize: 12,
+                    height: 1.5,
+                    color: t.inkMuted),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+
+    return LayoutBuilder(
+      builder: (context, box) {
+        if (box.maxWidth <= 620) {
+          return Column(children: [
+            const SoferRule(strong: true),
+            figures,
+            const SoferRule(),
+            delivery,
+            const SoferRule(strong: true),
+          ]);
+        }
+        return Column(children: [
+          const SoferRule(strong: true),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: figures),
+              Container(width: 1, color: t.rule),
+              Expanded(child: delivery),
+            ],
+          ),
+          const SoferRule(strong: true),
+        ]);
+      },
+    );
+  }
+
+  /// What is missing when a commission has no stated size.
+  static String _sizeQuestion(Project project) => switch (project.type) {
+        ProjectType.sefer => "מספר העמודים בספר",
+        ProjectType.mezuza => "כמה מזוזות בהזמנה",
+        ProjectType.tefillin => "כמה סטים בהזמנה",
+      };
 
   static String _unitPlural(ProjectType type) => switch (type) {
         ProjectType.sefer => 'עמודים',
