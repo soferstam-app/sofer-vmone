@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'logic/hebrew_clock.dart';
 import 'logic/hebrew_work_calendar.dart';
 import 'models.dart';
 
@@ -18,6 +19,7 @@ class StorageService {
   static const String _keyExpenses = 'expenses';
   static const String _keySoferName = 'sofer_name';
   static const String _keyWorkCalendarRules = 'work_calendar_rules';
+  static const String _keyDayStart = 'day_start';
 
   Future<void> saveProjects(List<Project> projects) async {
     final prefs = await SharedPreferences.getInstance();
@@ -25,12 +27,34 @@ class StorageService {
     await prefs.setString(_keyProjects, data);
   }
 
+  /// Parses a stored list, dropping only the records that cannot be read.
+  ///
+  /// One malformed entry — from a partial write, a hand-edited file, or a field
+  /// a future version shaped differently — must not cost the user everything
+  /// else in the list. This mirrors what the backup importer already does.
+  List<T> _parseList<T>(
+      String? raw, T Function(Map<String, dynamic>) fromJson) {
+    if (raw == null || raw.isEmpty) return <T>[];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return <T>[];
+      final out = <T>[];
+      for (final item in decoded) {
+        try {
+          if (item is Map) out.add(fromJson(Map<String, dynamic>.from(item)));
+        } catch (_) {
+          // Skip this record and keep the rest.
+        }
+      }
+      return out;
+    } catch (_) {
+      return <T>[];
+    }
+  }
+
   Future<List<Project>> loadProjects() async {
     final prefs = await SharedPreferences.getInstance();
-    final String? data = prefs.getString(_keyProjects);
-    if (data == null) return [];
-    final List<dynamic> jsonList = jsonDecode(data);
-    return jsonList.map((json) => Project.fromJson(json)).toList();
+    return _parseList(prefs.getString(_keyProjects), Project.fromJson);
   }
 
   Future<void> saveHistory(List<WorkSession> history) async {
@@ -41,10 +65,7 @@ class StorageService {
 
   Future<List<WorkSession>> loadHistory() async {
     final prefs = await SharedPreferences.getInstance();
-    final String? data = prefs.getString(_keyHistory);
-    if (data == null) return [];
-    final List<dynamic> jsonList = jsonDecode(data);
-    return jsonList.map((json) => WorkSession.fromJson(json)).toList();
+    return _parseList(prefs.getString(_keyHistory), WorkSession.fromJson);
   }
 
   /// Every user-owned value in one map: the three data lists plus all
@@ -90,6 +111,7 @@ class StorageService {
         _keyUseGregorianDates: prefs.getBool(_keyUseGregorianDates),
         _keySoferName: prefs.getString(_keySoferName),
         _keyWorkCalendarRules: prefs.getString(_keyWorkCalendarRules),
+        _keyDayStart: prefs.getString(_keyDayStart),
       },
     };
   }
@@ -178,6 +200,44 @@ class StorageService {
     await prefs.setInt(_keyDayRolloverHour, hour.clamp(0, 23));
   }
 
+  /// When a new working day starts — midnight, sunset, nightfall or a chosen
+  /// hour.
+  ///
+  /// Falls back to the standalone rollover hour this replaced, so a device that
+  /// had set 02:00 keeps that boundary without the user touching anything.
+  Future<DayStart> getDayStart() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_keyDayStart);
+    if (raw != null && raw.isNotEmpty) {
+      final decoded = _decodeSettings(raw);
+      if (decoded != null) return DayStart.fromJson(decoded);
+    }
+    return DayStart.fromRolloverHour(prefs.getInt(_keyDayRolloverHour) ?? 0);
+  }
+
+  Future<void> setDayStart(DayStart dayStart) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyDayStart, jsonEncode(dayStart.toJson()));
+    // Kept in step so a build that predates this setting still reads a sensible
+    // hour instead of reverting the user to midnight.
+    await prefs.setInt(
+        _keyDayRolloverHour,
+        dayStart.boundary == DayBoundary.fixedHour ? dayStart.hour : 0);
+  }
+
+  /// Decodes a stored settings blob, returning null rather than throwing.
+  ///
+  /// Corrupt or unexpectedly shaped settings must never stop the app from
+  /// opening — the caller falls back to defaults.
+  Map<String, dynamic>? _decodeSettings(String raw) {
+    try {
+      final decoded = jsonDecode(raw);
+      return decoded is Map ? Map<String, dynamic>.from(decoded) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Which days count as writing days, for every completion estimate the app
   /// makes.
   ///
@@ -190,20 +250,15 @@ class StorageService {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_keyWorkCalendarRules);
     if (raw != null && raw.isNotEmpty) {
-      try {
-        final decoded = jsonDecode(raw);
-        if (decoded is Map) {
-          return WorkCalendarRules.fromJson(Map<String, dynamic>.from(decoded));
-        }
-      } catch (_) {
-        // Corrupt settings must not stop the app from opening.
-      }
+      final decoded = _decodeSettings(raw);
+      // fromJson migrates any schema this app has ever written.
+      if (decoded != null) return WorkCalendarRules.fromJson(decoded);
     }
 
     if (prefs.getBool(_keyFridayMotzeiHalfDay) == true) {
       return const WorkCalendarRules(
-        friday: FridayWork.half,
-        motzeiShabbatHalfDay: true,
+        friday: DayWeight.half,
+        motzeiShabbat: DayWeight.half,
       );
     }
     return WorkCalendarRules.standard;
@@ -244,11 +299,6 @@ class StorageService {
 
   Future<List<Expense>> loadExpenses() async {
     final prefs = await SharedPreferences.getInstance();
-    final String? data = prefs.getString(_keyExpenses);
-    if (data == null) return [];
-    final List<dynamic> list = jsonDecode(data);
-    return list
-        .map((e) => Expense.fromJson(Map<String, dynamic>.from(e)))
-        .toList();
+    return _parseList(prefs.getString(_keyExpenses), Expense.fromJson);
   }
 }

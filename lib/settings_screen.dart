@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'backup_service.dart';
 import 'hebrew_utils.dart';
+import 'logic/hebrew_clock.dart';
 import 'logic/hebrew_work_calendar.dart';
 import 'platform_support.dart';
 import 'storage_service.dart';
@@ -21,7 +22,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _notificationsEnabled = true;
   TimeOfDay _notificationTime = const TimeOfDay(hour: 20, minute: 0);
   bool _smartWorkflowEnabled = false;
-  int _dayRolloverHour = 0;
+  DayStart _dayStart = DayStart.midnight;
   WorkCalendarRules _workRules = WorkCalendarRules.standard;
   bool _useGregorianDates = false;
   bool _isExporting = false;
@@ -38,7 +39,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final enabled = await _storage.getNotificationEnabled();
     final time = await _storage.getNotificationTime();
     final smart = await _storage.getSmartWorkflowEnabled();
-    final rollover = await _storage.getDayRolloverHour();
+    final dayStart = await _storage.getDayStart();
     final workRules = await _storage.getWorkCalendarRules();
     final useGregorian = await _storage.getUseGregorianDates();
     final soferName = await _storage.getSoferName();
@@ -47,7 +48,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _notificationsEnabled = enabled;
         _notificationTime = time;
         _smartWorkflowEnabled = smart;
-        _dayRolloverHour = rollover;
+        _dayStart = dayStart;
         _workRules = workRules;
         _useGregorianDates = useGregorian;
         _soferName = soferName;
@@ -58,18 +59,112 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// A one-line read of the work-day rules, so the setting is legible without
   /// opening it.
   String get _workCalendarSummary {
+    String weight(String name, DayWeight w) => switch (w) {
+          DayWeight.full => "$name יום מלא",
+          DayWeight.half => "$name חצי יום",
+          DayWeight.none => "$name חופש",
+        };
+
+    final fastsOff = [
+      _workRules.fastSeventeenTammuz,
+      _workRules.fastGedalya,
+      _workRules.fastTenthTevet,
+      _workRules.fastEsther,
+    ].where((w) => w != DayWeight.full).length;
+
     final parts = <String>[
-      switch (_workRules.friday) {
-        FridayWork.none => "שישי חופש",
-        FridayWork.half => "שישי חצי יום",
-        FridayWork.full => "שישי יום מלא",
-      },
-      if (_workRules.motzeiShabbatHalfDay) "מוצ״ש חצי יום",
-      if (_workRules.skipCholHamoed) "חול המועד",
-      if (_workRules.skipFasts) "צומות",
-      if (_workRules.skipChanukah) "חנוכה",
+      weight("שישי", _workRules.friday),
+      if (_workRules.motzeiShabbat == DayWeight.half) "מוצ״ש חצי יום",
+      if (_workRules.chanukah != DayWeight.full)
+        weight("חנוכה", _workRules.chanukah),
+      if (fastsOff > 0) "$fastsOff צומות",
     ];
     return "${parts.join(" · ")} — משפיע על כל צפי סיום";
+  }
+
+  String get _dayStartSummary => switch (_dayStart.boundary) {
+        DayBoundary.midnight => "יום חדש מתחיל בחצות (00:00)",
+        DayBoundary.sunset => "יום חדש מתחיל בשקיעה — לפי ממוצע ארץ ישראל",
+        DayBoundary.nightfall =>
+          "יום חדש מתחיל בצאת הכוכבים — לפי ממוצע ארץ ישראל",
+        DayBoundary.fixedHour =>
+          "יום חדש מתחיל ב-${_dayStart.hour.toString().padLeft(2, '0')}:00",
+      };
+
+  /// Boundary choice plus, for a fixed hour, which hour.
+  ///
+  /// The hour picker only appears for the fixed-hour option, since it means
+  /// nothing for the other three.
+  Future<void> _pickDayStart() async {
+    final result = await showDialog<DayStart>(
+      context: context,
+      builder: (ctx) {
+        var draft = _dayStart;
+        return AlertDialog(
+          title: const Text("מעבר יום"),
+          content: StatefulBuilder(
+            builder: (ctx, setDialog) => SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  RadioGroup<DayBoundary>(
+                    groupValue: draft.boundary,
+                    onChanged: (v) => v == null
+                        ? null
+                        : setDialog(() => draft = draft.copyWith(boundary: v)),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (final option in DayBoundary.values)
+                          RadioListTile<DayBoundary>(
+                            value: option,
+                            title: Text(option.label),
+                            subtitle: Text(option.explanation,
+                                style: const TextStyle(fontSize: 12)),
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                      ],
+                    ),
+                  ),
+                  if (draft.boundary == DayBoundary.fixedHour)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: DropdownButton<int>(
+                        value: draft.hour,
+                        isExpanded: true,
+                        items: List.generate(
+                          24,
+                          (i) => DropdownMenuItem(
+                            value: i,
+                            child:
+                                Text("${i.toString().padLeft(2, '0')}:00"),
+                          ),
+                        ),
+                        onChanged: (v) => v == null
+                            ? null
+                            : setDialog(() => draft = draft.copyWith(hour: v)),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text("ביטול")),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, draft),
+                child: const Text("אישור")),
+          ],
+        );
+      },
+    );
+
+    if (result == null) return;
+    await _storage.setDayStart(result);
+    if (mounted) setState(() => _dayStart = result);
   }
 
   Future<void> _updateNotificationSettings(bool enabled) async {
@@ -490,53 +585,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       },
                     ),
                     ListTile(
-                      title: const Text("שעת מעבר יום"),
-                      subtitle: Text(
-                          "יום חדש מתחיל ב-${_dayRolloverHour.toString().padLeft(2, '0')}:00 (לטובת סופרים שמסיימים מאוחר)"),
+                      title: const Text("מעבר יום"),
+                      subtitle: Text(_dayStartSummary),
                       leading:
                           const Icon(Icons.schedule, color: Colors.deepPurple),
-                      onTap: () async {
-                        final h = await showDialog<int>(
-                          context: context,
-                          builder: (ctx) {
-                            int sel = _dayRolloverHour;
-                            return AlertDialog(
-                              title: const Text("שעת מעבר יום"),
-                              content: StatefulBuilder(
-                                builder: (ctx, setDialog) {
-                                  return DropdownButton<int>(
-                                    value: sel,
-                                    isExpanded: true,
-                                    items: List.generate(25, (i) {
-                                      return DropdownMenuItem(
-                                          value: i,
-                                          child: Text(
-                                              "${i.toString().padLeft(2, '0')}:00"));
-                                    }),
-                                    onChanged: (v) {
-                                      if (v != null) {
-                                        setDialog(() => sel = v);
-                                      }
-                                    },
-                                  );
-                                },
-                              ),
-                              actions: [
-                                TextButton(
-                                    onPressed: () => Navigator.pop(ctx),
-                                    child: const Text("ביטול")),
-                                TextButton(
-                                    onPressed: () => Navigator.pop(ctx, sel),
-                                    child: const Text("אישור")),
-                              ],
-                            );
-                          },
-                        );
-                        if (h != null) {
-                          await _storage.setDayRolloverHour(h);
-                          if (mounted) setState(() => _dayRolloverHour = h);
-                        }
-                      },
+                      onTap: _pickDayStart,
                     ),
                     const Divider(),
                     ListTile(

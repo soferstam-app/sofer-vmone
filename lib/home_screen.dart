@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:window_manager/window_manager.dart';
 import 'logic/id_generator.dart';
 import 'logic/date_logic.dart';
+import 'logic/hebrew_clock.dart';
 import 'logic/production_calculator.dart';
 import 'logic/session_logic.dart';
 import 'models.dart';
@@ -83,7 +84,7 @@ class _SoferHomeState extends State<SoferHome>
   /// Total break duration during current smart session (not counted in writing average).
   Duration _sessionBreakDuration = Duration.zero;
 
-  int _dayRolloverHour = 0;
+  DayStart _dayStart = DayStart.midnight;
   bool _useGregorianDates = false;
 
   void _onWindowsFloatingModeChanged() {
@@ -95,8 +96,8 @@ class _SoferHomeState extends State<SoferHome>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     widget.windowsFloatingMode?.addListener(_onWindowsFloatingModeChanged);
-    _storageService.getDayRolloverHour().then((h) {
-      if (mounted) setState(() => _dayRolloverHour = h);
+    _storageService.getDayStart().then((d) {
+      if (mounted) setState(() => _dayStart = d);
     });
     _storageService.getUseGregorianDates().then((v) {
       if (mounted) setState(() => _useGregorianDates = v);
@@ -128,7 +129,7 @@ class _SoferHomeState extends State<SoferHome>
   }
 
   DateTime _effectiveDate(DateTime now) =>
-      DateLogic.effectiveDate(now, _dayRolloverHour);
+      DateLogic.effectiveDate(now, _dayStart);
 
   void _initAutoUpdater() async {
     if (Platform.isWindows || Platform.isMacOS) {
@@ -1685,7 +1686,7 @@ class _SoferHomeState extends State<SoferHome>
             // not count towards today's goal. They carry a placeholder date, so
             // this used to be filtered out only by accident.
             !s.backlogOnly &&
-            DateLogic.isSameWorkingDay(s.startTime, now, _dayRolloverHour))
+            DateLogic.isSameWorkingDay(s.startTime, now, _dayStart))
         .toList();
 
     int totalDone = 0;
@@ -1775,12 +1776,12 @@ class _SoferHomeState extends State<SoferHome>
 
   Future<void> _refreshSettingsFromStorage() async {
     final smartEnabled = await _storageService.getSmartWorkflowEnabled();
-    final rollover = await _storageService.getDayRolloverHour();
+    final dayStart = await _storageService.getDayStart();
     final useGregorian = await _storageService.getUseGregorianDates();
     if (!mounted) return;
     setState(() {
       _isSmartWorkflow = smartEnabled;
-      _dayRolloverHour = rollover;
+      _dayStart = dayStart;
       _useGregorianDates = useGregorian;
     });
   }

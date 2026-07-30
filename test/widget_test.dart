@@ -13,6 +13,7 @@ import 'package:sofer_vmone/hebrew_utils.dart';
 import 'package:sofer_vmone/logic/date_logic.dart';
 import 'package:sofer_vmone/logic/completion_estimator.dart';
 import 'package:sofer_vmone/logic/expense_logic.dart';
+import 'package:sofer_vmone/logic/hebrew_clock.dart';
 import 'package:sofer_vmone/logic/hebrew_work_calendar.dart';
 import 'package:sofer_vmone/logic/id_generator.dart';
 import 'package:sofer_vmone/logic/merge_service.dart';
@@ -22,20 +23,39 @@ import 'package:sofer_vmone/logic/project_analytics.dart';
 import 'package:sofer_vmone/logic/quote_calculator.dart';
 import 'package:sofer_vmone/logic/session_logic.dart';
 import 'package:sofer_vmone/models.dart';
+import 'package:sofer_vmone/storage_service.dart';
 
-/// Only the days nobody writes on, so arithmetic tests stay independent of
-/// wherever in the year the sample dates happen to fall. The festival rules
-/// themselves are exercised in the HebrewWorkCalendar group.
+/// Every configurable category set to a full working day, so arithmetic tests
+/// depend only on the fixed days — Shabbat, Yom Tov and the rest — and not on
+/// wherever in the year the sample dates happen to fall.
 const shabbatOnly = WorkCalendarRules(
-  friday: FridayWork.full,
-  skipCholHamoed: false,
-  skipErevYomTov: false,
-  skipFasts: false,
-  skipErevTishaBeav: false,
-  skipBetweenYomKippurAndSukkot: false,
-  skipWeekBeforePesach: false,
-  skipPurim: false,
-  skipChanukah: false,
+  friday: DayWeight.full,
+  motzeiShabbat: DayWeight.none,
+  chanukah: DayWeight.full,
+  fastSeventeenTammuz: DayWeight.full,
+  fastGedalya: DayWeight.full,
+  fastTenthTevet: DayWeight.full,
+  fastEsther: DayWeight.full,
+  lagBaomer: DayWeight.full,
+  isruChag: DayWeight.full,
+  daysBeforePesach: 0,
+  beforePesach: DayWeight.full,
+  betweenYomKippurAndSukkot: DayWeight.full,
+);
+
+/// The same, but with Friday off as well — the shape most of the app runs with.
+const shabbatAndFriday = WorkCalendarRules(
+  friday: DayWeight.none,
+  chanukah: DayWeight.full,
+  fastSeventeenTammuz: DayWeight.full,
+  fastGedalya: DayWeight.full,
+  fastTenthTevet: DayWeight.full,
+  fastEsther: DayWeight.full,
+  lagBaomer: DayWeight.full,
+  isruChag: DayWeight.full,
+  daysBeforePesach: 0,
+  beforePesach: DayWeight.full,
+  betweenYomKippurAndSukkot: DayWeight.full,
 );
 
 void main() {
@@ -591,46 +611,49 @@ void main() {
   });
 
   group('DateLogic', () {
+    DayStart at(int hour) =>
+        DayStart(boundary: DayBoundary.fixedHour, hour: hour);
+
     test('rollover 0 behaves as the plain calendar date', () {
-      expect(DateLogic.effectiveDate(DateTime(2026, 5, 10, 1, 30), 0),
+      expect(DateLogic.effectiveDate(DateTime(2026, 5, 10, 1, 30), DayStart.midnight),
           DateTime(2026, 5, 10));
-      expect(DateLogic.effectiveDate(DateTime(2026, 5, 10, 23, 0), 0),
+      expect(DateLogic.effectiveDate(DateTime(2026, 5, 10, 23, 0), DayStart.midnight),
           DateTime(2026, 5, 10));
     });
 
     test('before the rollover hour belongs to the previous day', () {
       // 01:00 with rollover at 02:00 is still "yesterday"
-      expect(DateLogic.effectiveDate(DateTime(2026, 5, 10, 1, 0), 2),
+      expect(DateLogic.effectiveDate(DateTime(2026, 5, 10, 1, 0), at(2)),
           DateTime(2026, 5, 9));
       // 02:00 exactly starts the new day
-      expect(DateLogic.effectiveDate(DateTime(2026, 5, 10, 2, 0), 2),
+      expect(DateLogic.effectiveDate(DateTime(2026, 5, 10, 2, 0), at(2)),
           DateTime(2026, 5, 10));
     });
 
     test('crosses a month boundary correctly', () {
       // 01:00 on the 1st, rollover 3 → belongs to the last day of April
-      expect(DateLogic.effectiveDate(DateTime(2026, 5, 1, 1, 0), 3),
+      expect(DateLogic.effectiveDate(DateTime(2026, 5, 1, 1, 0), at(3)),
           DateTime(2026, 4, 30));
     });
 
     test('crosses a year boundary correctly', () {
-      expect(DateLogic.effectiveDate(DateTime(2026, 1, 1, 0, 30), 2),
+      expect(DateLogic.effectiveDate(DateTime(2026, 1, 1, 0, 30), at(2)),
           DateTime(2025, 12, 31));
     });
 
     test('a late-night session and the day it belongs to agree', () {
       final lateNight = DateTime(2026, 5, 10, 1, 15);
       final theWorkingDay = DateTime(2026, 5, 9, 20, 0);
-      expect(DateLogic.isSameWorkingDay(lateNight, theWorkingDay, 2), isTrue);
+      expect(DateLogic.isSameWorkingDay(lateNight, theWorkingDay, at(2)), isTrue);
       // Without the rollover they would be different days
-      expect(DateLogic.isSameWorkingDay(lateNight, theWorkingDay, 0), isFalse);
+      expect(DateLogic.isSameWorkingDay(lateNight, theWorkingDay, DayStart.midnight), isFalse);
     });
 
     test('month grouping honours the rollover at a boundary', () {
       final lateNight = DateTime(2026, 5, 1, 1, 0);
       expect(
-          DateLogic.isSameWorkingMonth(lateNight, DateTime(2026, 4), 3), isTrue);
-      expect(DateLogic.isSameWorkingMonth(lateNight, DateTime(2026, 5), 3),
+          DateLogic.isSameWorkingMonth(lateNight, DateTime(2026, 4), at(3)), isTrue);
+      expect(DateLogic.isSameWorkingMonth(lateNight, DateTime(2026, 5), at(3)),
           isFalse);
     });
   });
@@ -1362,64 +1385,171 @@ void main() {
     });
   });
 
-  group('HebrewWorkCalendar — days off', () {
-    // Stated as Hebrew dates, because that is how the rules themselves are
-    // stated. Nothing here depends on which Gregorian day a festival lands on
-    // in any particular year.
-    const rules = WorkCalendarRules.standard;
+  group('forward compatibility of saved records', () {
+    test('a field from a newer version survives a round trip', () {
+      // What an older build sees when it opens a file a newer one wrote.
+      final fromTheFuture = <String, dynamic>{
+        'id': 'p1',
+        'name': 'ספר',
+        'type': 0,
+        'price': 100,
+        'expenses': 0,
+        'targetDaily': 0,
+        'targetMonthly': 0,
+        'somethingAddedLater': 'keep me',
+        'nestedFutureField': {'a': 1, 'b': [2, 3]},
+      };
 
+      final project = Project.fromJson(fromTheFuture);
+      expect(project.extraFields.keys,
+          containsAll(['somethingAddedLater', 'nestedFutureField']));
+
+      // Re-exporting must not drop them.
+      final written = project.toJson();
+      expect(written['somethingAddedLater'], 'keep me');
+      expect(written['nestedFutureField'], {'a': 1, 'b': [2, 3]});
+      // And editing must not either.
+      expect(project.copyWith(name: 'אחר').toJson()['somethingAddedLater'],
+          'keep me');
+    });
+
+    test('sessions and expenses keep unknown fields too', () {
+      final session = WorkSession.fromJson(<String, dynamic>{
+        'id': 's1',
+        'projectId': 'p1',
+        'startTime': '2026-05-03T09:00:00.000',
+        'endTime': '2026-05-03T13:00:00.000',
+        'amount': 1,
+        'startLine': 1,
+        'endLine': 42,
+        'description': '',
+        'isManual': false,
+        'futureFlag': true,
+      });
+      expect(session.toJson()['futureFlag'], isTrue);
+
+      final expense = Expense.fromJson(<String, dynamic>{
+        'id': 'e1',
+        'product': 'קלף',
+        'date': '2026-05-01T00:00:00.000',
+        'amount': 100,
+        'futureCategory': 'x',
+      });
+      expect(expense.copyWith(amount: 120).toJson()['futureCategory'], 'x');
+    });
+
+    test('a missing field takes its default instead of throwing', () {
+      // The minimum an older file might carry.
+      final project = Project.fromJson(<String, dynamic>{'id': 'p1'});
+      expect(project.type, ProjectType.sefer);
+      expect(project.price, 0);
+      expect(project.targetDaily, 0);
+      expect(project.isDeleted, isFalse);
+
+      // Numbers written as strings, which some producers do.
+      final loose = Project.fromJson(<String, dynamic>{
+        'id': 'p2',
+        'price': '250',
+        'totalPages': '245',
+        'type': 1,
+      });
+      expect(loose.price, 250);
+      expect(loose.totalPages, 245);
+      expect(loose.type, ProjectType.mezuza);
+    });
+
+    test('an enum index from the future falls back rather than crashing', () {
+      final project =
+          Project.fromJson(<String, dynamic>{'id': 'p1', 'type': 99});
+      expect(project.type, ProjectType.sefer);
+
+      final expense = Expense.fromJson(
+          <String, dynamic>{'id': 'e1', 'allocation': 99, 'amount': 5});
+      expect(expense.allocation, ExpenseAllocation.month);
+    });
+
+    test('a record with no id is rejected, not silently half-read', () {
+      expect(() => Project.fromJson(<String, dynamic>{'name': 'x'}),
+          throwsA(isA<FormatException>()));
+      expect(() => WorkSession.fromJson(<String, dynamic>{'amount': 1}),
+          throwsA(isA<FormatException>()));
+      expect(() => Expense.fromJson(<String, dynamic>{'amount': 1}),
+          throwsA(isA<FormatException>()));
+    });
+
+    test('one bad record does not lose the rest of the list', () async {
+      SharedPreferences.setMockInitialValues({
+        'flutter.projects': jsonEncode([
+          {'id': 'good1', 'name': 'א', 'type': 0},
+          {'name': 'no id at all'},
+          'not even an object',
+          {'id': 'good2', 'name': 'ב', 'type': 1},
+        ]),
+      });
+
+      final loaded = await StorageService().loadProjects();
+      expect(loaded.map((p) => p.id), ['good1', 'good2']);
+    });
+  });
+
+  group('HebrewWorkCalendar — days that are never writing days', () {
+    // Stated as Hebrew dates, because that is how the rules themselves are
+    // stated. Nothing here depends on which Gregorian day a festival lands on.
+    //
+    // Every configurable category is set to a full working day, so anything
+    // still off is off because it is fixed.
     WorkDay day(int year, int month, int dayOfMonth,
-            [WorkCalendarRules r = rules]) =>
+            [WorkCalendarRules r = shabbatOnly]) =>
         HebrewWorkCalendar.classifyHebrewDate(year, month, dayOfMonth, r);
 
-    test('Yom Tov is off however the rest is configured', () {
-      // Every optional rule turned off; these days must still be off.
-      const everythingAllowed = WorkCalendarRules(
-        friday: FridayWork.full,
-        skipCholHamoed: false,
-        skipErevYomTov: false,
-        skipFasts: false,
-        skipErevTishaBeav: false,
-        skipBetweenYomKippurAndSukkot: false,
-        skipWeekBeforePesach: false,
-        skipPurim: false,
-        skipChanukah: false,
-      );
+    test('Yom Tov, whatever else is configured', () {
       for (final y in [5785, 5786, 5787]) {
-        expect(day(y, JewishDate.NISSAN, 15, everythingAllowed).reason,
-            NonWorkReason.yomTov,
+        expect(day(y, JewishDate.NISSAN, 15).reason, NonWorkReason.yomTov,
             reason: 'first day of Pesach $y');
-        expect(day(y, JewishDate.TISHREI, 1, everythingAllowed).reason,
-            NonWorkReason.yomTov,
+        expect(day(y, JewishDate.TISHREI, 1).reason, NonWorkReason.yomTov,
             reason: 'Rosh Hashana $y');
-        expect(day(y, JewishDate.TISHREI, 10, everythingAllowed).reason,
-            NonWorkReason.yomTov,
+        expect(day(y, JewishDate.TISHREI, 10).reason, NonWorkReason.yomTov,
             reason: 'Yom Kippur $y');
-        expect(day(y, JewishDate.SIVAN, 6, everythingAllowed).reason,
-            NonWorkReason.yomTov,
+        expect(day(y, JewishDate.SIVAN, 6).reason, NonWorkReason.yomTov,
             reason: 'Shavuot $y');
+        expect(day(y, JewishDate.TISHREI, 22).reason, NonWorkReason.yomTov,
+            reason: 'Shemini Atzeret $y');
       }
     });
 
-    test('Tisha BeAv is off even when fasts are allowed', () {
-      const fastsAllowed = WorkCalendarRules(skipFasts: false);
-      for (final y in [5785, 5786, 5787, 5788]) {
-        // 9 Av unless it fell on Shabbat, in which case the fast is the 10th.
-        final ninth = day(y, JewishDate.AV, 9, fastsAllowed);
-        final tenth = day(y, JewishDate.AV, 10, fastsAllowed);
+    test('Chol HaMoed, including Hoshana Rabba', () {
+      for (var d = 17; d <= 21; d++) {
         expect(
-          ninth.reason == NonWorkReason.tishaBeav ||
-              (ninth.reason == NonWorkReason.shabbat &&
-                  tenth.reason == NonWorkReason.tishaBeav),
-          isTrue,
-          reason: 'Tisha BeAv $y was $ninth / $tenth',
-        );
+            day(5786, JewishDate.TISHREI, d).reason, NonWorkReason.cholHamoed,
+            reason: '$d Tishrei');
+      }
+      for (var d = 17; d <= 19; d++) {
+        expect(day(5786, JewishDate.NISSAN, d).reason, NonWorkReason.cholHamoed,
+            reason: '$d Nisan');
       }
     });
 
-    test('the eve of Tisha BeAv moves with the fast', () {
+    test('the eves of festivals', () {
+      expect(day(5786, JewishDate.NISSAN, 14).reason, NonWorkReason.erevYomTov);
+      expect(day(5786, JewishDate.SIVAN, 5).reason, NonWorkReason.erevYomTov);
+      expect(day(5786, JewishDate.ELUL, 29).reason, NonWorkReason.erevYomTov);
+      expect(day(5786, JewishDate.TISHREI, 9).reason, NonWorkReason.erevYomTov);
+      expect(
+          day(5786, JewishDate.TISHREI, 14).reason, NonWorkReason.erevYomTov);
+      // 20 Nisan is Chol HaMoed and also the eve of the seventh day.
+      expect(day(5786, JewishDate.NISSAN, 20).reason, NonWorkReason.erevYomTov);
+    });
+
+    test('Purim and Shushan Purim', () {
+      expect(day(5786, JewishDate.ADAR, 14).reason, NonWorkReason.purim);
+      expect(day(5786, JewishDate.ADAR, 15).reason, NonWorkReason.purim);
+      // In a leap year Purim is in Adar II.
+      expect(day(5787, JewishDate.ADAR_II, 14).reason, NonWorkReason.purim);
+      expect(day(5787, JewishDate.ADAR_II, 15).reason, NonWorkReason.purim);
+    });
+
+    test('Tisha BeAv, and its eve, wherever the fast lands', () {
       for (var y = 5780; y <= 5800; y++) {
-        // Find the day the fast is actually kept, then check the day before it.
         var observed = 0;
         for (var d = 9; d <= 10; d++) {
           if (day(y, JewishDate.AV, d).reason == NonWorkReason.tishaBeav) {
@@ -1430,116 +1560,230 @@ void main() {
         expect(observed, isNot(0), reason: 'no Tisha BeAv found in $y');
 
         final before = day(y, JewishDate.AV, observed - 1);
-        expect(
-          before.reason,
-          anyOf(NonWorkReason.erevTishaBeav, NonWorkReason.shabbat),
-          reason: 'day before Tisha BeAv $y',
-        );
+        expect(before.reason,
+            anyOf(NonWorkReason.erevTishaBeav, NonWorkReason.shabbat),
+            reason: 'day before Tisha BeAv $y');
       }
+    });
+
+    test('Shabbat beats a category set to a full working day', () {
+      // Chanukah is a full working day in these rules; a Shabbat of Chanukah is
+      // still Shabbat. Walked forward across the eight days, which span two
+      // Hebrew months.
+      final jc = JewishCalendar.initDate(5786, JewishDate.KISLEV, 25);
+      for (var i = 0; i < 8; i++) {
+        if (jc.getDayOfWeek() == JewishDate.saturday) {
+          final classified = HebrewWorkCalendar.classify(jc, shabbatOnly);
+          expect(classified.value, 0);
+          expect(classified.reason, NonWorkReason.shabbat);
+          return;
+        }
+        jc.forward();
+      }
+      fail('no Shabbat found during Chanukah 5786');
+    });
+
+    test('Chol HaMoed beats a full working Friday', () {
+      // Chol HaMoed Pesach in Israel is 16–20 Nisan.
+      final jc =
+          JewishCalendar.initDate(5786, JewishDate.NISSAN, 16, inIsrael: true);
+      for (var i = 0; i < 5; i++) {
+        if (jc.getDayOfWeek() == JewishDate.friday) {
+          final classified = HebrewWorkCalendar.classify(jc, shabbatOnly);
+          expect(classified.value, 0);
+          expect(classified.reason,
+              anyOf(NonWorkReason.cholHamoed, NonWorkReason.erevYomTov));
+          return;
+        }
+        jc.forward();
+      }
+      fail('no Friday found in Chol HaMoed Pesach 5786');
     });
 
     test('Chol HaMoed starts a day earlier in Israel', () {
-      const israel = WorkCalendarRules(inIsrael: true);
-      const diaspora = WorkCalendarRules(inIsrael: false);
-
-      expect(day(5786, JewishDate.NISSAN, 16, israel).reason,
-          NonWorkReason.cholHamoed);
-      expect(day(5786, JewishDate.NISSAN, 16, diaspora).reason,
+      expect(day(5786, JewishDate.NISSAN, 16).reason, NonWorkReason.cholHamoed);
+      expect(
+          day(5786, JewishDate.NISSAN, 16,
+                  shabbatOnly.copyWith(inIsrael: false))
+              .reason,
           NonWorkReason.yomTov);
     });
 
-    test('the four days between Yom Kippur and Sukkot are off', () {
-      for (var d = 11; d <= 14; d++) {
-        final classified = day(5786, JewishDate.TISHREI, d);
-        expect(classified.isOff, isTrue, reason: '$d Tishrei');
+    test('days that are always ordinary working days', () {
+      // Rosh Chodesh, Tu BiShvat, Pesach Sheni, Purim Katan, Tu BeAv and Yom
+      // HaAtzmaut are not settings, and are never skipped.
+      final ordinary = <String, ({int month, int day})>{
+        'Tu BiShvat': (month: JewishDate.SHEVAT, day: 15),
+        'Pesach Sheni': (month: JewishDate.IYAR, day: 14),
+        'Tu BeAv': (month: JewishDate.AV, day: 15),
+        'Rosh Chodesh Iyar': (month: JewishDate.IYAR, day: 1),
+        'Yom HaAtzmaut': (month: JewishDate.IYAR, day: 5),
+      };
+
+      // Checked against the default rules, so Friday and Shabbat are off and
+      // are skipped over — the weekday, not the day itself, would be the reason.
+      ordinary.forEach((name, d) {
+        final jc = JewishCalendar.initDate(5786, d.month, d.day);
+        if (jc.getDayOfWeek() == JewishDate.saturday ||
+            jc.getDayOfWeek() == JewishDate.friday) {
+          return;
+        }
+        expect(
+            HebrewWorkCalendar.classifyHebrewDate(
+                    5786, d.month, d.day, WorkCalendarRules.standard)
+                .value,
+            1,
+            reason: name);
+      });
+
+      final katan = JewishCalendar.initDate(5787, JewishDate.ADAR, 14);
+      if (katan.getDayOfWeek() != JewishDate.saturday &&
+          katan.getDayOfWeek() != JewishDate.friday) {
+        expect(
+            HebrewWorkCalendar.classifyHebrewDate(
+                    5787, JewishDate.ADAR, 14, WorkCalendarRules.standard)
+                .value,
+            1,
+            reason: 'Purim Katan');
       }
-      // 14 Tishrei is Erev Sukkot and should be named as such.
-      expect(day(5786, JewishDate.TISHREI, 14).reason, NonWorkReason.erevYomTov);
+    });
+  });
+
+  group('HebrewWorkCalendar — configurable categories', () {
+    WorkDay day(int year, int month, int dayOfMonth, WorkCalendarRules r) =>
+        HebrewWorkCalendar.classifyHebrewDate(year, month, dayOfMonth, r);
+
+    /// The first day in a Hebrew month range that falls on [weekday].
+    int findWeekday(int year, int month, int from, int to, int weekday) {
+      for (var d = from; d <= to; d++) {
+        if (JewishCalendar.initDate(year, month, d).getDayOfWeek() == weekday) {
+          return d;
+        }
+      }
+      fail('no weekday $weekday between $from and $to of month $month');
+    }
+
+    test('Friday takes each of the three states', () {
+      final friday =
+          findWeekday(5786, JewishDate.IYAR, 15, 28, JewishDate.friday);
+
+      expect(day(5786, JewishDate.IYAR, friday, shabbatOnly).value, 1);
+      expect(
+          day(5786, JewishDate.IYAR, friday,
+                  shabbatOnly.copyWith(friday: DayWeight.half))
+              .value,
+          0.5);
+      expect(
+          day(5786, JewishDate.IYAR, friday,
+                  shabbatOnly.copyWith(friday: DayWeight.none))
+              .value,
+          0);
     });
 
-    test('the week before Pesach is off', () {
-      for (var d = 8; d <= 14; d++) {
-        expect(day(5786, JewishDate.NISSAN, d).isOff, isTrue,
-            reason: '$d Nisan');
-      }
-      // 7 Nisan is an ordinary day, unless it happens to be Shabbat.
-      final seventh = day(5786, JewishDate.NISSAN, 7);
-      expect(seventh.reason, isNot(NonWorkReason.weekBeforePesach));
+    test('motzei Shabbat is half a day or nothing, never a full one', () {
+      final shabbat =
+          findWeekday(5786, JewishDate.IYAR, 15, 28, JewishDate.saturday);
+
+      expect(day(5786, JewishDate.IYAR, shabbat, shabbatOnly).value, 0);
+      expect(
+          day(5786, JewishDate.IYAR, shabbat,
+                  shabbatOnly.copyWith(motzeiShabbat: DayWeight.half))
+              .value,
+          0.5);
+      // A stored `full` is clamped rather than honoured.
+      expect(
+          day(5786, JewishDate.IYAR, shabbat,
+                  shabbatOnly.copyWith(motzeiShabbat: DayWeight.full))
+              .value,
+          0);
     });
 
-    test('minor fasts are off, and can be turned back on', () {
+    test('each fast is set separately', () {
+      final rules = shabbatOnly.copyWith(fastTenthTevet: DayWeight.none);
       // 10 Tevet never moves, so it is the safest fast to assert on.
-      expect(day(5786, JewishDate.TEVES, 10).reason, NonWorkReason.fast);
-      expect(
-          day(5786, JewishDate.TEVES, 10,
-                  const WorkCalendarRules(skipFasts: false))
-              .isOff,
-          isFalse);
+      expect(day(5786, JewishDate.TEVES, 10, rules).value, 0);
+      expect(day(5786, JewishDate.TEVES, 10, rules).reason,
+          NonWorkReason.fastTenthTevet);
+      // The other three are untouched by that setting.
+      expect(day(5786, JewishDate.TEVES, 10, shabbatOnly).value, 1);
     });
 
-    test('Purim is in Adar II in a leap year', () {
-      // 5787 is a leap year: 14 Adar I is Purim Katan, 14 Adar II is Purim.
-      final jc = JewishCalendar.initDate(5787, JewishDate.ADAR, 14);
-      expect(jc.isJewishLeapYear(), isTrue);
+    test('the window before Pesach follows the chosen number of days', () {
+      final three = shabbatOnly.copyWith(
+          daysBeforePesach: 3, beforePesach: DayWeight.none);
+      expect(three.pesachWindow, (from: 12, to: 14));
+      expect(day(5786, JewishDate.NISSAN, 12, three).value, 0);
+      // 11 Nisan is outside a three-day window.
+      expect(day(5786, JewishDate.NISSAN, 11, three).value, 1);
 
-      expect(day(5787, JewishDate.ADAR_II, 14).reason, NonWorkReason.purim);
-      // Purim Katan is only off when minor days are switched on.
-      expect(day(5787, JewishDate.ADAR, 14).reason, isNot(NonWorkReason.purim));
-      expect(
-          day(5787, JewishDate.ADAR, 14,
-                  const WorkCalendarRules(skipMinorHolidays: true))
-              .reason,
-          NonWorkReason.minorHoliday);
+      final seven = shabbatOnly.copyWith(
+          daysBeforePesach: 7, beforePesach: DayWeight.none);
+      expect(seven.pesachWindow, (from: 8, to: 14));
+      expect(day(5786, JewishDate.NISSAN, 8, seven).value, 0);
+      expect(day(5786, JewishDate.NISSAN, 7, seven).value, 1);
+
+      // Zero clears the window entirely.
+      expect(shabbatOnly.copyWith(daysBeforePesach: 0).pesachWindow, isNull);
+      // And it can never reach back into Adar.
+      expect(shabbatOnly.copyWith(daysBeforePesach: 40).pesachWindow,
+          (from: 1, to: 14));
     });
 
-    test('Chanukah can be worked or not, as configured', () {
-      expect(day(5786, JewishDate.KISLEV, 25).reason, NonWorkReason.chanukah);
-      expect(
-          day(5786, JewishDate.KISLEV, 25,
-                  const WorkCalendarRules(skipChanukah: false))
-              .isOff,
-          isFalse);
-    });
-
-    test('Friday is worth none, half or a full day as set', () {
-      // 20 Iyar 5786 — an ordinary stretch with no festival in it.
-      for (var d = 15; d <= 28; d++) {
-        final jc = JewishCalendar.initDate(5786, JewishDate.IYAR, d);
-        if (jc.getDayOfWeek() != JewishDate.friday) continue;
-
-        expect(day(5786, JewishDate.IYAR, d).value, 0);
+    test('the days between Yom Kippur and Sukkot', () {
+      final off =
+          shabbatOnly.copyWith(betweenYomKippurAndSukkot: DayWeight.none);
+      for (var d = 11; d <= 13; d++) {
+        expect(day(5786, JewishDate.TISHREI, d, off).value, 0, reason: '$d');
+        // Shabbat is fixed and outranks the window, so it can be the reason on
+        // whichever of the three days it falls.
         expect(
-            day(5786, JewishDate.IYAR, d,
-                    const WorkCalendarRules(friday: FridayWork.half))
-                .value,
-            0.5);
-        expect(
-            day(5786, JewishDate.IYAR, d,
-                    const WorkCalendarRules(friday: FridayWork.full))
-                .value,
-            1);
-        return;
+            day(5786, JewishDate.TISHREI, d, off).reason,
+            anyOf(NonWorkReason.betweenYomKippurAndSukkot,
+                NonWorkReason.shabbat),
+            reason: '$d Tishrei');
       }
-      fail('no Friday found in the sample range');
     });
 
     test('Isru Chag is a day later outside Israel', () {
-      const israel = WorkCalendarRules(inIsrael: true, skipMinorHolidays: true);
-      const diaspora =
-          WorkCalendarRules(inIsrael: false, skipMinorHolidays: true);
+      final israel = shabbatOnly.copyWith(isruChag: DayWeight.none);
+      final diaspora = israel.copyWith(inIsrael: false);
 
       expect(day(5786, JewishDate.NISSAN, 22, israel).reason,
-          NonWorkReason.minorHoliday);
+          NonWorkReason.isruChag);
       // 22 Nisan is still Yom Tov abroad; Isru Chag is the 23rd.
       expect(day(5786, JewishDate.NISSAN, 22, diaspora).reason,
           NonWorkReason.yomTov);
       expect(day(5786, JewishDate.NISSAN, 23, diaspora).reason,
-          NonWorkReason.minorHoliday);
+          NonWorkReason.isruChag);
+    });
+
+    test('the most restrictive setting wins where two overlap', () {
+      // A Friday during Chanukah is covered by both settings.
+      final walker = JewishCalendar.initDate(5786, JewishDate.KISLEV, 25);
+      JewishCalendar? friday;
+      for (var i = 0; i < 8; i++) {
+        if (walker.getDayOfWeek() == JewishDate.friday) {
+          friday = walker.clone();
+          break;
+        }
+        walker.forward();
+      }
+      expect(friday, isNotNull, reason: 'no Friday during Chanukah 5786');
+
+      WorkDay withRules(DayWeight fri, DayWeight chan) =>
+          HebrewWorkCalendar.classify(friday!,
+              shabbatOnly.copyWith(friday: fri, chanukah: chan));
+
+      expect(withRules(DayWeight.full, DayWeight.full).value, 1);
+      expect(withRules(DayWeight.half, DayWeight.full).value, 0.5);
+      expect(withRules(DayWeight.full, DayWeight.none).value, 0);
+      expect(withRules(DayWeight.none, DayWeight.full).value, 0);
+      expect(withRules(DayWeight.half, DayWeight.none).value, 0);
     });
   });
 
   group('HebrewWorkCalendar — counting and planning', () {
-    test('an ordinary week has six working days without the Friday rule', () {
+    test('an ordinary week has six working days, or five without Friday', () {
       // 15–21 Iyar 5786: seven consecutive days with no festival in them.
       final from = JewishCalendar.initDate(5786, JewishDate.IYAR, 15)
           .getGregorianCalendar();
@@ -1547,11 +1791,7 @@ void main() {
           .getGregorianCalendar();
 
       expect(HebrewWorkCalendar.countWorkDays(from, to, shabbatOnly), 6);
-      // With Friday off as well, five.
-      expect(
-          HebrewWorkCalendar.countWorkDays(
-              from, to, const WorkCalendarRules(skipChanukah: false)),
-          5);
+      expect(HebrewWorkCalendar.countWorkDays(from, to, shabbatAndFriday), 5);
     });
 
     test('counting is inclusive of both ends and never negative', () {
@@ -1596,38 +1836,28 @@ void main() {
 
       expect(plan.calendarDays, greaterThan(10));
       expect(plan.skippedTotal, plan.calendarDays - 10);
-      expect(plan.skipped.keys, contains(NonWorkReason.weekBeforePesach));
       expect(plan.skipped.keys, contains(NonWorkReason.yomTov));
+      expect(plan.skipped.keys, contains(NonWorkReason.cholHamoed));
     });
 
     test('half days accumulate without drifting a day', () {
-      // Fridays and Saturday nights each worth half: two of them make one day.
-      const halves = WorkCalendarRules(
-        friday: FridayWork.half,
-        motzeiShabbatHalfDay: true,
-        skipCholHamoed: false,
-        skipErevYomTov: false,
-        skipFasts: false,
-        skipErevTishaBeav: false,
-        skipBetweenYomKippurAndSukkot: false,
-        skipWeekBeforePesach: false,
-        skipPurim: false,
-        skipChanukah: false,
+      final halves = shabbatOnly.copyWith(
+        friday: DayWeight.half,
+        motzeiShabbat: DayWeight.half,
       );
       final start = JewishCalendar.initDate(5786, JewishDate.IYAR, 15)
           .getGregorianCalendar();
-      final plan =
-          HebrewWorkCalendar.plan(from: start, workDaysNeeded: 7, rules: halves)!;
+      final plan = HebrewWorkCalendar.plan(
+          from: start, workDaysNeeded: 7, rules: halves)!;
 
       // The plan must be the *earliest* day the work is done: seven days of
       // writing fit into it, and not into a day less.
-      expect(HebrewWorkCalendar.countWorkDays(start, plan.completionDate, halves),
+      expect(
+          HebrewWorkCalendar.countWorkDays(start, plan.completionDate, halves),
           greaterThanOrEqualTo(7));
       expect(
-          HebrewWorkCalendar.countWorkDays(
-              start,
-              plan.completionDate.subtract(const Duration(days: 1)),
-              halves),
+          HebrewWorkCalendar.countWorkDays(start,
+              plan.completionDate.subtract(const Duration(days: 1)), halves),
           lessThan(7));
     });
 
@@ -1646,27 +1876,140 @@ void main() {
           isNull);
     });
 
-    test('rules survive a round trip through storage', () {
+    test('daysOff reports half days as well as full ones', () {
+      final halves = shabbatOnly.copyWith(friday: DayWeight.half);
+      final from = JewishCalendar.initDate(5786, JewishDate.IYAR, 15)
+          .getGregorianCalendar();
+      final to = JewishCalendar.initDate(5786, JewishDate.IYAR, 21)
+          .getGregorianCalendar();
+
+      final entries = HebrewWorkCalendar.daysOff(from, to, halves);
+      expect(entries.any((e) => e.day.value == 0.5), isTrue);
+      expect(entries.any((e) => e.day.value == 0), isTrue);
+    });
+  });
+
+  group('WorkCalendarRules storage', () {
+    test('survives a round trip', () {
       const original = WorkCalendarRules(
         inIsrael: false,
-        friday: FridayWork.half,
-        motzeiShabbatHalfDay: true,
-        skipChanukah: false,
-        skipRoshChodesh: true,
+        friday: DayWeight.half,
+        motzeiShabbat: DayWeight.half,
+        chanukah: DayWeight.full,
+        fastTenthTevet: DayWeight.half,
+        daysBeforePesach: 3,
+        lagBaomer: DayWeight.full,
       );
       final restored = WorkCalendarRules.fromJson(
           jsonDecode(jsonEncode(original.toJson())) as Map<String, dynamic>);
 
       expect(restored.inIsrael, isFalse);
-      expect(restored.friday, FridayWork.half);
-      expect(restored.motzeiShabbatHalfDay, isTrue);
-      expect(restored.skipChanukah, isFalse);
-      expect(restored.skipRoshChodesh, isTrue);
-      // Anything missing from an older file falls back to the default.
-      expect(WorkCalendarRules.fromJson(const {}).friday, FridayWork.none);
-      expect(WorkCalendarRules.fromJson(const {}).skipCholHamoed, isTrue);
+      expect(restored.friday, DayWeight.half);
+      expect(restored.motzeiShabbat, DayWeight.half);
+      expect(restored.chanukah, DayWeight.full);
+      expect(restored.fastTenthTevet, DayWeight.half);
+      expect(restored.daysBeforePesach, 3);
+      expect(restored.lagBaomer, DayWeight.full);
+    });
+
+    test('an empty or unknown blob falls back to the defaults', () {
+      final blank = WorkCalendarRules.fromJson(const {'schemaVersion': 2});
+      expect(blank.friday, DayWeight.none);
+      expect(blank.daysBeforePesach, 7);
+      expect(blank.inIsrael, isTrue);
+
+      // Keys this build has never heard of must not break it.
+      final future = WorkCalendarRules.fromJson(const {
+        'schemaVersion': 99,
+        'friday': 'half',
+        'somethingAddedLater': {'nested': true},
+      });
+      expect(future.friday, DayWeight.half);
+    });
+
+    test('migrates the first stored shape', () {
+      // The version-1 blob: one boolean per category, and no schemaVersion.
+      final v1 = <String, dynamic>{
+        'inIsrael': true,
+        'friday': 'half',
+        'motzeiShabbatHalfDay': true,
+        'skipCholHamoed': true,
+        'skipFasts': false,
+        'skipChanukah': true,
+        'skipWeekBeforePesach': true,
+        'skipBetweenYomKippurAndSukkot': false,
+        'skipMinorHolidays': false,
+        'skipRoshChodesh': true,
+      };
+      final migrated = WorkCalendarRules.fromJson(v1);
+
+      expect(migrated.friday, DayWeight.half);
+      expect(migrated.motzeiShabbat, DayWeight.half);
+      // "skip" became "not a working day", its absence a full day.
+      expect(migrated.chanukah, DayWeight.none);
+      expect(migrated.fastTenthTevet, DayWeight.full);
+      expect(migrated.beforePesach, DayWeight.none);
+      expect(migrated.betweenYomKippurAndSukkot, DayWeight.full);
+      expect(migrated.daysBeforePesach, 7);
     });
   });
+
+  group('DayStart and the zmanim clock', () {
+    test('survives a round trip and tolerates an unknown boundary', () {
+      const original = DayStart(boundary: DayBoundary.nightfall, hour: 3);
+      final restored = DayStart.fromJson(
+          jsonDecode(jsonEncode(original.toJson())) as Map<String, dynamic>);
+      expect(restored.boundary, DayBoundary.nightfall);
+      expect(restored.hour, 3);
+
+      final unknown =
+          DayStart.fromJson(const {'boundary': 'somethingNew', 'hour': 4});
+      // Falls back on the hour that is present rather than losing the setting.
+      expect(unknown.boundary, DayBoundary.fixedHour);
+      expect(unknown.hour, 4);
+    });
+
+    test('carries the old standalone rollover hour forward', () {
+      expect(DayStart.fromRolloverHour(0).boundary, DayBoundary.midnight);
+      expect(DayStart.fromRolloverHour(2).boundary, DayBoundary.fixedHour);
+      expect(DayStart.fromRolloverHour(2).hour, 2);
+      // Out-of-range values are clamped rather than stored as-is.
+      expect(DayStart.fromRolloverHour(99).hour, 23);
+    });
+
+    test('nightfall comes after sunset, both in the evening', () {
+      final date = DateTime(2026, 7, 15);
+      final sunset = HebrewClock.sunset(date)!;
+      final night = HebrewClock.nightfall(date)!;
+
+      expect(sunset.hour, inInclusiveRange(18, 21));
+      expect(night.isAfter(sunset), isTrue);
+      expect(night.difference(sunset).inMinutes, inInclusiveRange(20, 60));
+    });
+
+    test('an evening boundary files work after it under the next day', () {
+      const nightfall = DayStart(boundary: DayBoundary.nightfall);
+      final summer = DateTime(2026, 7, 15);
+      final night = HebrewClock.nightfall(summer)!;
+
+      expect(DateLogic.effectiveDate(
+              night.subtract(const Duration(minutes: 10)), nightfall),
+          DateTime(2026, 7, 15));
+      expect(
+          DateLogic.effectiveDate(
+              night.add(const Duration(minutes: 10)), nightfall),
+          DateTime(2026, 7, 16));
+    });
+
+    test('a morning boundary files work before it under the previous day', () {
+      const early = DayStart(boundary: DayBoundary.fixedHour, hour: 2);
+      expect(DateLogic.effectiveDate(DateTime(2026, 7, 15, 1, 30), early),
+          DateTime(2026, 7, 14));
+      expect(DateLogic.effectiveDate(DateTime(2026, 7, 15, 23, 30), early),
+          DateTime(2026, 7, 15));
+    });
+  });
+
 
   group('CompletionEstimator', () {
     Project sefer({int pages = 100, int targetDaily = 0}) => Project(

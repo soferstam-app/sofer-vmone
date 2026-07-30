@@ -1,3 +1,5 @@
+import 'logic/json_compat.dart';
+
 enum ProjectType { sefer, mezuza, tefillin }
 
 class Project {
@@ -26,6 +28,32 @@ class Project {
   final String? clientEmail;
   final DateTime? targetCompletionDate;
 
+  /// Fields written by a newer version of the app, carried through untouched.
+  ///
+  /// Without this, a phone on a newer build exporting to a PC on an older one
+  /// would lose them the next time the PC exported back.
+  final Map<String, dynamic> extraFields;
+
+  /// Everything this version writes. Anything else in a stored record goes to
+  /// [extraFields].
+  static const Set<String> _knownKeys = {
+    'id',
+    'name',
+    'type',
+    'price',
+    'expenses',
+    'targetDaily',
+    'targetMonthly',
+    'dailyGoalInLines',
+    'totalPages',
+    'linesPerPage',
+    'targetUnits',
+    'lastUpdated',
+    'isDeleted',
+    'clientEmail',
+    'targetCompletionDate',
+  };
+
   /// The size of the job in billable units — pages, mezuzot or sets — however
   /// the project happens to state it. Null when unknown.
   double? get plannedUnits => switch (type) {
@@ -49,10 +77,13 @@ class Project {
     this.isDeleted = false,
     this.clientEmail,
     this.targetCompletionDate,
+    this.extraFields = const {},
   }) : lastUpdated = lastUpdated ?? DateTime.now();
 
   Map<String, dynamic> toJson() {
     return {
+      // Unknown fields first, so anything this version owns always wins.
+      ...extraFields,
       'id': id,
       'name': name,
       'type': type.index,
@@ -71,27 +102,31 @@ class Project {
     };
   }
 
+  /// Throws only when there is no usable id — a record that cannot be merged is
+  /// not a record. Every other field falls back rather than failing, so one odd
+  /// value cannot cost the user a whole import.
   factory Project.fromJson(Map<String, dynamic> json) {
+    final id = JsonCompat.string(json['id']);
+    if (id.isEmpty) throw const FormatException('project without an id');
+
     return Project(
-      id: json['id'],
-      name: json['name'],
-      type: ProjectType.values[json['type']],
-      price: (json['price'] as num).toDouble(),
-      expenses: (json['expenses'] as num).toDouble(),
-      targetDaily: json['targetDaily'],
-      targetMonthly: json['targetMonthly'],
-      dailyGoalInLines: json['dailyGoalInLines'] ?? false,
-      totalPages: json['totalPages'],
-      linesPerPage: json['linesPerPage'],
-      targetUnits: json['targetUnits'],
-      lastUpdated: json['lastUpdated'] != null
-          ? DateTime.parse(json['lastUpdated'])
-          : DateTime.now(),
-      isDeleted: json['isDeleted'] ?? false,
+      id: id,
+      name: JsonCompat.string(json['name'], 'פרויקט'),
+      type: JsonCompat.enumByIndex(
+          json['type'], ProjectType.values, ProjectType.sefer),
+      price: JsonCompat.number(json['price'], 0),
+      expenses: JsonCompat.number(json['expenses'], 0),
+      targetDaily: JsonCompat.integer(json['targetDaily'], 0),
+      targetMonthly: JsonCompat.integer(json['targetMonthly'], 0),
+      dailyGoalInLines: JsonCompat.boolean(json['dailyGoalInLines'], false),
+      totalPages: JsonCompat.intOrNull(json['totalPages']),
+      linesPerPage: JsonCompat.intOrNull(json['linesPerPage']),
+      targetUnits: JsonCompat.intOrNull(json['targetUnits']),
+      lastUpdated: JsonCompat.date(json['lastUpdated'], DateTime.now()),
+      isDeleted: JsonCompat.boolean(json['isDeleted'], false),
       clientEmail: json['clientEmail'] as String?,
-      targetCompletionDate: json['targetCompletionDate'] != null
-          ? DateTime.parse(json['targetCompletionDate'])
-          : null,
+      targetCompletionDate: JsonCompat.dateOrNull(json['targetCompletionDate']),
+      extraFields: JsonCompat.unknownKeys(json, _knownKeys),
     );
   }
 
@@ -125,6 +160,7 @@ class Project {
       isDeleted: isDeleted ?? this.isDeleted,
       clientEmail: clientEmail ?? this.clientEmail,
       targetCompletionDate: targetCompletionDate ?? this.targetCompletionDate,
+      extraFields: extraFields,
     );
   }
 
@@ -174,6 +210,28 @@ class WorkSession {
   final DateTime lastUpdated;
   final bool isDeleted;
 
+  /// Fields written by a newer version, carried through untouched. See
+  /// [Project.extraFields].
+  final Map<String, dynamic> extraFields;
+
+  static const Set<String> _knownKeys = {
+    'id',
+    'projectId',
+    'startTime',
+    'endTime',
+    'amount',
+    'startLine',
+    'endLine',
+    'tefillinType',
+    'parshiya',
+    'description',
+    'isManual',
+    'backlogOnly',
+    'linesPerPageAtEntry',
+    'lastUpdated',
+    'isDeleted',
+  };
+
   WorkSession({
     required this.id,
     required this.projectId,
@@ -190,6 +248,7 @@ class WorkSession {
     this.linesPerPageAtEntry,
     DateTime? lastUpdated,
     this.isDeleted = false,
+    this.extraFields = const {},
   }) : lastUpdated = lastUpdated ?? DateTime.now();
 
   Duration get duration => endTime.difference(startTime);
@@ -210,6 +269,7 @@ class WorkSession {
 
   Map<String, dynamic> toJson() {
     return {
+      ...extraFields,
       'id': id,
       'projectId': projectId,
       'startTime': startTime.toIso8601String(),
@@ -228,25 +288,31 @@ class WorkSession {
     };
   }
 
+  /// Throws only without a usable id, which is what merging keys on. A session
+  /// missing its times falls back to the epoch rather than failing: a wrong
+  /// duration is visible and fixable, a refused import is not.
   factory WorkSession.fromJson(Map<String, dynamic> json) {
+    final id = JsonCompat.string(json['id']);
+    if (id.isEmpty) throw const FormatException('session without an id');
+
+    final start = JsonCompat.date(json['startTime'], DateTime(1970));
     return WorkSession(
-      id: json['id'],
-      projectId: json['projectId'],
-      startTime: DateTime.parse(json['startTime']),
-      endTime: DateTime.parse(json['endTime']),
-      amount: json['amount'],
-      startLine: json['startLine'],
-      endLine: json['endLine'],
-      tefillinType: json['tefillinType'],
-      parshiya: json['parshiya'],
-      description: json['description'],
-      isManual: json['isManual'],
-      backlogOnly: json['backlogOnly'] ?? false,
-      linesPerPageAtEntry: json['linesPerPageAtEntry'] as int?,
-      lastUpdated: json['lastUpdated'] != null
-          ? DateTime.parse(json['lastUpdated'])
-          : DateTime.now(),
-      isDeleted: json['isDeleted'] ?? false,
+      id: id,
+      projectId: JsonCompat.string(json['projectId']),
+      startTime: start,
+      endTime: JsonCompat.date(json['endTime'], start),
+      amount: JsonCompat.integer(json['amount'], 0),
+      startLine: JsonCompat.integer(json['startLine'], 0),
+      endLine: JsonCompat.integer(json['endLine'], 0),
+      tefillinType: json['tefillinType'] as String?,
+      parshiya: JsonCompat.intOrNull(json['parshiya']),
+      description: JsonCompat.string(json['description']),
+      isManual: JsonCompat.boolean(json['isManual'], false),
+      backlogOnly: JsonCompat.boolean(json['backlogOnly'], false),
+      linesPerPageAtEntry: JsonCompat.intOrNull(json['linesPerPageAtEntry']),
+      lastUpdated: JsonCompat.date(json['lastUpdated'], DateTime.now()),
+      isDeleted: JsonCompat.boolean(json['isDeleted'], false),
+      extraFields: JsonCompat.unknownKeys(json, _knownKeys),
     );
   }
 
@@ -276,6 +342,7 @@ class WorkSession {
       linesPerPageAtEntry: linesPerPageAtEntry,
       lastUpdated: DateTime.now(),
       isDeleted: isDeleted ?? this.isDeleted,
+      extraFields: extraFields,
     );
   }
 }
@@ -320,6 +387,23 @@ class Expense {
   final DateTime lastUpdated;
   final bool isDeleted;
 
+  /// Fields written by a newer version, carried through untouched. See
+  /// [Project.extraFields].
+  final Map<String, dynamic> extraFields;
+
+  static const Set<String> _knownKeys = {
+    'id',
+    'product',
+    'date',
+    'amount',
+    'allocation',
+    'projectIds',
+    'periodStart',
+    'periodEnd',
+    'lastUpdated',
+    'isDeleted',
+  };
+
   Expense({
     required this.id,
     required this.product,
@@ -331,6 +415,7 @@ class Expense {
     this.periodEnd,
     DateTime? lastUpdated,
     this.isDeleted = false,
+    this.extraFields = const {},
   }) : lastUpdated = lastUpdated ?? DateTime.now();
 
   /// Share of this expense borne by one project, when split across several.
@@ -339,6 +424,7 @@ class Expense {
 
   Map<String, dynamic> toJson() {
     return {
+      ...extraFields,
       'id': id,
       'product': product,
       'date': date.toIso8601String(),
@@ -353,35 +439,27 @@ class Expense {
   }
 
   factory Expense.fromJson(Map<String, dynamic> json) {
+    final id = JsonCompat.string(json['id']);
+    if (id.isEmpty) throw const FormatException('expense without an id');
+
+    final date = JsonCompat.date(json['date'], DateTime.now());
     return Expense(
-      id: json['id'],
-      product: json['product'] ?? '',
-      date:
-          json['date'] != null ? DateTime.parse(json['date']) : DateTime.now(),
-      amount: (json['amount'] as num?)?.toDouble() ?? 0,
+      id: id,
+      product: JsonCompat.string(json['product']),
+      date: date,
+      amount: JsonCompat.number(json['amount'], 0),
       // Older backups have no lastUpdated: fall back to the expense date so
       // merging still has a deterministic timestamp.
-      lastUpdated: json['lastUpdated'] != null
-          ? DateTime.parse(json['lastUpdated'])
-          : (json['date'] != null
-              ? DateTime.parse(json['date'])
-              : DateTime.now()),
-      isDeleted: json['isDeleted'] ?? false,
+      lastUpdated: JsonCompat.date(json['lastUpdated'], date),
+      isDeleted: JsonCompat.boolean(json['isDeleted'], false),
       // Expenses saved before allocation existed behave as they did then:
       // charged to the month of their date.
-      allocation: json['allocation'] != null &&
-              (json['allocation'] as int) < ExpenseAllocation.values.length
-          ? ExpenseAllocation.values[json['allocation']]
-          : ExpenseAllocation.month,
-      projectIds: json['projectIds'] is List
-          ? List<String>.from(json['projectIds'])
-          : const [],
-      periodStart: json['periodStart'] != null
-          ? DateTime.tryParse(json['periodStart'])
-          : null,
-      periodEnd: json['periodEnd'] != null
-          ? DateTime.tryParse(json['periodEnd'])
-          : null,
+      allocation: JsonCompat.enumByIndex(json['allocation'],
+          ExpenseAllocation.values, ExpenseAllocation.month),
+      projectIds: JsonCompat.strings(json['projectIds']),
+      periodStart: JsonCompat.dateOrNull(json['periodStart']),
+      periodEnd: JsonCompat.dateOrNull(json['periodEnd']),
+      extraFields: JsonCompat.unknownKeys(json, _knownKeys),
     );
   }
 
@@ -406,6 +484,7 @@ class Expense {
       periodEnd: periodEnd ?? this.periodEnd,
       lastUpdated: DateTime.now(),
       isDeleted: isDeleted ?? this.isDeleted,
+      extraFields: extraFields,
     );
   }
 }
