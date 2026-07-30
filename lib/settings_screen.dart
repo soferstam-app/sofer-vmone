@@ -9,6 +9,7 @@ import 'main.dart' show themeController;
 import 'storage_service.dart';
 import 'notification_service.dart';
 import 'theme_settings_screen.dart';
+import 'widgets/sofer_widgets.dart';
 import 'work_calendar_settings_screen.dart';
 import 'package:auto_updater/auto_updater.dart';
 import 'dart:io';
@@ -505,7 +506,168 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
+      body: SoferTokens.of(context).isRules
+          ? SoferPage(maxWidth: 720, child: _ruledSettings())
+          : _cardSettings(),
+    );
+  }
+
+  /// Settings as a specification sheet.
+  ///
+  /// Every entry states its current value on the right, in the serif, because
+  /// the value is what the writer came to check — in the Material layout it is
+  /// buried in a subtitle under the name. No leading icons and no chevrons: a
+  /// row that can be tapped is one that has a value to change.
+  Widget _ruledSettings() {
+    return ListView(
+      children: [
+        const SoferSectionTitle("תזכורות"),
+        _toggle(
+          "התראות יומיות",
+          "תזכורת לעמידה ביעד הכתיבה",
+          _notificationsEnabled,
+          _updateNotificationSettings,
+        ),
+        if (_notificationsEnabled)
+          _entry("שעת תזכורת", _notificationTime.format(context),
+              onTap: _pickNotificationTime),
+        const SoferRule(strong: true),
+
+        const SoferSectionTitle("לוח ותאריכים"),
+        _entry("עיצוב", themeController.choice.label,
+            note: themeController.nightByClock
+                ? "כרגע בערכת לילה"
+                : themeController.autoNight
+                    ? "מעבר אוטומטי ללילה"
+                    : null,
+            onTap: () async {
+              await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const ThemeSettingsScreen()));
+              if (mounted) setState(() {});
+            }),
+        _entry("ימי עבודה", _workRules.friday.label,
+            note: _workCalendarSummary, onTap: () async {
+          await Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => const WorkCalendarSettingsScreen()));
+          // The estimates on every other screen read these rules, so the
+          // summary here has to reflect a change made inside.
+          await _loadNotificationSettings();
+        }),
+        _entry("מעבר יום", _dayStart.summary,
+            note: _dayStartSummary, onTap: _pickDayStart),
+        _toggle(
+          "תאריכים לועזיים",
+          "תצוגה בלבד — החישוב תמיד לפי הלוח העברי",
+          _useGregorianDates,
+          (v) async {
+            await _storage.setUseGregorianDates(v);
+            if (mounted) setState(() => _useGregorianDates = v);
+          },
+        ),
+        const SoferRule(strong: true),
+
+        const SoferSectionTitle("הנתונים"),
+        _entry("שם הסופר", _soferName.isEmpty ? "לא הוגדר" : _soferName,
+            note: "לחתימה בעדכונים ללקוחות", onTap: _editSoferName),
+        _entry("גיבוי הנתונים", _isExporting ? "מייצא…" : "ייצוא / שחזור",
+            note: "פרויקטים, היסטוריה, הוצאות והגדרות בקובץ אחד",
+            onTap: _isExporting ? null : _showBackupOptions),
+        if (Platform.isWindows || Platform.isMacOS)
+          _entry("בדוק עדכונים", "", onTap: _checkForUpdates),
+        const SoferRule(strong: true),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  /// One line of the sheet: what it is, and what it is set to.
+  Widget _entry(String label, String value,
+      {String? note, VoidCallback? onTap}) {
+    final t = SoferTokens.of(context);
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        decoration:
+            BoxDecoration(border: Border(bottom: BorderSide(color: t.rule))),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label,
+                      style: TextStyle(
+                          fontFamily: t.labelFamily,
+                          fontSize: 14,
+                          color: t.ink)),
+                  if (note != null) ...[
+                    const SizedBox(height: 3),
+                    Text(note,
+                        style: TextStyle(
+                            fontFamily: t.labelFamily,
+                            fontSize: 12,
+                            height: 1.5,
+                            color: t.inkMuted)),
+                  ],
+                ],
+              ),
+            ),
+            if (value.isNotEmpty) ...[
+              const SizedBox(width: 14),
+              Text(value,
+                  style: TextStyle(
+                      fontFamily: t.numeralFamily,
+                      fontSize: 17,
+                      color: onTap == null ? t.inkMuted : t.accent)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _toggle(
+      String label, String note, bool value, ValueChanged<bool> onChanged) {
+    final t = SoferTokens.of(context);
+    return Container(
+      decoration:
+          BoxDecoration(border: Border(bottom: BorderSide(color: t.rule))),
+      padding: const EdgeInsetsDirectional.fromSTEB(20, 6, 12, 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: TextStyle(
+                        fontFamily: t.labelFamily,
+                        fontSize: 14,
+                        color: t.ink)),
+                const SizedBox(height: 3),
+                Text(note,
+                    style: TextStyle(
+                        fontFamily: t.labelFamily,
+                        fontSize: 12,
+                        height: 1.5,
+                        color: t.inkMuted)),
+              ],
+            ),
+          ),
+          Switch(value: value, onChanged: onChanged),
+        ],
+      ),
+    );
+  }
+
+  Widget _cardSettings() {
+    return SingleChildScrollView(
         child: Column(
           children: [
             TweenAnimationBuilder<double>(
@@ -640,7 +802,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ],
         ),
-      ),
-    );
+      );
   }
 }
