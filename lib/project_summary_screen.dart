@@ -364,135 +364,138 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
   }) {
     final t = SoferTokens.of(context);
 
-    final figures = Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SoferSectionTitle("מה נעשה", padding: EdgeInsets.zero),
-          const SizedBox(height: 8),
-          SoferStatRow("נכתב", totalWrittenStr),
-          SoferStatRow("רווח", "₪${totalProfit.toStringAsFixed(2)}"),
-          if (projectExpenses > 0) ...[
-            SoferStatRow("הוצאות משויכות", "₪${projectExpenses.toStringAsFixed(2)}"),
-            SoferStatRow("נטו",
-                "₪${(totalProfit - projectExpenses).toStringAsFixed(2)}"),
-          ],
-          if (hourlyRate != null)
-            SoferStatRow("שכר לשעה", "₪${hourlyRate.toStringAsFixed(0)}",
-                emphasise: true),
-          if (avgTimeStr.isNotEmpty)
-            SoferStatRow("ממוצע", avgTimeStr, last: true),
-        ],
-      ),
-    );
+    final net = totalProfit - projectExpenses;
 
-    final delivery = Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (estimate == null) ...[
-            const SoferSectionTitle("צפי סיום", padding: EdgeInsets.zero),
-            const SizedBox(height: 6),
-            Text(
-              project.plannedUnits == null
-                  ? "כדי לחשב צפי סיום צריך להזין בפרויקט את ${_sizeQuestion(project)}."
-                  : "אין עוד מה לחשב — העבודה הושלמה.",
-              style: TextStyle(
-                  fontFamily: t.labelFamily,
-                  fontSize: 13,
-                  height: 1.6,
-                  color: project.plannedUnits == null ? t.caution : t.inkMuted),
-            ),
-          ] else ...[
-            const SoferSectionTitle("צפי סיום", padding: EdgeInsets.zero),
-            const SizedBox(height: 5),
-            Text(
-              formatDisplayDateWithWeekday(
-                  estimate.plan.completionDate, _useGregorianDates),
-              style: TextStyle(
-                  fontFamily: t.numeralFamily, fontSize: 25, color: t.accent),
-            ),
-            const SizedBox(height: 5),
-            Text(
-              "בעוד ${estimate.plan.calendarDays} ימים · "
-              "${estimate.workDaysLeft.toStringAsFixed(0)} ימי עבודה",
-              style: TextStyle(
-                  fontFamily: t.labelFamily, fontSize: 12, color: t.inkMuted),
-            ),
-            const SizedBox(height: 14),
-            SoferProgress(estimate.progress),
-            const SizedBox(height: 6),
-            Text(
-              "${estimate.doneUnits.toStringAsFixed(0)} מתוך "
-              "${estimate.totalUnits.toStringAsFixed(0)} "
-              "${_unitPlural(project.type)} · "
-              "${(estimate.progress * 100).toStringAsFixed(0)}%",
-              style: TextStyle(
-                  fontFamily: t.labelFamily, fontSize: 12, color: t.inkMuted),
-            ),
-            const SizedBox(height: 16),
-            SoferStatRow(
-              estimate.paceMeasured ? "הקצב שלך" : "לפי היעד היומי",
-              "${estimate.unitsPerWorkDay.toStringAsFixed(2)} ${_unitPlural(project.type)}",
-            ),
-            if (targetPaceStr.isNotEmpty)
-              SoferStatRow("נדרש לתאריך היעד", targetPaceStr, last: true),
-            if (!estimate.paceMeasured) ...[
-              const SizedBox(height: 8),
-              Text(
-                "עדיין אין מספיק עבודה מתועדת, לכן החישוב לפי היעד היומי ולא "
-                "לפי הקצב בפועל.",
-                style: TextStyle(
-                    fontFamily: t.labelFamily,
-                    fontSize: 12,
-                    height: 1.5,
-                    color: t.caution),
-              ),
-            ],
-            if (estimate.plan.skippedTotal > 0) ...[
-              const SizedBox(height: 10),
-              Text(
-                "${estimate.plan.skippedTotal} ימים בדרך אינם ימי עבודה: "
-                "${formatSkippedDays(estimate.plan)}",
-                style: TextStyle(
-                    fontFamily: t.labelFamily,
-                    fontSize: 12,
-                    height: 1.5,
-                    color: t.inkMuted),
-              ),
-            ],
-          ],
-        ],
-      ),
-    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SoferRule(strong: true),
 
-    return LayoutBuilder(
-      builder: (context, box) {
-        if (box.maxWidth <= 620) {
-          return Column(children: [
-            const SoferRule(strong: true),
-            figures,
-            const SoferRule(),
-            delivery,
-            const SoferRule(strong: true),
-          ]);
-        }
-        return Column(children: [
-          const SoferRule(strong: true),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+        // The answer the writer opened this screen for, before anything else.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(child: figures),
-              Container(width: 1, color: t.rule),
-              Expanded(child: delivery),
+              if (estimate == null)
+                Text(
+                  project.plannedUnits == null
+                      ? "כדי לחשב צפי סיום צריך להזין את ${_sizeQuestion(project)}"
+                      : "העבודה הושלמה",
+                  style: TextStyle(
+                      fontFamily: t.numeralFamily,
+                      fontSize: 21,
+                      height: 1.4,
+                      color: project.plannedUnits == null
+                          ? t.caution
+                          : t.inkMuted),
+                )
+              else ...[
+                Text("צפי סיום",
+                    style: TextStyle(
+                        fontFamily: t.labelFamily,
+                        fontSize: 12,
+                        letterSpacing: 1.5,
+                        color: t.inkMuted)),
+                const SizedBox(height: 6),
+                Text(
+                  formatDisplayDateWithWeekday(
+                      estimate.plan.completionDate, _useGregorianDates),
+                  style: TextStyle(
+                      fontFamily: t.numeralFamily,
+                      fontSize: 31,
+                      height: 1.2,
+                      color: t.ink),
+                ),
+                const SizedBox(height: 10),
+                // Stated as a sentence rather than as rows. The reasoning is
+                // prose, and reads as prose.
+                Text(
+                  _deliverySentence(project, estimate, targetPaceStr),
+                  style: TextStyle(
+                      fontFamily: t.labelFamily,
+                      fontSize: 14,
+                      height: 1.75,
+                      color: t.inkMuted),
+                ),
+              ],
             ],
           ),
-          const SoferRule(strong: true),
-        ]);
-      },
+        ),
+
+        const SoferRule(),
+
+        // Three figures across, captions beneath. No labels above, no boxes.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: SoferNumber(totalWrittenStr,
+                    size: 20, caption: "נכתב עד כה"),
+              ),
+              Expanded(
+                child: SoferNumber("₪${net.toStringAsFixed(0)}",
+                    size: 26,
+                    caption: projectExpenses > 0 ? "נטו אחרי הוצאות" : "רווח"),
+              ),
+              Expanded(
+                child: SoferNumber(
+                  hourlyRate == null ? "—" : "₪${hourlyRate.toStringAsFixed(0)}",
+                  size: 26,
+                  emphasise: hourlyRate != null,
+                  caption: "לשעה",
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        if (estimate != null) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
+            child: SoferProgress(estimate.progress),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+            child: Text(
+              "${estimate.doneUnits.toStringAsFixed(0)} מתוך "
+              "${estimate.totalUnits.toStringAsFixed(0)} "
+              "${_unitPlural(project.type)}"
+              "${avgTimeStr.isEmpty ? '' : ' · $avgTimeStr'}"
+              "${projectExpenses > 0 ? ' · הוצאות ₪${projectExpenses.toStringAsFixed(0)}' : ''}",
+              style: TextStyle(
+                  fontFamily: t.labelFamily, fontSize: 12, color: t.inkMuted),
+            ),
+          ),
+        ],
+
+        const SoferRule(strong: true),
+      ],
     );
+  }
+
+  /// The delivery estimate written out, including what it rests on and what the
+  /// calendar takes away.
+  String _deliverySentence(
+      Project project, CompletionEstimate estimate, String targetPaceStr) {
+    final unit = _unitPlural(project.type);
+    final parts = <String>[
+      estimate.paceMeasured
+          ? "בקצב שנמדד — ${estimate.unitsPerWorkDay.toStringAsFixed(2)} $unit ליום עבודה"
+          : "לפי היעד היומי שהגדרת, כי אין עוד מספיק עבודה מתועדת",
+      "נותרו ${estimate.plan.calendarDays} ימים, מהם "
+          "${estimate.workDaysLeft.toStringAsFixed(0)} ימי עבודה",
+    ];
+    if (estimate.plan.skippedTotal > 0) {
+      parts.add("${estimate.plan.skippedTotal} ימים בדרך אינם ימי עבודה "
+          "(${formatSkippedDays(estimate.plan, maxReasons: 2)})");
+    }
+    if (targetPaceStr.isNotEmpty) {
+      parts.add("כדי לעמוד בתאריך היעד צריך $targetPaceStr");
+    }
+    return "${parts.join('. ')}.";
   }
 
   /// What is missing when a commission has no stated size.
@@ -637,28 +640,61 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
       }
     }
 
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 6,
-          crossAxisSpacing: 4,
-          mainAxisSpacing: 4,
-        ),
-        itemCount: totalPages,
-        itemBuilder: (context, index) {
-          int pageNum = index + 1;
-          Set<int> lines = pageContent[pageNum] ?? {};
-          double progress = lines.length / linesPerPage;
-          if (progress > 1.0) progress = 1.0;
+    final t = SoferTokens.of(context);
 
-          return InkWell(
-            onTap: () => _showSeferPageDetails(pageNum, lines, linesPerPage),
-            child: Container(
-              decoration: BoxDecoration(
-                border: Border.all(color: SoferTokens.of(context).rule),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 2),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text("מפת העמודים",
+                    style: TextStyle(
+                      fontFamily: t.labelFamily,
+                      fontSize: 12,
+                      letterSpacing: t.isRules ? 1.5 : 0,
+                      fontWeight: t.isCards ? FontWeight.bold : FontWeight.normal,
+                      color: t.isCards ? t.accent : t.inkMuted,
+                    )),
+              ),
+              Text("$totalPages עמודים · לחיצה לפרטים",
+                  style: TextStyle(
+                      fontFamily: t.labelFamily,
+                      fontSize: 11,
+                      color: t.inkFaint)),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+          // A page-per-cell map of the whole scroll. Sized by a maximum cell
+          // extent rather than a fixed column count: at six across, 245 pages
+          // came to nearly six thousand pixels of grid and pushed everything
+          // below it off the screen.
+          child: GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 30,
+              childAspectRatio: 1 / 1.35,
+              crossAxisSpacing: 3,
+              mainAxisSpacing: 3,
+            ),
+            itemCount: totalPages,
+            itemBuilder: (context, index) {
+              int pageNum = index + 1;
+              Set<int> lines = pageContent[pageNum] ?? {};
+              double progress = lines.length / linesPerPage;
+              if (progress > 1.0) progress = 1.0;
+
+              return InkWell(
+                onTap: () =>
+                    _showSeferPageDetails(pageNum, lines, linesPerPage),
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: SoferTokens.of(context).rule),
                 // How far into the page the writing got, filled from the top.
                 // The accent marks what is done, here as everywhere.
                 gradient: progress > 0
@@ -674,20 +710,30 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                         stops: [0.0, progress, progress, 1.0],
                       )
                     : null,
-                color: progress == 0 ? SoferTokens.of(context).paper : null,
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                formatHebrewNumber(pageNum),
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: SoferTokens.of(context).ink,
+                    color:
+                        progress == 0 ? SoferTokens.of(context).paper : null,
+                  ),
+                  alignment: Alignment.center,
+                  // At this size only the shortest numerals fit, and the map is
+                  // read as a shape rather than page by page — the number is in
+                  // the tap.
+                  child: progress > 0
+                      ? null
+                      : Text(
+                          formatHebrewNumber(pageNum),
+                          style: TextStyle(
+                            fontSize: 9,
+                            color: SoferTokens.of(context).inkFaint,
+                          ),
+                          overflow: TextOverflow.clip,
+                          maxLines: 1,
+                        ),
                 ),
-              ),
-            ),
-          );
-        },
-      ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
