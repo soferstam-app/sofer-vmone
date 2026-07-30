@@ -19,6 +19,11 @@ import 'summary_screen.dart';
 import 'features_screen.dart';
 import 'notification_service.dart';
 import 'hebrew_utils.dart';
+import 'home/ruled_home_body.dart';
+import 'logic/completion_estimator.dart';
+import 'logic/hebrew_work_calendar.dart';
+import 'logic/profit_calculator.dart';
+import 'theme/app_theme.dart';
 import 'timer_foreground_task.dart';
 
 class SoferHome extends StatefulWidget {
@@ -86,6 +91,9 @@ class _SoferHomeState extends State<SoferHome>
 
   DayStart _dayStart = DayStart.midnight;
   bool _useGregorianDates = false;
+
+  /// Needed for the completion estimate the ruled home screen shows.
+  WorkCalendarRules _workRules = WorkCalendarRules.standard;
 
   void _onWindowsFloatingModeChanged() {
     if (mounted) setState(() {});
@@ -192,6 +200,193 @@ class _SoferHomeState extends State<SoferHome>
   String _getDisplayDate(DateTime date) {
     return formatDisplayDate(date, _useGregorianDates);
   }
+
+  /// Flips between the two workflows and remembers the choice.
+  ///
+  /// This used to live in settings. It is something a writer changes between
+  /// sittings — smart when they are picking up where they left off, plain when
+  /// they will say afterwards what they wrote — so it belongs where the work
+  /// starts, not behind a settings screen.
+  ///
+  /// Refused mid-sitting: the two modes record a session differently, and
+  /// switching underneath a running timer would leave it half in each.
+  Future<void> _toggleWorkflowMode() async {
+    if (_stopwatch.isRunning || _isPaused) {
+      _showError(context, "אפשר להחליף מצב רק כשהטיימר עצור");
+      return;
+    }
+    final next = !_isSmartWorkflow;
+    await _storageService.setSmartWorkflowEnabled(next);
+    if (!mounted) return;
+    setState(() => _isSmartWorkflow = next);
+  }
+
+  /// Gathers what the ruled home screen shows.
+  ///
+  /// Built here because the figures come from the same sources the rest of the
+  /// app uses — one pace calculation, one estimator — rather than from numbers
+  /// the layout works out for itself.
+  HomeSnapshot _buildHomeSnapshot() {
+    final project = _selectedProject;
+    final today = _effectiveDate(DateTime.now());
+
+    var todayOutput = "—";
+    String? hourlyRate;
+    String? doneOfTotal;
+    var progress = 0.0;
+    String? completion;
+    String? completionDetail;
+
+    if (project != null) {
+      final todaySessions = history
+          .where((s) =>
+              s.projectId == project.id &&
+              !s.isDeleted &&
+              !s.backlogOnly &&
+              DateLogic.sessionIsOnDay(s, today, _dayStart))
+          .toList();
+
+      var worked = Duration.zero;
+      for (final s in todaySessions) {
+        if (s.duration > Duration.zero) worked += s.duration;
+      }
+
+      switch (project.type) {
+        case ProjectType.sefer:
+          final lines = ProductionCalculator.seferLinesTotal(todaySessions);
+          todayOutput = "$lines שורות";
+        case ProjectType.mezuza:
+          final lines = ProductionCalculator.mezuzaLinesTotal(todaySessions);
+          todayOutput =
+              "${(lines / ProductionCalculator.linesPerMezuza).toStringAsFixed(1)} מזוזות";
+        case ProjectType.tefillin:
+          todayOutput =
+              "${ProductionCalculator.parshiyotTotal(todaySessions)} פרשיות";
+      }
+
+      final rate =
+          ProfitCalculator.profitPerHour(project, todaySessions, worked);
+      if (rate != null) hourlyRate = "₪${rate.toStringAsFixed(0)}";
+
+      final estimate = CompletionEstimator.estimate(
+        project: project,
+        history: history,
+        rules: _workRules,
+      );
+      if (estimate != null) {
+        progress = estimate.progress;
+        final unit = switch (project.type) {
+          ProjectType.sefer => "עמודים",
+          ProjectType.mezuza => "מזוזות",
+          ProjectType.tefillin => "סטים",
+        };
+        doneOfTotal = "${estimate.doneUnits.toStringAsFixed(0)} "
+            "מתוך ${estimate.totalUnits.toStringAsFixed(0)} $unit";
+        completion = formatDisplayDateWithWeekday(
+            estimate.plan.completionDate, _useGregorianDates);
+        completionDetail = "בעוד ${estimate.plan.calendarDays} ימים · "
+            "${estimate.workDaysLeft.toStringAsFixed(0)} ימי עבודה";
+      }
+    }
+
+    return HomeSnapshot(
+      project: project,
+      projects: projects,
+      hebrewDate: _getDisplayDate(today),
+      isRunning: _stopwatch.isRunning,
+      isPaused: _isPaused,
+      elapsed: _formatTime(_effectiveElapsed()),
+      currentPage: _smartCurrentPage,
+      currentLine: _smartCurrentLine,
+      positionUnit: project?.type == ProjectType.tefillin ? "פרשייה" : "שורה",
+      todayOutput: todayOutput,
+      hourlyRate: hourlyRate,
+      doneOfTotal: doneOfTotal,
+      progress: progress,
+      completion: completion,
+      completionDetail: completionDetail,
+    );
+  }
+
+  /// One app bar for every theme and both workflows.
+  ///
+  /// The workflow toggle sits immediately beside the tools button, which is
+  /// where it was asked for: the two things a writer reaches for that are not
+  /// about the sitting in front of them.
+  PreferredSizeWidget _homeAppBar() {
+    final t = SoferTokens.of(context);
+
+    return AppBar(
+      title: const Text('סופר ומונה'),
+      centerTitle: t.isCards,
+      actions: [
+        IconButton(
+          icon: Icon(_isSmartWorkflow ? Icons.my_location : Icons.timer_outlined),
+          tooltip: _isSmartWorkflow
+              ? "מצב חכם — עובד לפי המיקום. לחץ למצב רגיל"
+              : "מצב רגיל — טיימר והזנה בסוף. לחץ למצב חכם",
+          color: _isSmartWorkflow ? t.accent : null,
+          // Left enabled while the timer runs: it explains why it will not
+          // switch, which a greyed-out button cannot do.
+          onPressed: _toggleWorkflowMode,
+        ),
+        IconButton(
+          icon: const Icon(Icons.auto_awesome_mosaic),
+          tooltip: "כלים",
+          onPressed: _navigateToFeatures,
+        ),
+        if (Platform.isWindows)
+          Padding(
+            padding: const EdgeInsetsDirectional.only(end: 8),
+            child: TextButton.icon(
+              icon: const Icon(Icons.open_in_new, size: 22),
+              label: const Text("חלון צף"),
+              onPressed: () async {
+                await windowManager.setSize(const Size(320, 260));
+                await windowManager.setAlwaysOnTop(true);
+                await windowManager.setAlignment(Alignment.bottomRight);
+                widget.windowsFloatingMode?.value = true;
+              },
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _homeBottomNav() {
+    final t = SoferTokens.of(context);
+    return NavigationBar(
+      selectedIndex: 0,
+      backgroundColor: t.paper,
+      indicatorColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      destinations: const [
+        NavigationDestination(
+            icon: Icon(Icons.edit_outlined), label: "בית"),
+        NavigationDestination(
+            icon: Icon(Icons.bar_chart_rounded), label: "סיכומים"),
+        NavigationDestination(
+            icon: Icon(Icons.folder_rounded), label: "פרויקטים"),
+        NavigationDestination(
+            icon: Icon(Icons.settings_rounded), label: "הגדרות"),
+      ],
+      onDestinationSelected: (i) {
+        if (i == 1) _navigateToSummary();
+        if (i == 2) _navigateToProjects();
+        if (i == 3) _navigateToSettings();
+      },
+    );
+  }
+
+  HomeActions get _homeActions => HomeActions(
+        onStart: _startTimer,
+        onStop: _stopTimer,
+        onBreak: _onBreakTap,
+        onManualEntry: () => _openEntryDialog(isManual: true),
+        onNextLine: _smartNextLine,
+        onEditPosition: _showEditPositionDialog,
+        onProjectChanged: (p) => setState(() => _selectedProject = p),
+      );
 
   void _startTimer() {
     setState(() {
@@ -1794,11 +1989,13 @@ class _SoferHomeState extends State<SoferHome>
     final smartEnabled = await _storageService.getSmartWorkflowEnabled();
     final dayStart = await _storageService.getDayStart();
     final useGregorian = await _storageService.getUseGregorianDates();
+    final workRules = await _storageService.getWorkCalendarRules();
     if (!mounted) return;
     setState(() {
       _isSmartWorkflow = smartEnabled;
       _dayStart = dayStart;
       _useGregorianDates = useGregorian;
+      _workRules = workRules;
     });
   }
 
@@ -1923,37 +2120,28 @@ class _SoferHomeState extends State<SoferHome>
     if (Platform.isWindows && (widget.windowsFloatingMode?.value ?? false)) {
       return _buildWindowsFloatingOverlay();
     }
+
+    // The ruled themes share one home screen for both workflows; the cards
+    // theme keeps the two it has always had.
+    if (SoferTokens.of(context).isRules) {
+      return Scaffold(
+        appBar: _homeAppBar(),
+        body: RuledHomeBody(
+          snapshot: _buildHomeSnapshot(),
+          actions: _homeActions,
+          isSmart: _isSmartWorkflow,
+        ),
+        bottomNavigationBar: _homeBottomNav(),
+      );
+    }
+
     if (_isSmartWorkflow) {
       return _buildSmartWorkflowUI();
     }
 
     return Scaffold(
       backgroundColor: const Color(0xFFFDF7FF),
-      appBar: AppBar(
-        title: const Text('סופר ומונה'),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.auto_awesome_mosaic),
-            tooltip: "כלים",
-            onPressed: _navigateToFeatures,
-          ),
-          if (Platform.isWindows)
-            Padding(
-              padding: const EdgeInsets.only(left: 8.0),
-              child: TextButton.icon(
-                icon: const Icon(Icons.open_in_new, size: 22),
-                label: const Text("חלון צף"),
-                onPressed: () async {
-                  await windowManager.setSize(const Size(320, 260));
-                  await windowManager.setAlwaysOnTop(true);
-                  await windowManager.setAlignment(Alignment.bottomRight);
-                  widget.windowsFloatingMode?.value = true;
-                },
-              ),
-            ),
-        ],
-      ),
+      appBar: _homeAppBar(),
       body: LayoutBuilder(
         builder: (context, constraints) {
           return SingleChildScrollView(
@@ -2173,16 +2361,9 @@ class _SoferHomeState extends State<SoferHome>
   Widget _buildSmartWorkflowUI() {
     return Scaffold(
       backgroundColor: const Color(0xFFFDF7FF),
-      appBar: AppBar(
-        title: const Text('סופר ומונה - מצב חכם'),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: _navigateToSettings,
-          ),
-        ],
-      ),
+      // The same app bar as plain mode, so the switch back is always in the
+      // same place. Before this, smart mode had no way out but settings.
+      appBar: _homeAppBar(),
       body: Center(
         child: SingleChildScrollView(
           child: Column(
