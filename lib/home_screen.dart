@@ -578,7 +578,7 @@ class _SoferHomeState extends State<SoferHome>
         content: Text("סיימתי שורה! זמן שורה: ${_formatTime(lapDuration)}"),
         duration: const Duration(seconds: 2),
         behavior: SnackBarBehavior.floating,
-        backgroundColor: Colors.blueGrey,
+        backgroundColor: SoferTokens.of(context).inkMuted,
       ),
     );
   }
@@ -1023,9 +1023,9 @@ class _SoferHomeState extends State<SoferHome>
                       _buildManualTimePicker(setDialogState),
                     const SizedBox(height: 15),
                     if (projects.isEmpty)
-                      const Text(
+                      Text(
                         "אין פרויקטים. לחץ על 'פרויקטים' בתחתית כדי להוסיף.",
-                        style: TextStyle(color: Colors.red),
+                        style: TextStyle(color: SoferTokens.of(context).danger),
                       )
                     else
                       DropdownButton<Project>(
@@ -1055,9 +1055,9 @@ class _SoferHomeState extends State<SoferHome>
                   onPressed: () {
                     Navigator.pop(context);
                   },
-                  child: const Text(
+                  child: Text(
                     "מחיקה / ביטול",
-                    style: TextStyle(color: Colors.red),
+                    style: TextStyle(color: SoferTokens.of(context).danger),
                   ),
                 ),
                 ElevatedButton(
@@ -1080,7 +1080,7 @@ class _SoferHomeState extends State<SoferHome>
                           }
                         },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blueGrey,
+                    backgroundColor: SoferTokens.of(context).inkMuted,
                   ),
                   child: const Text("הוסף"),
                 ),
@@ -1138,7 +1138,7 @@ class _SoferHomeState extends State<SoferHome>
               "ללא תאריך = גיבוי להספק בלבד (לא ייכנס בממוצעים, רווח או יעד יומי).",
               style: TextStyle(
                 fontSize: 12,
-                color: Colors.blueGrey.shade700,
+                color: SoferTokens.of(context).inkMuted,
                 fontStyle: FontStyle.italic,
               ),
             ),
@@ -1159,7 +1159,7 @@ class _SoferHomeState extends State<SoferHome>
             padding: const EdgeInsets.only(bottom: 8.0),
             child: Text(
               "שעות כתיבה זמינות רק לאחר בחירת תאריך.",
-              style: TextStyle(fontSize: 12, color: Colors.orange.shade800),
+              style: TextStyle(fontSize: 12, color: SoferTokens.of(context).caution),
             ),
           ),
         if (hasDate && _manualIncludeTime)
@@ -1196,8 +1196,8 @@ class _SoferHomeState extends State<SoferHome>
           ),
         Text(
           durationText,
-          style: const TextStyle(
-              fontSize: 12, color: Colors.blue, fontWeight: FontWeight.bold),
+          style: TextStyle(
+              fontSize: 12, color: SoferTokens.of(context).accent, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 10),
         Row(
@@ -1351,9 +1351,9 @@ class _SoferHomeState extends State<SoferHome>
     if (p.type == ProjectType.sefer) {
       return Column(
         children: [
-          const Text(
+          Text(
               "מעמוד (אותיות או מספר) עד עמוד (אופציונלי – ריק = עמוד בודד)",
-              style: TextStyle(fontSize: 12, color: Colors.grey)),
+              style: TextStyle(fontSize: 12, color: SoferTokens.of(context).inkMuted)),
           const SizedBox(height: 6),
           Row(
             children: [
@@ -1922,7 +1922,7 @@ class _SoferHomeState extends State<SoferHome>
     ScaffoldMessenger.of(ctx).showSnackBar(
       SnackBar(
         content: Text(msg, style: const TextStyle(color: Colors.white)),
-        backgroundColor: Colors.green,
+        backgroundColor: SoferTokens.of(context).positive,
       ),
     );
   }
@@ -1930,7 +1930,7 @@ class _SoferHomeState extends State<SoferHome>
   void _showError(BuildContext ctx, String msg) {
     ScaffoldMessenger.of(ctx).showSnackBar(
       SnackBar(
-        content: Text(msg, style: const TextStyle(color: Colors.red)),
+        content: Text(msg, style: TextStyle(color: SoferTokens.of(context).danger)),
       ),
     );
   }
