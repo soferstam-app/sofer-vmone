@@ -1,3 +1,4 @@
+import '../models.dart';
 import 'hebrew_clock.dart';
 
 /// Single source of truth for "which day does this belong to".
@@ -66,6 +67,39 @@ class DateLogic {
   static bool isSameWorkingMonth(
       DateTime moment, DateTime month, DayStart dayStart) {
     final a = effectiveDate(moment, dayStart);
+    return a.year == month.year && a.month == month.month;
+  }
+
+  // -------------------------------------------------------------------------
+  // Recorded sessions. Everything that groups history by day must go through
+  // these three, never through `session.startTime` directly — the raw
+  // timestamp is the clock time, not the day the work was filed under.
+  // -------------------------------------------------------------------------
+
+  /// The working day a recorded [session] belongs to.
+  ///
+  /// Prefers the day frozen onto the session when it was entered. Deriving it
+  /// afresh on every read would mean that a writer who moves his day boundary
+  /// re-files all of his past work — but how a past day was reckoned is a fact
+  /// about that day, not about today's setting.
+  ///
+  /// Sessions from before the snapshot existed fall back to deriving it, which
+  /// is the old behaviour.
+  static DateTime workingDateOf(WorkSession session, DayStart dayStart) =>
+      session.workingDateAtEntry ?? effectiveDate(session.startTime, dayStart);
+
+  /// Whether [session] was filed under the working day containing [day].
+  static bool sessionIsOnDay(
+      WorkSession session, DateTime day, DayStart dayStart) {
+    final a = workingDateOf(session, dayStart);
+    final b = effectiveDate(day, dayStart);
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  /// Whether [session] was filed under a day in the same month as [month].
+  static bool sessionIsInMonth(
+      WorkSession session, DateTime month, DayStart dayStart) {
+    final a = workingDateOf(session, dayStart);
     return a.year == month.year && a.month == month.month;
   }
 }
