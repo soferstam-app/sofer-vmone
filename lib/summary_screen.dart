@@ -98,34 +98,16 @@ class _SummaryScreenState extends State<SummaryScreen> {
       ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.today_rounded,
-                    color: SoferTokens.of(context).accent, size: 24),
-                const SizedBox(width: 10),
-                Text(
-                  widget.useGregorianDates
-                      ? (_viewByMonth
-                          ? formatDisplayDateMonth(_selectedDate, true)
-                          : formatDisplayDate(_selectedDate, true))
-                      : _getHebrewDate(_selectedDate, _viewByMonth),
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: SoferTokens.of(context).accent,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          _dateHeader(),
           Expanded(
             child: dailySessions.isEmpty
                 ? _buildEmptyState()
                 : ListView(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    // The ruled entries carry their own padding so their rules
+                    // reach both edges; the cards keep their inset.
+                    padding: EdgeInsets.symmetric(
+                        horizontal:
+                            SoferTokens.of(context).isRules ? 0 : 16),
                     children: groupedSessions.entries
                         .where((entry) => validProjectIds.contains(entry.key))
                         .map((entry) {
@@ -146,6 +128,59 @@ class _SummaryScreenState extends State<SummaryScreen> {
                   ),
           ),
           _buildBottomButtons(),
+        ],
+      ),
+    );
+  }
+
+  /// The date the screen is showing.
+  ///
+  /// In the ruled layout it is a page heading — the date in the serif, sitting
+  /// on the heavier rule — rather than a coloured line with an icon beside it.
+  Widget _dateHeader() {
+    final t = SoferTokens.of(context);
+    final label = widget.useGregorianDates
+        ? (_viewByMonth
+            ? formatDisplayDateMonth(_selectedDate, true)
+            : formatDisplayDate(_selectedDate, true))
+        : _getHebrewDate(_selectedDate, _viewByMonth);
+
+    if (t.isCards) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.today_rounded, color: t.accent, size: 24),
+            const SizedBox(width: 10),
+            Text(label,
+                style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: t.accent)),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: t.ruleStrong)),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(label,
+                style: TextStyle(
+                    fontFamily: t.numeralFamily, fontSize: 23, color: t.ink)),
+          ),
+          Text(_viewByMonth ? "חודש" : "יום",
+              style: TextStyle(
+                  fontFamily: t.labelFamily,
+                  fontSize: 12,
+                  letterSpacing: 1.5,
+                  color: t.inkMuted)),
         ],
       ),
     );
@@ -198,50 +233,54 @@ class _SummaryScreenState extends State<SummaryScreen> {
     final t = SoferTokens.of(context);
     final met = progressPercent >= 1;
 
+    // A daily target of zero is not a target. Without one there is no progress
+    // to draw and no remainder to state, and drawing an empty bar under a
+    // dangling "יעד יומי ·" was the defect.
+    final hasTarget = remainingText.isNotEmpty;
+
     return Container(
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: t.ruleStrong)),
       ),
-      padding: const EdgeInsets.fromLTRB(0, 16, 0, 16),
+      // Its own horizontal padding, so the rule runs the full width of the
+      // screen the way ruling runs the full width of a page.
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Expanded(
-                child: Text(project.name,
-                    style: TextStyle(
-                        fontFamily: t.numeralFamily,
-                        fontSize: 19,
-                        color: t.ink)),
-              ),
-              Text(outputText,
-                  style: TextStyle(
-                      fontFamily: t.numeralFamily,
-                      fontSize: 25,
-                      color: t.ink)),
-            ],
-          ),
-          const SizedBox(height: 10),
+          Text(project.name,
+              style: TextStyle(
+                  fontFamily: t.numeralFamily, fontSize: 17, color: t.inkMuted)),
+          const SizedBox(height: 3),
+          // On its own line rather than opposite the name: the figure can be
+          // "3 עמודים ו-12 שורות", which set beside a long project name
+          // overflowed the row.
+          Text(outputText,
+              style: TextStyle(
+                  fontFamily: t.numeralFamily,
+                  fontSize: 26,
+                  height: 1.15,
+                  color: t.ink)),
+          const SizedBox(height: 12),
           SoferStatRow("זמן עבודה", _formatDuration(worked)),
           if (avgTimeText.isNotEmpty) SoferStatRow("ממוצע", avgTimeText),
           SoferStatRow("רווח נקי", "₪${profit.toStringAsFixed(2)}"),
           if (hourlyRate != null)
             SoferStatRow("שכר לשעה", "₪${hourlyRate.toStringAsFixed(0)}",
-                emphasise: true, last: true),
-          const SizedBox(height: 14),
-          SoferProgress(progressPercent),
-          const SizedBox(height: 6),
-          Text(
-            "יעד יומי · $remainingText",
-            style: TextStyle(
-              fontFamily: t.labelFamily,
-              fontSize: 12,
-              color: met ? t.positive : t.inkMuted,
+                emphasise: true, last: !hasTarget),
+          if (hasTarget) ...[
+            const SizedBox(height: 14),
+            SoferProgress(progressPercent),
+            const SizedBox(height: 6),
+            Text(
+              "יעד יומי · $remainingText",
+              style: TextStyle(
+                fontFamily: t.labelFamily,
+                fontSize: 12,
+                color: met ? t.positive : t.inkMuted,
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
