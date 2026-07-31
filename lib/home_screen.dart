@@ -6,7 +6,8 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:window_manager/window_manager.dart';
 import 'logic/id_generator.dart';
-import 'logic/entry_builder.dart';
+import 'entry/entry_sheet.dart';
+import 'format.dart';
 import 'logic/date_logic.dart';
 import 'logic/hebrew_clock.dart';
 import 'logic/production_calculator.dart';
@@ -15,17 +16,16 @@ import 'models.dart';
 import 'settings_screen.dart';
 import 'projects_screen.dart';
 import 'storage_service.dart';
-import 'package:kosher_dart/kosher_dart.dart';
 import 'summary_screen.dart';
 import 'features_screen.dart';
 import 'notification_service.dart';
 import 'hebrew_utils.dart';
 import 'home/ruled_home_body.dart';
-import 'widgets/sofer_widgets.dart';
 import 'logic/completion_estimator.dart';
 import 'logic/hebrew_work_calendar.dart';
 import 'logic/profit_calculator.dart';
 import 'theme/app_theme.dart';
+import 'widgets/feedback.dart';
 import 'timer_foreground_task.dart';
 
 class SoferHome extends StatefulWidget {
@@ -67,22 +67,6 @@ class _SoferHomeState extends State<SoferHome>
   final StorageService _storageService = StorageService();
 
   Project? _selectedProject;
-  final _pageCtrl = TextEditingController();
-  final _pageToCtrl = TextEditingController();
-  final _lineFromCtrl = TextEditingController();
-  final _lineToCtrl = TextEditingController();
-  final _amountCtrl = TextEditingController();
-  final _mezuzaLineCtrl = TextEditingController();
-
-  DateTime? _manualDate;
-  TimeOfDay _manualStartTime = const TimeOfDay(hour: 9, minute: 0);
-  TimeOfDay _manualEndTime = const TimeOfDay(hour: 10, minute: 0);
-  bool _manualIncludeTime = true;
-
-  String _tefillinMode = 'set';
-  String _tefillinPartType = 'head';
-  int _tefillinParshiyaIndex = 1;
-
   // Pages and lines are counted from one. There is no page 0 and no line 0, so
   // these never start at zero — a zero on screen is always a bug.
   int _smartCurrentPage = 1;
@@ -171,12 +155,6 @@ class _SoferHomeState extends State<SoferHome>
     widget.windowsFloatingMode?.removeListener(_onWindowsFloatingModeChanged);
     _pulseController.dispose();
     _timer?.cancel();
-    _pageCtrl.dispose();
-    _pageToCtrl.dispose();
-    _lineFromCtrl.dispose();
-    _lineToCtrl.dispose();
-    _amountCtrl.dispose();
-    _mezuzaLineCtrl.dispose();
     super.dispose();
   }
 
@@ -216,7 +194,7 @@ class _SoferHomeState extends State<SoferHome>
   /// switching underneath a running timer would leave it half in each.
   Future<void> _toggleWorkflowMode() async {
     if (_stopwatch.isRunning || _isPaused) {
-      _showError(context, "אפשר להחליף מצב רק כשהטיימר עצור");
+      showAppError(context, "אפשר להחליף מצב רק כשהטיימר עצור");
       return;
     }
     final next = !_isSmartWorkflow;
@@ -302,7 +280,7 @@ class _SoferHomeState extends State<SoferHome>
       hebrewDate: _getDisplayDate(today),
       isRunning: _stopwatch.isRunning,
       isPaused: _isPaused,
-      elapsed: _formatTime(_effectiveElapsed()),
+      elapsed: formatClock(_effectiveElapsed()),
       // Clamped at the display boundary too: whatever goes wrong upstream, the
       // screen never shows a page or line zero.
       currentLine: _smartCurrentLine < 1 ? 1 : _smartCurrentLine,
@@ -606,7 +584,7 @@ class _SoferHomeState extends State<SoferHome>
     await FlutterForegroundTask.startService(
       serviceId: 256,
       notificationTitle: 'סופר ומונה – טיימר פעיל',
-      notificationText: _formatTime(_effectiveElapsed()),
+      notificationText: formatClock(_effectiveElapsed()),
       callback: startTimerForegroundCallback,
     );
   }
@@ -622,7 +600,7 @@ class _SoferHomeState extends State<SoferHome>
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text("סיימתי שורה! זמן שורה: ${_formatTime(lapDuration)}"),
+        content: Text("סיימתי שורה! זמן שורה: ${formatClock(lapDuration)}"),
         duration: const Duration(seconds: 2),
         behavior: SnackBarBehavior.floating,
         backgroundColor: SoferTokens.of(context).inkMuted,
@@ -807,7 +785,7 @@ class _SoferHomeState extends State<SoferHome>
 
       if (finalMezuza < _smartStartPage ||
           (finalMezuza == _smartStartPage && finalLine < _smartStartLine)) {
-        _showError(context, "לא נרשמה התקדמות בכתיבה");
+        showAppError(context, "לא נרשמה התקדמות בכתיבה");
         return;
       }
 
@@ -825,7 +803,7 @@ class _SoferHomeState extends State<SoferHome>
       }
 
       if (totalLinesWritten <= 0) {
-        _showError(context, "לא נרשמה התקדמות בכתיבה");
+        showAppError(context, "לא נרשמה התקדמות בכתיבה");
         return;
       }
 
@@ -893,10 +871,10 @@ class _SoferHomeState extends State<SoferHome>
       _storageService.saveLastPosition(
           _selectedProject!.id, _smartCurrentPage, _smartCurrentLine);
 
-      _showSuccess(
+      showAppSuccess(
           context,
           breakDuration > Duration.zero
-              ? "הסשן נשמר בהצלחה! סה\"כ נכתבו $totalLinesWritten שורות.\nזמן כתיבה נטו: ${_formatTime(_lastSessionTime)}, זמן הפסקה: ${_formatTime(breakDuration)}"
+              ? "הסשן נשמר בהצלחה! סה\"כ נכתבו $totalLinesWritten שורות.\nזמן כתיבה נטו: ${formatClock(_lastSessionTime)}, זמן הפסקה: ${formatClock(breakDuration)}"
               : "הסשן נשמר בהצלחה! סה\"כ נכתבו $totalLinesWritten שורות.");
     } else {
       // --- Logic for Sefer Torah Projects ---
@@ -917,7 +895,7 @@ class _SoferHomeState extends State<SoferHome>
 
       if (finalPage < _smartStartPage ||
           (finalPage == _smartStartPage && finalLine < _smartStartLine)) {
-        _showError(context, "לא נרשמה התקדמות בכתיבה");
+        showAppError(context, "לא נרשמה התקדמות בכתיבה");
         return;
       }
 
@@ -948,7 +926,7 @@ class _SoferHomeState extends State<SoferHome>
       }
 
       if (totalLinesWritten == 0) {
-        _showError(context, "לא נרשמה התקדמות בכתיבה");
+        showAppError(context, "לא נרשמה התקדמות בכתיבה");
         return;
       }
 
@@ -1014,10 +992,10 @@ class _SoferHomeState extends State<SoferHome>
       _storageService.saveLastPosition(
           _selectedProject!.id, _smartCurrentPage, _smartCurrentLine);
 
-      _showSuccess(
+      showAppSuccess(
           context,
           breakDuration > Duration.zero
-              ? "הסשן נשמר בהצלחה! נכתבו $totalLinesWritten שורות.\nזמן כתיבה נטו: ${_formatTime(_lastSessionTime)}, זמן הפסקה: ${_formatTime(breakDuration)}"
+              ? "הסשן נשמר בהצלחה! נכתבו $totalLinesWritten שורות.\nזמן כתיבה נטו: ${formatClock(_lastSessionTime)}, זמן הפסקה: ${formatClock(breakDuration)}"
               : "הסשן נשמר בהצלחה! נכתבו $totalLinesWritten שורות.");
     }
   }
@@ -1027,1025 +1005,55 @@ class _SoferHomeState extends State<SoferHome>
   /// One place, because two of the six were being missed: after "הוסף" the page
   /// and line the writer had reached stayed behind while the ones they started
   /// from were cleared.
-  void _clearEntryFields() {
-    _pageCtrl.clear();
-    _pageToCtrl.clear();
-    _lineFromCtrl.clear();
-    _lineToCtrl.clear();
-    _amountCtrl.clear();
-    _mezuzaLineCtrl.clear();
-    _prefilledPage = '';
-    _prefilledLine = '';
-  }
-
-  /// What the position fields were offered with, so that cancelling a form the
-  /// writer never touched does not ask them to confirm anything.
-  String _prefilledPage = '';
-  String _prefilledLine = '';
-
-  /// Whether the measured time of this sitting has already been given to a
-  /// record.
+  /// Opens the form that records work.
   ///
-  /// A sitting is one measured stretch. Adding a second record without closing —
-  /// two pages that are not next to each other, say — used to hand it the same
-  /// hour again, so an hour at the desk was recorded as two. The first record
-  /// carries the time; the rest state that they carry none of their own, which
-  /// leaves the day's total right and the average across both units right.
-  bool _sittingTimeUsed = false;
-
-  /// Offers where the writer left off, as a starting point they can change.
-  ///
-  /// The position is stored per commission and kept in step by manual entries as
-  /// well as by the smart workflow, so it is the same answer smart mode resumes
-  /// from. Only a sefer has one: mezuzot and tefillin are counted rather than
-  /// paginated, and there is nothing there to suggest.
-  Future<void> _prefillPositionFrom(Project project) async {
-    if (project.type != ProjectType.sefer) return;
-    final pos = await _storageService.getLastPosition(project.id);
-    if (pos.isEmpty) return;
-    final page = ((pos['page'] as int?) ?? 1).clamp(1, 1 << 20);
-    final line = ((pos['line'] as int?) ?? 1).clamp(1, 1 << 20);
-    _prefilledPage = formatHebrewNumber(page);
-    _prefilledLine = line.toString();
-    _pageCtrl.text = _prefilledPage;
-    _lineFromCtrl.text = _prefilledLine;
-  }
-
-  /// Opens a new commission without leaving the entry form.
-  ///
-  /// The very dialog the projects screen uses, so a project opened here carries
-  /// every field one opened there does.
-  void _createProjectFromEntry(StateSetter setDialogState) {
-    showDialog(
-      context: context,
-      builder: (ctx) => ProjectDialog(
-        useGregorianDates: _useGregorianDates,
-        onSave: (p) {
-          setState(() => projects.add(p));
-          _storageService.saveProjects(projects);
-          setDialogState(() => _selectedProject = p);
-        },
-      ),
-    );
-  }
-
-  /// Asks before an entry is thrown away.
-  ///
-  /// The button read "מחיקה / ביטול" and did neither of them — it closed. After a
-  /// timed sitting that discards, without a word, the one thing on the form that
-  /// cannot simply be typed in again: the hour the app just measured.
-  Future<bool> _confirmDiscardEntry(bool isManual) async {
-    final touched = _pageToCtrl.text.trim().isNotEmpty ||
-        _lineToCtrl.text.trim().isNotEmpty ||
-        _amountCtrl.text.trim().isNotEmpty ||
-        _mezuzaLineCtrl.text.trim().isNotEmpty ||
-        _pageCtrl.text.trim() != _prefilledPage ||
-        _lineFromCtrl.text.trim() != _prefilledLine;
-
-    // Nothing measured and nothing typed — there is nothing to lose, and asking
-    // would only be in the way.
-    if (isManual && !touched) return true;
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("לבטל את ההזנה?"),
-        content: Text(
-          isManual
-              ? "מה שהוזן כאן לא יישמר."
-              : "זמן העבודה שנמדד — ${_formatTime(_lastSessionTime)} — לא יישמר, "
-                  "ואי אפשר לשחזר אותו.",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text("המשך בהזנה"),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-                backgroundColor: SoferTokens.of(context).danger),
-            child: const Text("בטל את ההזנה"),
-          ),
-        ],
-      ),
-    );
-    return confirmed ?? false;
-  }
-
+  /// The form owns its own fields and its own rules. What is left here is what
+  /// only this screen can answer: which working day a record is filed under,
+  /// where the stored position goes next, and whether a daily target has just
+  /// been met.
   Future<void> _openEntryDialog({required bool isManual}) async {
-    // The chosen commission is deliberately kept. After a timed sitting it is
-    // the one the app has just spent an hour measuring, so clearing it asked a
-    // question that had already been answered — and left the home screen with
-    // nothing selected afterwards.
-    _clearEntryFields();
-    _manualDate = isManual ? null : _effectiveDate(DateTime.now());
-    _manualStartTime = const TimeOfDay(hour: 9, minute: 0);
-    _manualEndTime = const TimeOfDay(hour: 10, minute: 0);
-    _manualIncludeTime = true;
-    _tefillinMode = 'set';
-    _tefillinPartType = 'head';
-    _tefillinParshiyaIndex = 1;
-    _sittingTimeUsed = false;
-
-    if (_selectedProject != null) {
-      await _prefillPositionFrom(_selectedProject!);
-    }
-    if (!mounted) return;
-
-    final title = isManual ? "הזנה ידנית" : "סיכום כתיבה";
-
-    // A screen of its own on a phone, a dialog on a wide window — the same form
-    // and the same actions in both. An AlertDialog on a phone puts the fields in
-    // a small scrolling box with the keyboard over half of it and the buttons
-    // somewhere below the fold, which is a poor place for the one form every
-    // recorded sitting has to pass through.
-    if (MediaQuery.of(context).size.width < 600) {
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          fullscreenDialog: true,
-          builder: (routeContext) => StatefulBuilder(
-            builder: (routeContext, setForm) => PopScope(
-              // The back gesture asks too. Otherwise a swipe threw away the
-              // measured time as silently as the old button did.
-              canPop: false,
-              onPopInvokedWithResult: (didPop, _) async {
-                if (didPop) return;
-                if (!await _confirmDiscardEntry(isManual)) return;
-                if (routeContext.mounted) Navigator.pop(routeContext);
-              },
-              child: Scaffold(
-                appBar: AppBar(
-                  title: Text(title),
-                  leading: IconButton(
-                    icon: const Icon(Icons.close),
-                    tooltip: "ביטול",
-                    onPressed: () async {
-                      if (!await _confirmDiscardEntry(isManual)) return;
-                      if (routeContext.mounted) Navigator.pop(routeContext);
-                    },
-                  ),
-                ),
-                body: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-                  child: _entryFormBody(routeContext, setForm, isManual),
-                ),
-                bottomNavigationBar: SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: _selectedProject == null
-                                ? null
-                                : () => _entryAddAnother(
-                                    routeContext, setForm, isManual),
-                            child: const Text("הוסף עוד"),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: FilledButton(
-                            onPressed: _selectedProject == null
-                                ? null
-                                : () =>
-                                    _entrySaveAndClose(routeContext, isManual),
-                            child: const Text("שמור"),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-      return;
-    }
-
-    await showDialog(
+    final used = await showEntrySheet(
       context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setForm) => AlertDialog(
-          title: Text(title),
-          content: SizedBox(
-            width: 460,
-            child: SingleChildScrollView(
-              child: _entryFormBody(dialogContext, setForm, isManual),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () async {
-                if (!await _confirmDiscardEntry(isManual)) return;
-                if (dialogContext.mounted) Navigator.pop(dialogContext);
-              },
-              child: Text("ביטול",
-                  style: TextStyle(color: SoferTokens.of(context).danger)),
-            ),
-            OutlinedButton(
-              onPressed: _selectedProject == null
-                  ? null
-                  : () => _entryAddAnother(dialogContext, setForm, isManual),
-              child: const Text("הוסף עוד"),
-            ),
-            FilledButton(
-              onPressed: _selectedProject == null
-                  ? null
-                  : () => _entrySaveAndClose(dialogContext, isManual),
-              child: const Text("שמור וסגור"),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// The entry form: which commission, what was written, and — optional, and
-  /// last — when.
-  ///
-  /// The order is what has to be answered first. Recording only what was written
-  /// and never how long it took is an ordinary way to work, so the time sits
-  /// behind one line at the bottom instead of as a switch and two pickers above
-  /// the field the writer actually opened the form to fill in.
-  Widget _entryFormBody(
-      BuildContext ctx, StateSetter setForm, bool isManual) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SoferSectionTitle("הפרויקט", padding: EdgeInsets.zero),
-        const SizedBox(height: 4),
-        // The picker, with a way to open a new commission without leaving. A
-        // sofer who has just written something for a job not yet in the app
-        // should not have to throw away a measured sitting, go and create it,
-        // and type the time back in by hand.
-        Row(
-          children: [
-            Expanded(
-              child: projects.isEmpty
-                  ? Text("אין עדיין פרויקטים — אפשר לפתוח אחד כאן",
-                      style: TextStyle(color: SoferTokens.of(ctx).inkMuted))
-                  : DropdownButton<Project>(
-                      hint: const Text("בחר פרויקט"),
-                      // Guarded: a project deleted on another screen would
-                      // otherwise be a value with no matching item, which the
-                      // dropdown asserts on.
-                      value: projects.contains(_selectedProject)
-                          ? _selectedProject
-                          : null,
-                      isExpanded: true,
-                      items: [
-                        for (final p in projects)
-                          DropdownMenuItem(value: p, child: Text(p.name)),
-                      ],
-                      onChanged: (val) async {
-                        _clearEntryFields();
-                        if (val != null) await _prefillPositionFrom(val);
-                        setForm(() => _selectedProject = val);
-                      },
-                    ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.add),
-              tooltip: "פרויקט חדש",
-              onPressed: () => _createProjectFromEntry(setForm),
-            ),
-          ],
-        ),
-        if (_selectedProject != null) ...[
-          const SizedBox(height: 20),
-          const SoferSectionTitle("מה נכתב", padding: EdgeInsets.zero),
-          const SizedBox(height: 8),
-          _buildDynamicForm(_selectedProject!, setForm),
-        ],
-        const SizedBox(height: 20),
-        const SoferSectionTitle("מתי", padding: EdgeInsets.zero),
-        const SizedBox(height: 8),
-        _whenRow(ctx, setForm, isManual),
-      ],
-    );
-  }
-
-  /// One line saying when the work happened — and, in manual entry, one tap to
-  /// change it.
-  Widget _whenRow(BuildContext ctx, StateSetter setForm, bool isManual) {
-    final t = SoferTokens.of(ctx);
-    final box = BoxDecoration(
-      border: Border.all(color: t.rule),
-      borderRadius: BorderRadius.circular(t.panelRadius),
-    );
-
-    // A measured sitting states its time. There is nothing to choose here, and
-    // the only thing worth saying is how long it was.
-    if (!isManual) {
-      return Container(
-        decoration: box,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        child: Row(
-          children: [
-            Icon(Icons.timer_outlined, size: 20, color: t.accent),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                _sittingTimeUsed
-                    ? "זמן הישיבה כבר נרשם ברשומה הקודמת"
-                    : "נמדדו ${_formatTime(_lastSessionTime)}",
-                style: TextStyle(fontSize: 14, color: t.ink),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return InkWell(
-      onTap: () => _editEntryWhen(setForm),
-      borderRadius: BorderRadius.circular(t.panelRadius),
-      child: Container(
-        decoration: box,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        child: Row(
-          children: [
-            Icon(_manualDate == null ? Icons.event_busy : Icons.event,
-                size: 20,
-                color: _manualDate == null ? t.inkMuted : t.accent),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(_whenSummary(),
-                      style: TextStyle(fontSize: 14, color: t.ink)),
-                  const SizedBox(height: 2),
-                  Text(_whenNote(),
-                      style: TextStyle(fontSize: 11, color: t.inkMuted)),
-                ],
-              ),
-            ),
-            Icon(Icons.edit_outlined, size: 18, color: t.inkMuted),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _whenSummary() {
-    if (_manualDate == null) return "ללא תאריך";
-    final date = _getDisplayDate(_manualDate!);
-    if (!_manualIncludeTime) return date;
-    return "$date · ${_manualStartTime.format(context)}"
-        "–${_manualEndTime.format(context)}";
-  }
-
-  String _whenNote() {
-    if (_manualDate == null) {
-      return "יירשם כהספק בלבד — בלי רווח, ממוצע או יעד יומי";
-    }
-    if (!_manualIncludeTime) return "בלי שעות עבודה";
-    final range = SessionLogic.buildTimeRange(
-      date: _manualDate!,
-      startHour: _manualStartTime.hour,
-      startMinute: _manualStartTime.minute,
-      endHour: _manualEndTime.hour,
-      endMinute: _manualEndTime.minute,
-    );
-    return "סה\"כ ${_formatTime(range.end.difference(range.start))}";
-  }
-
-  /// The date and the hours, behind one tap.
-  Future<void> _editEntryWhen(StateSetter setForm) async {
-    await showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setInner) => AlertDialog(
-          title: const Text("מתי"),
-          content: SizedBox(
-            width: 380,
-            child: SingleChildScrollView(
-              child: _buildManualTimePicker(setInner),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text("סגור"),
-            ),
-          ],
-        ),
-      ),
-    );
-    setForm(() {});
-  }
-
-  /// Saves and stays, so a day recorded in parts is one sitting at the keyboard
-  /// rather than a form opened and closed for every stretch of it.
-  Future<void> _entryAddAnother(
-      BuildContext ctx, StateSetter setForm, bool isManual) async {
-    if (!await _validateAndSave(ctx, isManual)) return;
-    if (!ctx.mounted) return;
-
-    _clearEntryFields();
-    // The stored position moved on with the entry, so the next record is offered
-    // starting where this one ended.
-    await _prefillPositionFrom(_selectedProject!);
-
-    if (isManual && _manualDate != null && _manualIncludeTime) {
-      // The next stretch of the day begins when the last one ended, keeping the
-      // same length. A suggestion, like the position — the row underneath says
-      // what it is and one tap changes it.
-      final startMinutes = _manualEndTime.hour * 60 + _manualEndTime.minute;
-      final span = startMinutes -
-          (_manualStartTime.hour * 60 + _manualStartTime.minute);
-      final endMinutes = startMinutes + (span <= 0 ? 60 : span);
-      _manualStartTime = TimeOfDay(
-          hour: (startMinutes ~/ 60) % 24, minute: startMinutes % 60);
-      _manualEndTime =
-          TimeOfDay(hour: (endMinutes ~/ 60) % 24, minute: endMinutes % 60);
-    }
-    // The measured time of a sitting is given to one record only.
-    if (!isManual) _sittingTimeUsed = true;
-
-    if (!ctx.mounted) return;
-    setForm(() {});
-    ScaffoldMessenger.of(ctx).showSnackBar(
-      const SnackBar(content: Text("נוסף. אפשר להזין עוד.")),
-    );
-  }
-
-  Future<void> _entrySaveAndClose(BuildContext ctx, bool isManual) async {
-    final messenger = ScaffoldMessenger.of(ctx);
-    if (!await _validateAndSave(ctx, isManual)) return;
-    if (!ctx.mounted) return;
-    Navigator.pop(ctx);
-    messenger.showSnackBar(
-      const SnackBar(content: Text("הנתונים נשמרו בהצלחה!")),
-    );
-  }
-
-
-  Widget _buildManualTimePicker(StateSetter setDialogState) {
-    final bool hasDate = _manualDate != null;
-    String durationText = "";
-    if (hasDate && _manualIncludeTime) {
-      final now = DateTime.now();
-      DateTime start = DateTime(now.year, now.month, now.day,
-          _manualStartTime.hour, _manualStartTime.minute);
-      DateTime end = DateTime(now.year, now.month, now.day, _manualEndTime.hour,
-          _manualEndTime.minute);
-      if (end.isBefore(start)) {
-        end = end.add(const Duration(days: 1));
-      }
-      Duration d = end.difference(start);
-      durationText =
-          "סה\"כ זמן מחושב: ${d.inHours} שעות ו-${d.inMinutes % 60} דקות";
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (!hasDate)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8.0),
-            child: Text(
-              "ללא תאריך = גיבוי להספק בלבד (לא ייכנס בממוצעים, רווח או יעד יומי).",
-              style: TextStyle(
-                fontSize: 12,
-                color: SoferTokens.of(context).inkMuted,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          ),
-        SwitchListTile(
-          title: const Text("חישוב זמן כתיבה"),
-          value: hasDate && _manualIncludeTime,
-          onChanged: hasDate
-              ? (val) {
-                  setDialogState(() => _manualIncludeTime = val);
-                }
-              : null,
-          contentPadding: EdgeInsets.zero,
-          dense: true,
-        ),
-        if (!hasDate)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8.0),
-            child: Text(
-              "שעות כתיבה זמינות רק לאחר בחירת תאריך.",
-              style: TextStyle(fontSize: 12, color: SoferTokens.of(context).caution),
-            ),
-          ),
-        if (hasDate && _manualIncludeTime)
-          Row(
-            children: [
-              const Text("התחלה: "),
-              TextButton(
-                onPressed: () async {
-                  final t = await showTimePicker(
-                    context: context,
-                    initialTime: _manualStartTime,
-                  );
-                  if (t != null) {
-                    setDialogState(() => _manualStartTime = t);
-                  }
-                },
-                child: Text(_manualStartTime.format(context)),
-              ),
-              const Spacer(),
-              const Text("סיום: "),
-              TextButton(
-                onPressed: () async {
-                  final t = await showTimePicker(
-                    context: context,
-                    initialTime: _manualEndTime,
-                  );
-                  if (t != null) {
-                    setDialogState(() => _manualEndTime = t);
-                  }
-                },
-                child: Text(_manualEndTime.format(context)),
-              ),
-            ],
-          ),
-        Text(
-          durationText,
-          style: TextStyle(
-              fontSize: 12, color: SoferTokens.of(context).accent, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            const Text("תאריך: "),
-            TextButton(
-              onPressed: () async {
-                await _showHebrewDatePickerDialog(setDialogState);
-              },
-              child: Text(
-                _manualDate == null
-                    ? "ללא תאריך (כללי)"
-                    : _getDisplayDate(_manualDate!),
-              ),
-            ),
-            if (_manualDate != null)
-              IconButton(
-                icon: const Icon(Icons.close, size: 16),
-                onPressed: () => setDialogState(() => _manualDate = null),
-              ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Future<void> _showHebrewDatePickerDialog(StateSetter setParentState) async {
-    DateTime currentGregorian = _manualDate ?? DateTime.now();
-    JewishDate jewishDate = JewishDate.fromDateTime(currentGregorian);
-
-    await showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            int currentYear = jewishDate.getJewishYear();
-            int currentMonth = jewishDate.getJewishMonth();
-            int currentDay = jewishDate.getJewishDayOfMonth();
-            bool isLeap = jewishDate.isJewishLeapYear();
-            int daysInMonth = jewishDate.getDaysInJewishMonth();
-
-            List<int> years = List.generate(21, (i) => (currentYear - 10) + i);
-
-            List<int> months;
-            if (isLeap) {
-              months = [7, 8, 9, 10, 11, 12, 13, 1, 2, 3, 4, 5, 6];
-            } else {
-              months = [7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6];
-            }
-
-            List<int> days = List.generate(daysInMonth, (i) => i + 1);
-
-            return AlertDialog(
-              title: const Text("בחר תאריך עברי"),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  DropdownButton<int>(
-                    value: years.contains(currentYear) ? currentYear : years[0],
-                    items: years.map((y) {
-                      return DropdownMenuItem(
-                        value: y,
-                        child: Text(formatHebrewYear(y)),
-                      );
-                    }).toList(),
-                    onChanged: (val) {
-                      if (val != null) {
-                        JewishDate temp = JewishDate();
-                        temp.setJewishDate(val, 1, 1);
-                        bool newIsLeap = temp.isJewishLeapYear();
-
-                        int newMonth = currentMonth;
-                        if (!newIsLeap && currentMonth == 13) {
-                          newMonth = 12;
-                        }
-
-                        temp.setJewishDate(val, newMonth, 1);
-                        int maxDays = temp.getDaysInJewishMonth();
-                        int newDay =
-                            currentDay > maxDays ? maxDays : currentDay;
-
-                        jewishDate.setJewishDate(val, newMonth, newDay);
-                        setState(() {});
-                      }
-                    },
-                  ),
-                  DropdownButton<int>(
-                    value: months.contains(currentMonth) ? currentMonth : 1,
-                    items: months.map((m) {
-                      return DropdownMenuItem(
-                        value: m,
-                        child: Text(getHebrewMonthName(m, isLeap)),
-                      );
-                    }).toList(),
-                    onChanged: (val) {
-                      if (val != null) {
-                        jewishDate.setJewishDate(currentYear, val, 1);
-                        int maxDays = jewishDate.getDaysInJewishMonth();
-                        int newDay =
-                            currentDay > maxDays ? maxDays : currentDay;
-
-                        jewishDate.setJewishDate(currentYear, val, newDay);
-                        setState(() {});
-                      }
-                    },
-                  ),
-                  DropdownButton<int>(
-                    value: days.contains(currentDay) ? currentDay : 1,
-                    items: days.map((d) {
-                      return DropdownMenuItem(
-                        value: d,
-                        child: Text(formatHebrewNumber(d)),
-                      );
-                    }).toList(),
-                    onChanged: (val) {
-                      if (val != null) {
-                        jewishDate.setJewishDate(
-                          currentYear,
-                          currentMonth,
-                          val,
-                        );
-                        setState(() {});
-                      }
-                    },
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text("ביטול"),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    setParentState(() {
-                      _manualDate = jewishDate.getGregorianCalendar();
-                    });
-                    Navigator.pop(context);
-                  },
-                  child: const Text("בחר"),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildDynamicForm(Project p, StateSetter setDialogState) {
-    if (p.type == ProjectType.sefer) {
-      return Column(
-        children: [
-          Text(
-              "מעמוד (אותיות או מספר) עד עמוד (אופציונלי – ריק = עמוד בודד)",
-              style: TextStyle(fontSize: 12, color: SoferTokens.of(context).inkMuted)),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _pageCtrl,
-                  decoration: const InputDecoration(
-                    labelText: "מעמוד",
-                    prefixIcon: Icon(Icons.auto_stories),
-                    hintText: "למשל: א או 1",
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: TextField(
-                  controller: _pageToCtrl,
-                  decoration: const InputDecoration(
-                    labelText: "עד עמוד",
-                    hintText: "ריק = עמוד בודד",
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _lineFromCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: "משורה",
-                    prefixIcon: Icon(Icons.vertical_align_top),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: TextField(
-                  controller: _lineToCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: "עד שורה",
-                    prefixIcon: Icon(Icons.vertical_align_bottom),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      );
-    } else if (p.type == ProjectType.mezuza) {
-      return Column(
-        children: [
-          TextField(
-            controller: _amountCtrl,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: "כמות מזוזות",
-              prefixIcon: Icon(Icons.numbers),
-            ),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _mezuzaLineCtrl,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: "עד שורה (אופציונלי)",
-              prefixIcon: Icon(Icons.format_align_left),
-              hintText: "השאר ריק למזוזה שלמה",
-            ),
-          ),
-        ],
-      );
-    } else {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          DropdownButton<String>(
-            value: _tefillinMode,
-            isExpanded: true,
-            items: const [
-              DropdownMenuItem(value: 'set', child: Text("סט שלם (ראש+יד)")),
-              DropdownMenuItem(
-                value: 'head',
-                child: Text("תפילין של ראש (4 פרשיות)"),
-              ),
-              DropdownMenuItem(
-                value: 'hand',
-                child: Text("תפילין של יד (4 פרשיות)"),
-              ),
-              DropdownMenuItem(
-                value: 'parshiya',
-                child: Text("פרשייה בודדת (ראש/יד)"),
-              ),
-            ],
-            onChanged: (v) => setDialogState(() => _tefillinMode = v!),
-          ),
-          const SizedBox(height: 10),
-          if (_tefillinMode == 'parshiya') ...[
-            Row(
-              children: [
-                Expanded(
-                  child: DropdownButton<String>(
-                    value: _tefillinPartType,
-                    isExpanded: true,
-                    items: const [
-                      DropdownMenuItem(
-                        value: 'head',
-                        child: Text("תפילין של ראש"),
-                      ),
-                      DropdownMenuItem(
-                        value: 'hand',
-                        child: Text("תפילין של יד"),
-                      ),
-                    ],
-                    onChanged: (v) =>
-                        setDialogState(() => _tefillinPartType = v!),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: DropdownButton<int>(
-                    value: _tefillinParshiyaIndex,
-                    isExpanded: true,
-                    items: const [
-                      DropdownMenuItem(value: 1, child: Text("1. קדש")),
-                      DropdownMenuItem(
-                        value: 2,
-                        child: Text("2. והיה כי יביאך"),
-                      ),
-                      DropdownMenuItem(value: 3, child: Text("3. שמע")),
-                      DropdownMenuItem(
-                        value: 4,
-                        child: Text("4. והיה אם שמוע"),
-                      ),
-                    ],
-                    onChanged: (v) =>
-                        setDialogState(() => _tefillinParshiyaIndex = v!),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _mezuzaLineCtrl,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: "עד שורה (השאר ריק לפרשייה מלאה)",
-                prefixIcon: const Icon(Icons.format_align_left),
-                hintText:
-                    _tefillinPartType == 'head' ? "עד 4 שורות" : "עד 7 שורות",
-              ),
-            ),
-          ] else ...[
-            TextField(
-              controller: _amountCtrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: "כמות יחידות",
-                prefixIcon: Icon(Icons.numbers),
-              ),
-            ),
-          ],
-        ],
-      );
-    }
-  }
-
-  /// Turns what is on the form into records, and saves them.
-  ///
-  /// The reading and the rules live in [EntryBuilder], which is pure and
-  /// tested. What is left here is what genuinely needs the screen: the stretch
-  /// of time the form was set to, asking the writer about an overlap, showing a
-  /// refusal, and writing to storage.
-  Future<bool> _validateAndSave(
-    BuildContext dialogContext,
-    bool isManual,
-  ) async {
-    final project = _selectedProject;
-    if (project == null) return false;
-
-    final times = _entryTimes(isManual);
-    final backlogOnly = isManual && _manualDate == null;
-
-    final outcome = EntryBuilder.build(
-      input: EntryInput(
-        project: project,
-        start: times.start,
-        end: times.end,
-        isManual: isManual,
-        backlogOnly: backlogOnly,
-        // Stated, not inferred later from start == end. A writer who chose not
-        // to give a time and a sitting that happened to measure nothing are
-        // different facts, and only here is it known which this is.
-        timeRecorded: isManual
-            ? (_manualDate != null && _manualIncludeTime)
-            : !_sittingTimeUsed,
-        pageFrom: _pageCtrl.text,
-        pageTo: _pageToCtrl.text,
-        lineFrom: _lineFromCtrl.text,
-        lineTo: _lineToCtrl.text,
-        amount: _amountCtrl.text,
-        partialLine: _mezuzaLineCtrl.text,
-        tefillinMode: _tefillinMode,
-        tefillinPart: _tefillinPartType,
-        tefillinParshiya: _tefillinParshiyaIndex,
-      ),
+      isManual: isManual,
+      projects: projects,
       history: history,
+      useGregorianDates: _useGregorianDates,
+      dayStart: _dayStart,
+      initialProject: _selectedProject,
+      measuredTime: _lastSessionTime,
+      measuredEnd: _timerEndTime,
+      onProjectCreated: (project) {
+        setState(() => projects.add(project));
+        _storageService.saveProjects(projects);
+      },
+      onSave: _recordEntry,
     );
-
-    switch (outcome) {
-      case EntryRejected(:final message):
-        _showError(dialogContext, message);
-        return false;
-
-      case EntryBuilt(
-          :final sessions,
-          :final overlapsRecordedWork,
-          :final reachedPage,
-          :final reachedLine
-        ):
-        if (overlapsRecordedWork &&
-            !await _confirmOverlap(dialogContext, sessions.length > 1)) {
-          return false;
-        }
-
-        setState(() {
-          history.addAll(_stampWorkingDay(sessions));
-          _storageService.saveHistory(history);
-        });
-
-        // Keeps the smart-workflow position in step with entries made by hand.
-        // Otherwise typing pages in and then starting a smart session resumes
-        // from wherever the writer was before, and rewrites work already
-        // recorded.
-        await _advanceSmartPositionAfterEntry(
-          project: project,
-          page: reachedPage,
-          lastLine: reachedLine,
-          backlogOnly: backlogOnly,
-        );
-
-        if (Platform.isAndroid && _checkDailyGoalMet(project)) {
-          NotificationService().cancelDailyReminder();
-        }
-        return true;
-    }
+    // The commission the form was last used on stays selected here, so the two
+    // screens never disagree about what is being worked on.
+    if (used != null && mounted) setState(() => _selectedProject = used);
   }
 
-  /// The stretch of time the entry covers.
-  ///
-  /// Four cases, and they are not interchangeable: a measured sitting, a manual
-  /// entry with hours, one with a date but no hours, and one with no date at
-  /// all. The last two both come out as an instant rather than a stretch —
-  /// which is why the record says outright whether a time was given, instead of
-  /// leaving a later reader to guess from a duration of zero.
-  ({DateTime start, DateTime end}) _entryTimes(bool isManual) {
-    if (!isManual) {
-      final end = _timerEndTime ?? DateTime.now();
-      // A sitting's measured time belongs to one record. A second record added
-      // without closing carries none of its own.
-      return (
-        start: _sittingTimeUsed ? end : end.subtract(_lastSessionTime),
-        end: end,
-      );
-    }
+  /// Files what the entry form produced.
+  Future<void> _recordEntry(EntrySave save) async {
+    setState(() {
+      history.addAll(_stampWorkingDay(save.sessions));
+      _storageService.saveHistory(history);
+    });
 
-    final date = _manualDate;
-    if (date == null) {
-      // No date at all — a backlog record, counting towards output and nothing
-      // else. The timestamp is a placeholder; backlogOnly is what carries the
-      // meaning.
-      final placeholder = DateTime(2000, 1, 1, 12, 0);
-      return (start: placeholder, end: placeholder);
-    }
-    if (!_manualIncludeTime) {
-      final noon = DateTime(date.year, date.month, date.day, 12, 0);
-      return (start: noon, end: noon);
-    }
-    final range = SessionLogic.buildTimeRange(
-      date: date,
-      startHour: _manualStartTime.hour,
-      startMinute: _manualStartTime.minute,
-      endHour: _manualEndTime.hour,
-      endMinute: _manualEndTime.minute,
+    // Keeps the smart-workflow position in step with entries made by hand.
+    // Otherwise typing pages in and then starting a smart session resumes from
+    // wherever the writer was before, and rewrites work already recorded.
+    await _advanceSmartPositionAfterEntry(
+      project: save.project,
+      page: save.reachedPage,
+      lastLine: save.reachedLine,
+      backlogOnly: save.backlogOnly,
     );
-    return (start: range.start, end: range.end);
-  }
 
-  /// Writing over lines already recorded is a correction, not a mistake, so it
-  /// is a question rather than a refusal.
-  Future<bool> _confirmOverlap(BuildContext ctx, bool isRange) async =>
-      await showDialog<bool>(
-        context: ctx,
-        builder: (c) => AlertDialog(
-          title: const Text("שים לב: כפילות"),
-          content: Text(isRange
-              ? "חלק מהשורות בטווח העמודים כבר נכתבו בעבר. האם לשמור בכל זאת?"
-              : "חלק מהשורות בעמוד זה כבר נכתבו בעבר. האם לשמור בכל זאת?"),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(c, false),
-              child: const Text("ביטול"),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(c, true),
-              child: const Text("שמור בכל זאת"),
-            ),
-          ],
-        ),
-      ) ??
-      false;
+    if (Platform.isAndroid && _checkDailyGoalMet(save.project)) {
+      NotificationService().cancelDailyReminder();
+    }
+  }
 
   /// Moves the stored smart-workflow position forward when a manual entry ends
   /// past it. Never moves it backwards, so filling in an earlier gap does not
@@ -2132,28 +1140,6 @@ class _SoferHomeState extends State<SoferHome>
       }
     }
     return totalDone >= target;
-  }
-
-  void _showSuccess(BuildContext ctx, String msg) {
-    ScaffoldMessenger.of(ctx).showSnackBar(
-      SnackBar(
-        content: Text(msg, style: const TextStyle(color: Colors.white)),
-        backgroundColor: SoferTokens.of(context).positive,
-      ),
-    );
-  }
-
-  void _showError(BuildContext ctx, String msg) {
-    ScaffoldMessenger.of(ctx).showSnackBar(
-      SnackBar(
-        content: Text(msg, style: TextStyle(color: SoferTokens.of(context).danger)),
-      ),
-    );
-  }
-
-  String _formatTime(Duration d) {
-    String twoDigits(int n) => n.toString().padLeft(2, "0");
-    return "${twoDigits(d.inHours)}:${twoDigits(d.inMinutes.remainder(60))}:${twoDigits(d.inSeconds.remainder(60))}";
   }
 
   void _resetAllData() async {
@@ -2271,7 +1257,7 @@ class _SoferHomeState extends State<SoferHome>
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                _formatTime(_effectiveElapsed()),
+                formatClock(_effectiveElapsed()),
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 42,
@@ -2394,7 +1380,7 @@ class _SoferHomeState extends State<SoferHome>
                           child: FadeTransition(
                             opacity: _pulseAnimation,
                             child: Text(
-                              _formatTime(_effectiveElapsed()),
+                              formatClock(_effectiveElapsed()),
                               style: const TextStyle(
                                   fontSize: 80, fontWeight: FontWeight.w200),
                             ),
@@ -2669,7 +1655,7 @@ class _SoferHomeState extends State<SoferHome>
                   child: FadeTransition(
                     opacity: _pulseAnimation,
                     child: Text(
-                      _formatTime(_effectiveElapsed()),
+                      formatClock(_effectiveElapsed()),
                       style: const TextStyle(
                           fontSize: 80, fontWeight: FontWeight.w200),
                     ),
@@ -2720,7 +1706,7 @@ class _SoferHomeState extends State<SoferHome>
                   ),
                 if (_isPaused)
                   Text(
-                    "בהפסקה: ${_formatTime(_breakStopwatch.elapsed)}",
+                    "בהפסקה: ${formatClock(_breakStopwatch.elapsed)}",
                     style: const TextStyle(
                         color: Colors.orange,
                         fontWeight: FontWeight.bold,
@@ -2748,7 +1734,7 @@ class _SoferHomeState extends State<SoferHome>
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          _formatTime(_effectiveElapsed() - _lastLapTime),
+                          formatClock(_effectiveElapsed() - _lastLapTime),
                           style: const TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.bold,
