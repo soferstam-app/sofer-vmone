@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 import 'package:auto_updater/auto_updater.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:window_manager/window_manager.dart';
 import 'logic/id_generator.dart';
@@ -11,6 +10,7 @@ import 'format.dart';
 import 'logic/date_logic.dart';
 import 'logic/hebrew_clock.dart';
 import 'logic/production_calculator.dart';
+import 'logic/timer_controller.dart';
 import 'logic/session_logic.dart';
 import 'models.dart';
 import 'settings_screen.dart';
@@ -26,7 +26,6 @@ import 'logic/hebrew_work_calendar.dart';
 import 'logic/profit_calculator.dart';
 import 'theme/app_theme.dart';
 import 'widgets/feedback.dart';
-import 'timer_foreground_task.dart';
 
 class SoferHome extends StatefulWidget {
   const SoferHome({super.key, this.windowsFloatingMode});
@@ -39,31 +38,17 @@ class SoferHome extends StatefulWidget {
 
 class _SoferHomeState extends State<SoferHome>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
-  final Stopwatch _stopwatch = Stopwatch();
-  Timer? _timer;
-  DateTime? _timerStartTime;
-  DateTime? _timerEndTime;
-  final Stopwatch _breakStopwatch = Stopwatch();
-  int _accumulatedElapsedSeconds = 0;
+  /// The sitting's clock. Everything about measuring time lives there; what is
+  /// left here is telling the screen to redraw and keeping the pulse in step.
+  late final TimerController _clock;
 
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
 
-  bool _isPaused = false;
   bool _isSmartWorkflow = false;
-  Duration _lastLapTime = Duration.zero;
-
-  Duration _effectiveElapsed() {
-    final sec = _accumulatedElapsedSeconds +
-        (_timerStartTime != null
-            ? DateTime.now().difference(_timerStartTime!).inSeconds
-            : 0);
-    return Duration(seconds: sec);
-  }
 
   List<Project> projects = [];
   List<WorkSession> history = [];
-  Duration _lastSessionTime = Duration.zero;
   final StorageService _storageService = StorageService();
 
   Project? _selectedProject;
@@ -74,8 +59,6 @@ class _SoferHomeState extends State<SoferHome>
   int _smartStartPage = 1;
   int _smartStartLine = 1;
 
-  /// Total break duration during current smart session (not counted in writing average).
-  Duration _sessionBreakDuration = Duration.zero;
 
   DayStart _dayStart = DayStart.midnight;
   bool _useGregorianDates = false;
@@ -91,6 +74,9 @@ class _SoferHomeState extends State<SoferHome>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _clock = TimerController(onTick: () {
+      if (mounted) setState(() {});
+    });
     widget.windowsFloatingMode?.addListener(_onWindowsFloatingModeChanged);
     _storageService.getDayStart().then((d) {
       if (mounted) setState(() => _dayStart = d);
@@ -100,7 +86,7 @@ class _SoferHomeState extends State<SoferHome>
     });
     NotificationService().scheduleDailyReminder();
 
-    if (Platform.isAndroid) _initTimerForegroundService();
+    _clock.initForegroundService();
 
     _pulseController = AnimationController(
       vsync: this,
@@ -154,7 +140,7 @@ class _SoferHomeState extends State<SoferHome>
     WidgetsBinding.instance.removeObserver(this);
     widget.windowsFloatingMode?.removeListener(_onWindowsFloatingModeChanged);
     _pulseController.dispose();
-    _timer?.cancel();
+    _clock.dispose();
     super.dispose();
   }
 
@@ -193,7 +179,7 @@ class _SoferHomeState extends State<SoferHome>
   /// Refused mid-sitting: the two modes record a session differently, and
   /// switching underneath a running timer would leave it half in each.
   Future<void> _toggleWorkflowMode() async {
-    if (_stopwatch.isRunning || _isPaused) {
+    if (_clock.isRunning || _clock.isPaused) {
       showAppError(context, "אפשר להחליף מצב רק כשהטיימר עצור");
       return;
     }
@@ -278,9 +264,9 @@ class _SoferHomeState extends State<SoferHome>
       project: project,
       projects: projects,
       hebrewDate: _getDisplayDate(today),
-      isRunning: _stopwatch.isRunning,
-      isPaused: _isPaused,
-      elapsed: formatClock(_effectiveElapsed()),
+      isRunning: _clock.isRunning,
+      isPaused: _clock.isPaused,
+      elapsed: formatClock(_clock.elapsed),
       // Clamped at the display boundary too: whatever goes wrong upstream, the
       // screen never shows a page or line zero.
       currentLine: _smartCurrentLine < 1 ? 1 : _smartCurrentLine,
@@ -418,75 +404,45 @@ class _SoferHomeState extends State<SoferHome>
   }
 
   void _startTimer() {
-    setState(() {
-      _isPaused = false;
-      if (!_stopwatch.isRunning) {
-        if (_breakStopwatch.isRunning) {
-          _sessionBreakDuration += _breakStopwatch.elapsed;
-          _breakStopwatch.stop();
-          _breakStopwatch.reset();
-        }
-        _stopwatch.start();
-        _pulseController.repeat(reverse: true);
-        _timerStartTime ??= DateTime.now();
-        _timer = Timer.periodic(const Duration(seconds: 1), (t) {
-          if (mounted) setState(() {});
-        });
-        _storageService.clearTimerState();
-      }
-    });
+    setState(_clock.start);
+    _syncPulse();
   }
 
   void _pauseTimer() {
-    setState(() {
-      if (_timerStartTime != null) {
-        _accumulatedElapsedSeconds +=
-            DateTime.now().difference(_timerStartTime!).inSeconds;
-        _timerStartTime = null;
-      }
-      _stopwatch.stop();
-      _timer?.cancel();
-      _pulseController.stop();
-      _pulseController.value = 1.0;
-      _isPaused = true;
-      _breakStopwatch.start();
-    });
+    setState(_clock.pause);
+    _syncPulse();
     _persistTimerState();
   }
 
   void _stopTimer() {
-    _lastSessionTime = _effectiveElapsed();
-    final breakDuration = _sessionBreakDuration;
-    setState(() {
-      _stopwatch.stop();
-      _timer?.cancel();
-      _pulseController.stop();
-      _pulseController.value = 1.0;
-      _breakStopwatch.stop();
-      _breakStopwatch.reset();
-      _isPaused = false;
-      _timerEndTime = DateTime.now();
-      _stopwatch.reset();
-      _lastLapTime = Duration.zero;
-      _timerStartTime = null;
-      _accumulatedElapsedSeconds = 0;
-      _sessionBreakDuration = Duration.zero;
-    });
-    _storageService.clearTimerState();
-    if (Platform.isAndroid) _stopTimerForegroundService();
+    late final StoppedSitting sitting;
+    setState(() => sitting = _clock.stop());
+    _syncPulse();
+
+    _clock.stopForegroundService();
     NotificationService().cancelBreakReminder();
+
     if (_isSmartWorkflow) {
-      _finishSmartSession(breakDuration: breakDuration);
+      _finishSmartSession(breakDuration: sitting.onBreak);
     } else {
       _openEntryDialog(isManual: false);
     }
   }
 
+  /// The pulse follows the clock rather than being driven alongside it, so
+  /// there is one answer to whether writing is under way and not two.
+  void _syncPulse() {
+    if (_clock.isRunning && !_clock.isPaused) {
+      _pulseController.repeat(reverse: true);
+    } else {
+      _pulseController.stop();
+      _pulseController.value = 1.0;
+    }
+  }
+
   Future<void> _persistTimerState() async {
     await _storageService.saveTimerState({
-      'isPaused': _isPaused,
-      'sessionStartTime': _timerStartTime?.toIso8601String(),
-      'accumulatedElapsedSeconds': _accumulatedElapsedSeconds,
+      ..._clock.toJson(),
       'isSmart': _isSmartWorkflow,
       'projectId': _selectedProject?.id,
       'smartCurrentPage': _smartCurrentPage,
@@ -499,20 +455,13 @@ class _SoferHomeState extends State<SoferHome>
   Future<void> _restoreTimerState() async {
     final state = await _storageService.getTimerState();
     if (state.isEmpty) return;
-    final isPaused = state['isPaused'] == true;
-    final accumulated =
-        (state['accumulatedElapsedSeconds'] as num?)?.toInt() ?? 0;
-    final sessionStart = state['sessionStartTime'] as String?;
     final isSmart = state['isSmart'] == true;
     final projectId = state['projectId'] as String?;
     if (projectId == null && isSmart) return;
     if (!mounted) return;
+    var running = false;
     setState(() {
-      _accumulatedElapsedSeconds = accumulated;
-      _timerStartTime = sessionStart != null && !isPaused
-          ? DateTime.tryParse(sessionStart)
-          : null;
-      _isPaused = isPaused;
+      running = _clock.restoreFrom(state);
       _isSmartWorkflow = isSmart;
       if (projectId != null) {
         _selectedProject = projects.cast<Project?>().firstWhere(
@@ -524,79 +473,23 @@ class _SoferHomeState extends State<SoferHome>
         _smartStartPage = (state['smartStartPage'] as num?)?.toInt() ?? 1;
         _smartStartLine = (state['smartStartLine'] as num?)?.toInt() ?? 1;
       }
-      if (_timerStartTime != null) {
-        _stopwatch.start();
-        _pulseController.repeat(reverse: true);
-        _timer = Timer.periodic(const Duration(seconds: 1), (t) {
-          if (mounted) setState(() {});
-        });
-      }
     });
+    if (running) _syncPulse();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive) {
-      if (_timerStartTime != null || _isPaused) _persistTimerState();
-      if (Platform.isAndroid && _timerStartTime != null) {
-        _startTimerForegroundService();
-      }
+      if (_clock.isActive) _persistTimerState();
+      _clock.startForegroundService();
     } else if (state == AppLifecycleState.resumed) {
-      if (Platform.isAndroid) _stopTimerForegroundService();
+      _clock.stopForegroundService();
     }
-  }
-
-  Future<void> _initTimerForegroundService() async {
-    final perm = await FlutterForegroundTask.checkNotificationPermission();
-    if (perm != NotificationPermission.granted) {
-      await FlutterForegroundTask.requestNotificationPermission();
-    }
-    FlutterForegroundTask.init(
-      androidNotificationOptions: AndroidNotificationOptions(
-        channelId: 'sofer_vmone_timer',
-        channelName: 'טיימר סופר ומונה',
-        channelDescription: 'התראה כשהטיימר רץ ברקע',
-        onlyAlertOnce: true,
-      ),
-      iosNotificationOptions: const IOSNotificationOptions(
-        showNotification: false,
-        playSound: false,
-      ),
-      foregroundTaskOptions: ForegroundTaskOptions(
-        eventAction: ForegroundTaskEventAction.repeat(1000),
-        autoRunOnBoot: false,
-        allowWakeLock: true,
-      ),
-    );
-  }
-
-  Future<void> _startTimerForegroundService() async {
-    if (_timerStartTime == null) return;
-    await FlutterForegroundTask.saveData(
-      key: 'timerSessionStartTime',
-      value: _timerStartTime!.toIso8601String(),
-    );
-    await FlutterForegroundTask.saveData(
-      key: 'timerAccumulatedSeconds',
-      value: _accumulatedElapsedSeconds,
-    );
-    await FlutterForegroundTask.startService(
-      serviceId: 256,
-      notificationTitle: 'סופר ומונה – טיימר פעיל',
-      notificationText: formatClock(_effectiveElapsed()),
-      callback: startTimerForegroundCallback,
-    );
-  }
-
-  Future<void> _stopTimerForegroundService() async {
-    await FlutterForegroundTask.stopService();
   }
 
   void _recordLap() {
-    final currentElapsed = _effectiveElapsed();
-    final lapDuration = currentElapsed - _lastLapTime;
-    _lastLapTime = currentElapsed;
+    final lapDuration = _clock.recordLap();
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -613,7 +506,7 @@ class _SoferHomeState extends State<SoferHome>
 
     await _loadSmartPosition();
     if (!mounted) return;
-    setState(() => _sessionBreakDuration = Duration.zero);
+    setState(_clock.clearBreaks);
     _startTimer();
   }
 
@@ -755,7 +648,7 @@ class _SoferHomeState extends State<SoferHome>
     setState(() {
       _smartCurrentPage = p;
       _smartCurrentLine = l;
-      if (!_stopwatch.isRunning && !_isPaused) {
+      if (!_clock.isRunning && !_clock.isPaused) {
         _smartStartPage = p;
         _smartStartLine = l;
       }
@@ -840,7 +733,7 @@ class _SoferHomeState extends State<SoferHome>
       }
       // --- Time Distribution ---
       DateTime sessionEnd = DateTime.now();
-      Duration totalNetTime = _lastSessionTime;
+      Duration totalNetTime = _clock.lastSitting;
       double msPerLine = totalNetTime.inMilliseconds / totalLinesWritten;
       DateTime tempEndTime = sessionEnd;
 
@@ -874,7 +767,7 @@ class _SoferHomeState extends State<SoferHome>
       showAppSuccess(
           context,
           breakDuration > Duration.zero
-              ? "הסשן נשמר בהצלחה! סה\"כ נכתבו $totalLinesWritten שורות.\nזמן כתיבה נטו: ${formatClock(_lastSessionTime)}, זמן הפסקה: ${formatClock(breakDuration)}"
+              ? "הסשן נשמר בהצלחה! סה\"כ נכתבו $totalLinesWritten שורות.\nזמן כתיבה נטו: ${formatClock(_clock.lastSitting)}, זמן הפסקה: ${formatClock(breakDuration)}"
               : "הסשן נשמר בהצלחה! סה\"כ נכתבו $totalLinesWritten שורות.");
     } else {
       // --- Logic for Sefer Torah Projects ---
@@ -961,7 +854,7 @@ class _SoferHomeState extends State<SoferHome>
       }
 
       DateTime sessionEnd = DateTime.now();
-      Duration totalNetTime = _lastSessionTime;
+      Duration totalNetTime = _clock.lastSitting;
       double msPerLine = totalNetTime.inMilliseconds / totalLinesWritten;
       DateTime tempEndTime = sessionEnd;
 
@@ -995,7 +888,7 @@ class _SoferHomeState extends State<SoferHome>
       showAppSuccess(
           context,
           breakDuration > Duration.zero
-              ? "הסשן נשמר בהצלחה! נכתבו $totalLinesWritten שורות.\nזמן כתיבה נטו: ${formatClock(_lastSessionTime)}, זמן הפסקה: ${formatClock(breakDuration)}"
+              ? "הסשן נשמר בהצלחה! נכתבו $totalLinesWritten שורות.\nזמן כתיבה נטו: ${formatClock(_clock.lastSitting)}, זמן הפסקה: ${formatClock(breakDuration)}"
               : "הסשן נשמר בהצלחה! נכתבו $totalLinesWritten שורות.");
     }
   }
@@ -1020,8 +913,8 @@ class _SoferHomeState extends State<SoferHome>
       useGregorianDates: _useGregorianDates,
       dayStart: _dayStart,
       initialProject: _selectedProject,
-      measuredTime: _lastSessionTime,
-      measuredEnd: _timerEndTime,
+      measuredTime: _clock.lastSitting,
+      measuredEnd: _clock.endedAt,
       onProjectCreated: (project) {
         setState(() => projects.add(project));
         _storageService.saveProjects(projects);
@@ -1257,7 +1150,7 @@ class _SoferHomeState extends State<SoferHome>
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                formatClock(_effectiveElapsed()),
+                formatClock(_clock.elapsed),
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 42,
@@ -1270,9 +1163,9 @@ class _SoferHomeState extends State<SoferHome>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   IconButton.filled(
-                    onPressed: _isPaused ? _startTimer : _pauseTimer,
-                    icon: Icon(_isPaused ? Icons.play_arrow : Icons.pause),
-                    tooltip: _isPaused ? "המשך" : "הפסקה",
+                    onPressed: _clock.isPaused ? _startTimer : _pauseTimer,
+                    icon: Icon(_clock.isPaused ? Icons.play_arrow : Icons.pause),
+                    tooltip: _clock.isPaused ? "המשך" : "הפסקה",
                     style: IconButton.styleFrom(
                       backgroundColor: Colors.orange.shade700,
                       foregroundColor: Colors.white,
@@ -1289,7 +1182,7 @@ class _SoferHomeState extends State<SoferHome>
                     ),
                   ),
                   const SizedBox(width: 8),
-                  if (!_isPaused)
+                  if (!_clock.isPaused)
                     IconButton.filled(
                       onPressed: _recordLap,
                       icon: const Icon(Icons.flag),
@@ -1380,14 +1273,14 @@ class _SoferHomeState extends State<SoferHome>
                           child: FadeTransition(
                             opacity: _pulseAnimation,
                             child: Text(
-                              formatClock(_effectiveElapsed()),
+                              formatClock(_clock.elapsed),
                               style: const TextStyle(
                                   fontSize: 80, fontWeight: FontWeight.w200),
                             ),
                           ),
                         ),
                       ),
-                      if (_stopwatch.isRunning && !_isPaused)
+                      if (_clock.isRunning && !_clock.isPaused)
                         Padding(
                           padding: const EdgeInsets.only(top: 12),
                           child: FadeTransition(
@@ -1433,7 +1326,7 @@ class _SoferHomeState extends State<SoferHome>
                           ),
                         ),
                       const SizedBox(height: 24),
-                      if (!_stopwatch.isRunning && !_isPaused)
+                      if (!_clock.isRunning && !_clock.isPaused)
                         TweenAnimationBuilder<double>(
                           tween: Tween(begin: 0.92, end: 1.0),
                           duration: const Duration(milliseconds: 400),
@@ -1466,11 +1359,11 @@ class _SoferHomeState extends State<SoferHome>
                               children: [
                                 ElevatedButton.icon(
                                   onPressed:
-                                      _isPaused ? _startTimer : _pauseTimer,
-                                  icon: Icon(_isPaused
+                                      _clock.isPaused ? _startTimer : _pauseTimer,
+                                  icon: Icon(_clock.isPaused
                                       ? Icons.play_arrow
                                       : Icons.coffee),
-                                  label: Text(_isPaused ? "המשך" : "הפסקת קפה"),
+                                  label: Text(_clock.isPaused ? "המשך" : "הפסקת קפה"),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.orange[300],
                                     foregroundColor: Colors.white,
@@ -1493,7 +1386,7 @@ class _SoferHomeState extends State<SoferHome>
                               ],
                             ),
                             const SizedBox(height: 15),
-                            if (!_isPaused)
+                            if (!_clock.isPaused)
                               OutlinedButton.icon(
                                 onPressed: _recordLap,
                                 icon: const Icon(Icons.flag),
@@ -1502,7 +1395,7 @@ class _SoferHomeState extends State<SoferHome>
                           ],
                         ),
                       const SizedBox(height: 20),
-                      if (!_stopwatch.isRunning && !_isPaused)
+                      if (!_clock.isRunning && !_clock.isPaused)
                         OutlinedButton.icon(
                           onPressed: () => _openEntryDialog(isManual: true),
                           icon: const Icon(Icons.edit_calendar),
@@ -1580,7 +1473,7 @@ class _SoferHomeState extends State<SoferHome>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (!_stopwatch.isRunning && !_isPaused)
+              if (!_clock.isRunning && !_clock.isPaused)
                 Padding(
                   padding: const EdgeInsets.all(20.0),
                   child: DropdownButtonFormField<Project>(
@@ -1597,7 +1490,7 @@ class _SoferHomeState extends State<SoferHome>
                   ),
                 ),
               if (_selectedProject != null) ...[
-                if (_stopwatch.isRunning || _isPaused)
+                if (_clock.isRunning || _clock.isPaused)
                   Column(
                     children: [
                       Text(
@@ -1655,13 +1548,13 @@ class _SoferHomeState extends State<SoferHome>
                   child: FadeTransition(
                     opacity: _pulseAnimation,
                     child: Text(
-                      formatClock(_effectiveElapsed()),
+                      formatClock(_clock.elapsed),
                       style: const TextStyle(
                           fontSize: 80, fontWeight: FontWeight.w200),
                     ),
                   ),
                 ),
-                if (_stopwatch.isRunning && !_isPaused)
+                if (_clock.isRunning && !_clock.isPaused)
                   Padding(
                     padding: const EdgeInsets.only(top: 12),
                     child: FadeTransition(
@@ -1704,15 +1597,15 @@ class _SoferHomeState extends State<SoferHome>
                       ),
                     ),
                   ),
-                if (_isPaused)
+                if (_clock.isPaused)
                   Text(
-                    "בהפסקה: ${formatClock(_breakStopwatch.elapsed)}",
+                    "בהפסקה: ${formatClock(_clock.breakElapsed)}",
                     style: const TextStyle(
                         color: Colors.orange,
                         fontWeight: FontWeight.bold,
                         fontSize: 20),
                   )
-                else if (_stopwatch.isRunning)
+                else if (_clock.isRunning)
                   Container(
                     margin: const EdgeInsets.only(top: 12),
                     padding: const EdgeInsets.symmetric(
@@ -1734,7 +1627,7 @@ class _SoferHomeState extends State<SoferHome>
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          formatClock(_effectiveElapsed() - _lastLapTime),
+                          formatClock(_clock.sinceLastLap),
                           style: const TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.bold,
@@ -1745,7 +1638,7 @@ class _SoferHomeState extends State<SoferHome>
                     ),
                   ),
                 const SizedBox(height: 40),
-                if (!_stopwatch.isRunning && !_isPaused)
+                if (!_clock.isRunning && !_clock.isPaused)
                   ElevatedButton.icon(
                     onPressed: _initSmartSession,
                     icon: const Icon(Icons.login),
@@ -1760,7 +1653,7 @@ class _SoferHomeState extends State<SoferHome>
                   Column(
                     children: [
                       ElevatedButton.icon(
-                        onPressed: _isPaused ? null : _smartNextLine,
+                        onPressed: _clock.isPaused ? null : _smartNextLine,
                         icon: const Icon(Icons.arrow_downward),
                         label: const Text("מעבר שורה (סיימתי)"),
                         style: ElevatedButton.styleFrom(
@@ -1776,10 +1669,10 @@ class _SoferHomeState extends State<SoferHome>
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           ElevatedButton.icon(
-                            onPressed: _isPaused ? _startTimer : _onBreakTap,
+                            onPressed: _clock.isPaused ? _startTimer : _onBreakTap,
                             icon: Icon(
-                                _isPaused ? Icons.play_arrow : Icons.coffee),
-                            label: Text(_isPaused ? "המשך כתיבה" : "הפסקת קפה"),
+                                _clock.isPaused ? Icons.play_arrow : Icons.coffee),
+                            label: Text(_clock.isPaused ? "המשך כתיבה" : "הפסקת קפה"),
                             style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.orange,
                                 foregroundColor: Colors.white),
