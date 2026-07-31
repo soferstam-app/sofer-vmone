@@ -59,6 +59,14 @@ oauth_credentials.json
 *.aab
 sofer_vmone_*_windows.zip
 
+# מפתח החתימה וסיסמאותיו – זהות האפליקציה. לעולם לא במאגר.
+# הקובץ לדוגמה (android/key.properties.example) כן נשמר.
+android/key.properties
+key.properties
+*.jks
+*.keystore
+!android/key.properties.example
+
 # תיקייה כפולה – הקונפיג הרשמי ב־android/app/src/main/res/xml/
 /android/app/src/XML/
 

@@ -1,0 +1,18 @@
+# Template. Copy to android/key.properties and fill in — that file is
+# git-ignored and must never be committed.
+#
+# Create the keystore first (choose your own password when prompted; nothing
+# here should be a password you use anywhere else):
+#
+#   keytool -genkeypair -v -keystore C:\keys\sofer-upload.jks -storetype JKS \
+#           -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+#
+# Then back the .jks file up in more than one place. It is the app's identity:
+# without it no future version can be installed over an existing one, and every
+# user would have to uninstall — losing their projects — to move to a new key.
+# Keep it outside the repository.
+
+storeFile=C:/keys/sofer-upload.jks
+storePassword=
+keyAlias=upload
+keyPassword=

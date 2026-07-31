@@ -547,9 +547,37 @@ Singleton מעל `flutter_local_notifications`. אזור זמן קבוע: `Asia/
 - `compileOptions`: Java 17 + `coreLibraryDesugaring` (`desugar_jdk_libs:2.0.4`) – נדרש ל-`flutter_local_notifications`.
 - הרשאות: `RECEIVE_BOOT_COMPLETED`, `VIBRATE`, `SCHEDULE_EXACT_ALARM`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_DATA_SYNC`.
 - שירות `com.pravera.flutter_foreground_task.service.ForegroundService` עם `foregroundServiceType="dataSync"`.
-- ⚠️ ה-release חתום כרגע ב-**debug keys** (ראו חוב טכני).
+- ⚠️ ה-release חתום כרגע ב-**debug keys** (ראו למטה).
 
 בנייה: `flutter build apk --release`
+
+### חתימה — ולפני גרסת שחרור
+
+זהות אפליקציה באנדרואיד היא צמד: `applicationId` + **תעודת החתימה**. אנדרואיד מתקין עדכון מעל אפליקציה קיימת **רק** כששניהם זהים; אחרת `INSTALL_FAILED_UPDATE_INCOMPATIBLE`, והדרך היחידה קדימה היא הסרה — שמוחקת את נתוני המשתמש.
+
+**המצב היום:** `android/key.properties` אינו קיים, ולכן ה-release נחתם ב-`~/.android/debug.keystore` (נוצר 21.01.2026, תוקף עד 2056, סיסמה `android` — קבוע ציבורי, לא סוד). מספיק לבדיקות על מכשיר שלך; **הקובץ הזה אינו מגובה בשום מקום**, וכל בנייה ממחשב אחר תיצור מפתח אחר.
+
+`android/app/build.gradle.kts` מטפל בשלושת המצבים:
+
+| מצב | התנהגות |
+|---|---|
+| `key.properties` קיים | חותם במפתח האמיתי, ומדפיס שכך עשה |
+| חסר, `assembleRelease` | חותם ב-debug ומדפיס אזהרה בולטת (ב-`logger.error`, כי `flutter build` מסנן `warn`) |
+| חסר, `bundleRelease` | **נכשל.** ה-AAB הוא התוצר שעולה לחנות, וחתימת debug שם היא טעות שאין ממנה חזרה |
+
+הכלל השלישי הוא ה"תזכורת" — הבנייה עצמה מסרבת לייצר תוצר חנות בלי מפתח, כדי שזה לא יישען על זיכרון.
+
+**לפני גרסת שחרור, בשינוי אחד:**
+
+1. ליצור keystore (הסיסמה נבחרת על ידי המשתמש; ראו `android/key.properties.example`).
+2. לגבות את קובץ ה-`.jks` בכמה מקומות, **מחוץ למאגר**. אין מפתח = אי אפשר לעדכן אף התקנה קיימת, לעולם.
+3. למלא `android/key.properties` (ב-gitignore).
+4. לשנות `applicationId` מ-`com.example.stamsofer` לשם אמיתי — **אחרי פרסום ראשון בחנות אי אפשר לשנות אותו יותר.**
+5. להעלות את `version:` ב-`pubspec.yaml`.
+
+סעיפים 1 ו-4 שניהם שוברים עדכון של התקנות קיימות, ולכן הם נעשים יחד: הסרה אחת ולא שתיים.
+
+**Play App Signing** (חובה לאפליקציה חדשה מאז 08.2021) מרכך את הסיכון בסעיף 2: מעלים AAB חתום במפתח העלאה, וגוגל חותמת מחדש במפתח שהיא מחזיקה. מפתח העלאה שאבד — גוגל מאפסת. בהפצה ישירה (GitHub Releases) אין רשת ביטחון כזאת.
 
 ### Windows
 - `window_manager` – חלון 1280×720 ממורכז, ותמיכה בחלון צף.
@@ -631,7 +659,7 @@ setx PUB_CACHE "C:\pub-cache"
 | # | נושא | הערה |
 |---|---|---|
 | 1 | `applicationId = com.example.stamsofer` | עדיין ברירת המחדל של Flutter; שינוי אחרי פרסום ידרוש התקנה מחדש למשתמשים |
-| 2 | חתימת release ב-debug keys | חובה להגדיר keystore אמיתי לפני העלאה לחנות |
+| 2 | חתימת release ב-debug keys | התשתית מוכנה (`key.properties` + guard שמסרב לבנות AAB בלי מפתח); נותר ליצור את ה-keystore. ראו "חתימה — ולפני גרסת שחרור" בפרק 11 |
 | 3 | `home_screen.dart` ≈2,300 שורות | מועמד לפיצול (טיימר / דיאלוג הזנה / מצב חכם כרכיבים נפרדים) |
 | 4 | ~~שגיאות סנכרון נבלעות~~ | ✅ תוקן – `syncData()` מחזיר `SyncStatus` וה-UI מדווח |
 | 5 | `history_screen.dart` ריק | שריד – ניתן למחוק |
