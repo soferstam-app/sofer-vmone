@@ -40,6 +40,7 @@ class Project {
     'id',
     'name',
     'type',
+    'typeName',
     'price',
     'expenses',
     'targetDaily',
@@ -86,6 +87,10 @@ class Project {
       ...extraFields,
       'id': id,
       'name': name,
+      // Written both ways on purpose — see JsonCompat.enumByName. The name is
+      // what this build reads; the index is what an older one still needs to
+      // find where it expects it.
+      'typeName': type.name,
       'type': type.index,
       'price': price,
       'expenses': expenses,
@@ -112,8 +117,8 @@ class Project {
     return Project(
       id: id,
       name: JsonCompat.string(json['name'], 'פרויקט'),
-      type: JsonCompat.enumByIndex(
-          json['type'], ProjectType.values, ProjectType.sefer),
+      type: JsonCompat.enumByName(
+          json, 'typeName', 'type', ProjectType.values, ProjectType.sefer),
       price: JsonCompat.number(json['price'], 0),
       expenses: JsonCompat.number(json['expenses'], 0),
       targetDaily: JsonCompat.integer(json['targetDaily'], 0),
@@ -457,6 +462,7 @@ class Expense {
     'date',
     'amount',
     'allocation',
+    'allocationName',
     'projectIds',
     'periodStart',
     'periodEnd',
@@ -489,6 +495,8 @@ class Expense {
       'product': product,
       'date': date.toIso8601String(),
       'amount': amount,
+      // Name and index both — see JsonCompat.enumByName.
+      'allocationName': allocation.name,
       'allocation': allocation.index,
       'projectIds': projectIds,
       'periodStart': periodStart?.toIso8601String(),
@@ -514,7 +522,7 @@ class Expense {
       isDeleted: JsonCompat.boolean(json['isDeleted'], false),
       // Expenses saved before allocation existed behave as they did then:
       // charged to the month of their date.
-      allocation: JsonCompat.enumByIndex(json['allocation'],
+      allocation: JsonCompat.enumByName(json, 'allocationName', 'allocation',
           ExpenseAllocation.values, ExpenseAllocation.month),
       projectIds: JsonCompat.strings(json['projectIds']),
       periodStart: JsonCompat.dateOrNull(json['periodStart']),

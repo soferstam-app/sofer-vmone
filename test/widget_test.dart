@@ -2359,6 +2359,95 @@ void main() {
     });
   });
 
+  group('enums are stored by name', () {
+    Project project(ProjectType type) => Project(
+          id: 'p',
+          name: 'x',
+          type: type,
+          price: 1,
+          expenses: 0,
+          targetDaily: 1,
+          targetMonthly: 1,
+        );
+
+    test('a name survives a round trip for every kind of work', () {
+      for (final type in ProjectType.values) {
+        final json = jsonDecode(jsonEncode(project(type).toJson()))
+            as Map<String, dynamic>;
+        expect(json['typeName'], type.name);
+        expect(Project.fromJson(json).type, type);
+      }
+    });
+
+    test('the index is still written, so an older build can read the file', () {
+      // An older build looks for an int under 'type'. Dropping it would make
+      // every project in a new backup read as the first value of the enum.
+      final json = project(ProjectType.tefillin).toJson();
+      expect(json['type'], ProjectType.tefillin.index);
+      expect(json['typeName'], 'tefillin');
+    });
+
+    test('a file written before names existed still reads by index', () {
+      final legacy = {
+        'id': 'p',
+        'name': 'x',
+        'type': ProjectType.mezuza.index,
+        'price': 1,
+        'expenses': 0,
+        'targetDaily': 1,
+        'targetMonthly': 1,
+      };
+      expect(Project.fromJson(legacy).type, ProjectType.mezuza);
+    });
+
+    test('the name wins over an index that disagrees with it', () {
+      // Which is the whole point: after a reordering of the enum the index is
+      // the thing that lies, and the name is the thing that does not.
+      final json = {
+        'id': 'p',
+        'name': 'x',
+        'typeName': 'tefillin',
+        'type': ProjectType.sefer.index,
+        'price': 1,
+        'expenses': 0,
+        'targetDaily': 1,
+        'targetMonthly': 1,
+      };
+      expect(Project.fromJson(json).type, ProjectType.tefillin);
+    });
+
+    test('a kind of work this build does not know falls back', () {
+      final json = {
+        'id': 'p',
+        'name': 'x',
+        'typeName': 'megillah',
+        'type': 9,
+        'price': 1,
+        'expenses': 0,
+        'targetDaily': 1,
+        'targetMonthly': 1,
+      };
+      expect(Project.fromJson(json).type, ProjectType.sefer);
+    });
+
+    test('an expense allocation is stored the same way', () {
+      for (final allocation in ExpenseAllocation.values) {
+        final expense = Expense(
+          id: 'e',
+          product: 'קלף',
+          date: DateTime(2026, 7, 20),
+          amount: 100,
+          allocation: allocation,
+        );
+        final json = jsonDecode(jsonEncode(expense.toJson()))
+            as Map<String, dynamic>;
+        expect(json['allocationName'], allocation.name);
+        expect(json['allocation'], allocation.index);
+        expect(Expense.fromJson(json).allocation, allocation);
+      }
+    });
+  });
+
   group('SessionLogic.splitRange', () {
     final start = DateTime(2026, 7, 20, 9);
     final end = DateTime(2026, 7, 20, 12);

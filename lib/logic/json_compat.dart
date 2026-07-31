@@ -67,6 +67,40 @@ class JsonCompat {
     return values[index];
   }
 
+  /// Reads an enum written as its name, falling back to the index a older file
+  /// carries.
+  ///
+  /// An index is a promise that the enum's declaration order will never change,
+  /// and nothing in the language keeps that promise: inserting a value into
+  /// `ProjectType` would silently turn every sefer in an existing backup into a
+  /// mezuza. A name means what it says.
+  ///
+  /// Both are written, which is what makes the change safe in both directions.
+  /// A build that only understands the old shape still finds the index where it
+  /// expects it, and carries the name through untouched in `extraFields`; a
+  /// build that understands names prefers the name and ignores the index.
+  ///
+  /// [nameKey] is read first, then [indexKey].
+  static T enumByName<T extends Enum>(
+    Map<String, dynamic> json,
+    String nameKey,
+    String indexKey,
+    List<T> values,
+    T fallback,
+  ) {
+    final name = json[nameKey];
+    if (name is String && name.isNotEmpty) {
+      for (final value in values) {
+        if (value.name == name) return value;
+      }
+      // A name this build does not know — a kind of work added by a newer
+      // version. The index beside it is no more trustworthy in that case, so
+      // fall back rather than guess.
+      return fallback;
+    }
+    return enumByIndex(json[indexKey], values, fallback);
+  }
+
   /// Everything in [json] that is not in [known].
   ///
   /// Returned as a plain map so a model can hold it and spread it back into its
