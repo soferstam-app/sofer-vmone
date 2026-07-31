@@ -1020,14 +1020,113 @@ class _SoferHomeState extends State<SoferHome>
     }
   }
 
-  void _openEntryDialog({required bool isManual}) {
-    _selectedProject = null;
+  /// Empties every field of the entry form.
+  ///
+  /// One place, because two of the six were being missed: after "הוסף" the page
+  /// and line the writer had reached stayed behind while the ones they started
+  /// from were cleared.
+  void _clearEntryFields() {
     _pageCtrl.clear();
     _pageToCtrl.clear();
     _lineFromCtrl.clear();
     _lineToCtrl.clear();
     _amountCtrl.clear();
     _mezuzaLineCtrl.clear();
+    _prefilledPage = '';
+    _prefilledLine = '';
+  }
+
+  /// What the position fields were offered with, so that cancelling a form the
+  /// writer never touched does not ask them to confirm anything.
+  String _prefilledPage = '';
+  String _prefilledLine = '';
+
+  /// Offers where the writer left off, as a starting point they can change.
+  ///
+  /// The position is stored per commission and kept in step by manual entries as
+  /// well as by the smart workflow, so it is the same answer smart mode resumes
+  /// from. Only a sefer has one: mezuzot and tefillin are counted rather than
+  /// paginated, and there is nothing there to suggest.
+  Future<void> _prefillPositionFrom(Project project) async {
+    if (project.type != ProjectType.sefer) return;
+    final pos = await _storageService.getLastPosition(project.id);
+    if (pos.isEmpty) return;
+    final page = ((pos['page'] as int?) ?? 1).clamp(1, 1 << 20);
+    final line = ((pos['line'] as int?) ?? 1).clamp(1, 1 << 20);
+    _prefilledPage = formatHebrewNumber(page);
+    _prefilledLine = line.toString();
+    _pageCtrl.text = _prefilledPage;
+    _lineFromCtrl.text = _prefilledLine;
+  }
+
+  /// Opens a new commission without leaving the entry form.
+  ///
+  /// The very dialog the projects screen uses, so a project opened here carries
+  /// every field one opened there does.
+  void _createProjectFromEntry(StateSetter setDialogState) {
+    showDialog(
+      context: context,
+      builder: (ctx) => ProjectDialog(
+        useGregorianDates: _useGregorianDates,
+        onSave: (p) {
+          setState(() => projects.add(p));
+          _storageService.saveProjects(projects);
+          setDialogState(() => _selectedProject = p);
+        },
+      ),
+    );
+  }
+
+  /// Asks before an entry is thrown away.
+  ///
+  /// The button read "מחיקה / ביטול" and did neither of them — it closed. After a
+  /// timed sitting that discards, without a word, the one thing on the form that
+  /// cannot simply be typed in again: the hour the app just measured.
+  Future<bool> _confirmDiscardEntry(bool isManual) async {
+    final touched = _pageToCtrl.text.trim().isNotEmpty ||
+        _lineToCtrl.text.trim().isNotEmpty ||
+        _amountCtrl.text.trim().isNotEmpty ||
+        _mezuzaLineCtrl.text.trim().isNotEmpty ||
+        _pageCtrl.text.trim() != _prefilledPage ||
+        _lineFromCtrl.text.trim() != _prefilledLine;
+
+    // Nothing measured and nothing typed — there is nothing to lose, and asking
+    // would only be in the way.
+    if (isManual && !touched) return true;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("לבטל את ההזנה?"),
+        content: Text(
+          isManual
+              ? "מה שהוזן כאן לא יישמר."
+              : "זמן העבודה שנמדד — ${_formatTime(_lastSessionTime)} — לא יישמר, "
+                  "ואי אפשר לשחזר אותו.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("המשך בהזנה"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: SoferTokens.of(context).danger),
+            child: const Text("בטל את ההזנה"),
+          ),
+        ],
+      ),
+    );
+    return confirmed ?? false;
+  }
+
+  Future<void> _openEntryDialog({required bool isManual}) async {
+    // The chosen commission is deliberately kept. After a timed sitting it is
+    // the one the app has just spent an hour measuring, so clearing it asked a
+    // question that had already been answered — and left the home screen with
+    // nothing selected afterwards.
+    _clearEntryFields();
     _manualDate = isManual ? null : _effectiveDate(DateTime.now());
     _manualStartTime = const TimeOfDay(hour: 9, minute: 0);
     _manualEndTime = const TimeOfDay(hour: 10, minute: 0);
@@ -1035,6 +1134,11 @@ class _SoferHomeState extends State<SoferHome>
     _tefillinMode = 'set';
     _tefillinPartType = 'head';
     _tefillinParshiyaIndex = 1;
+
+    if (_selectedProject != null) {
+      await _prefillPositionFrom(_selectedProject!);
+    }
+    if (!mounted) return;
 
     showDialog(
       context: context,
@@ -1059,28 +1163,52 @@ class _SoferHomeState extends State<SoferHome>
                     else
                       _buildManualTimePicker(setDialogState),
                     const SizedBox(height: 15),
-                    if (projects.isEmpty)
-                      Text(
-                        "אין פרויקטים. לחץ על 'פרויקטים' בתחתית כדי להוסיף.",
-                        style: TextStyle(color: SoferTokens.of(context).danger),
-                      )
-                    else
-                      DropdownButton<Project>(
-                        hint: const Text("בחר פרויקט"),
-                        value: _selectedProject,
-                        isExpanded: true,
-                        items: projects
-                            .map(
-                              (p) => DropdownMenuItem(
-                                value: p,
-                                child: Text(p.name),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (val) {
-                          setDialogState(() => _selectedProject = val);
-                        },
-                      ),
+                    // The picker, with a way to open a new commission without
+                    // leaving. A sofer who has just written something for a job
+                    // not yet in the app should not have to throw away a
+                    // measured sitting, go and create it, and type the time back
+                    // in by hand.
+                    Row(
+                      children: [
+                        Expanded(
+                          child: projects.isEmpty
+                              ? Text(
+                                  "אין עדיין פרויקטים — אפשר לפתוח אחד כאן",
+                                  style: TextStyle(
+                                      color: SoferTokens.of(context).inkMuted),
+                                )
+                              : DropdownButton<Project>(
+                                  hint: const Text("בחר פרויקט"),
+                                  // Guarded: a project deleted on another screen
+                                  // would otherwise be a value with no matching
+                                  // item, which the dropdown asserts on.
+                                  value: projects.contains(_selectedProject)
+                                      ? _selectedProject
+                                      : null,
+                                  isExpanded: true,
+                                  items: [
+                                    for (final p in projects)
+                                      DropdownMenuItem(
+                                          value: p, child: Text(p.name)),
+                                  ],
+                                  onChanged: (val) async {
+                                    _clearEntryFields();
+                                    if (val != null) {
+                                      await _prefillPositionFrom(val);
+                                    }
+                                    setDialogState(
+                                        () => _selectedProject = val);
+                                  },
+                                ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.add),
+                          tooltip: "פרויקט חדש",
+                          onPressed: () =>
+                              _createProjectFromEntry(setDialogState),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 10),
                     if (_selectedProject != null)
                       _buildDynamicForm(_selectedProject!, setDialogState),
@@ -1089,11 +1217,13 @@ class _SoferHomeState extends State<SoferHome>
               ),
               actions: [
                 TextButton(
-                  onPressed: () {
+                  onPressed: () async {
+                    if (!await _confirmDiscardEntry(isManual)) return;
+                    if (!context.mounted) return;
                     Navigator.pop(context);
                   },
                   child: Text(
-                    "מחיקה / ביטול",
+                    "ביטול",
                     style: TextStyle(color: SoferTokens.of(context).danger),
                   ),
                 ),
@@ -1103,10 +1233,13 @@ class _SoferHomeState extends State<SoferHome>
                       : () async {
                           if (await _validateAndSave(context, isManual)) {
                             if (!context.mounted) return;
-                            _pageCtrl.clear();
-                            _lineFromCtrl.clear();
-                            _lineToCtrl.clear();
-                            _amountCtrl.clear();
+                            _clearEntryFields();
+                            // The stored position moved on with the entry, so
+                            // the next record is offered starting where this one
+                            // ended — which is the point of adding without
+                            // closing.
+                            await _prefillPositionFrom(_selectedProject!);
+                            if (!context.mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text(
