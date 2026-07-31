@@ -75,6 +75,45 @@ class SessionLogic {
     ];
   }
 
+  /// Divides one stretch of time between parts of unequal size.
+  ///
+  /// A sitting in smart mode crosses several pages, and they are rarely equal:
+  /// it may start halfway down one and stop three lines into another. Time is
+  /// handed out in proportion to the lines each page took, which is the nearest
+  /// the app can get to the truth without asking.
+  ///
+  /// As in [splitRange], the last slice takes the remainder so the parts add
+  /// back up to exactly the stretch that was measured.
+  static List<({DateTime start, DateTime end})> splitByWeight({
+    required DateTime start,
+    required DateTime end,
+    required List<int> weights,
+  }) {
+    if (weights.isEmpty) return const [];
+    if (weights.length == 1) return [(start: start, end: end)];
+
+    final total = weights.fold(0, (sum, w) => sum + w);
+    if (total <= 0) {
+      return [for (final _ in weights) (start: start, end: start)];
+    }
+
+    final totalMs = end.difference(start).inMilliseconds;
+    final slices = <({DateTime start, DateTime end})>[];
+    var cursor = start;
+    var used = 0;
+    for (var i = 0; i < weights.length; i++) {
+      if (i == weights.length - 1) {
+        slices.add((start: cursor, end: end));
+        break;
+      }
+      used += weights[i];
+      final next = start.add(Duration(milliseconds: totalMs * used ~/ total));
+      slices.add((start: cursor, end: next));
+      cursor = next;
+    }
+    return slices;
+  }
+
   /// Validates a sefer line range against the project's page size.
   ///
   /// Returns null when valid, or a ready-to-show Hebrew message.

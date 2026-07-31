@@ -4,14 +4,13 @@ import 'package:auto_updater/auto_updater.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:window_manager/window_manager.dart';
-import 'logic/id_generator.dart';
 import 'entry/entry_sheet.dart';
 import 'format.dart';
 import 'logic/date_logic.dart';
 import 'logic/hebrew_clock.dart';
 import 'logic/production_calculator.dart';
 import 'logic/timer_controller.dart';
-import 'logic/session_logic.dart';
+import 'logic/smart_session.dart';
 import 'models.dart';
 import 'settings_screen.dart';
 import 'projects_screen.dart';
@@ -656,248 +655,84 @@ class _SoferHomeState extends State<SoferHome>
     await _storageService.saveLastPosition(_selectedProject!.id, p, l);
   }
 
+  /// Files a sitting recorded in smart mode.
+  ///
+  /// The arithmetic — which lines of which pages were written, and how the
+  /// measured time divides between them — lives in [SmartSessionBuilder], which
+  /// is pure and tested. Left here: the duplicate question, the message, and the
+  /// write.
   Future<void> _finishSmartSession(
       {Duration breakDuration = Duration.zero}) async {
-    if (_selectedProject == null) return;
+    final project = _selectedProject;
+    if (project == null) return;
 
-    // --- Logic for Mezuza Projects ---
-    if (_selectedProject!.type == ProjectType.mezuza) {
-      const int linesPerMezuza = 22;
+    final outcome = SmartSessionBuilder.build(
+      project: project,
+      from: SmartPosition(_smartStartPage, _smartStartLine),
+      to: SmartPosition(_smartCurrentPage, _smartCurrentLine),
+      worked: _clock.lastSitting,
+      endedAt: _clock.endedAt ?? DateTime.now(),
+      history: history,
+    );
 
-      int finalMezuza = _smartCurrentPage;
-      int finalLine = _smartCurrentLine - 1;
+    switch (outcome) {
+      case SmartNothingWritten():
+        showAppError(context, "לא נרשמה התקדמות בכתיבה");
+        return;
 
-      if (finalLine < 1) {
-        if (finalMezuza > _smartStartPage) {
-          finalMezuza--;
-          finalLine = linesPerMezuza;
-        } else {
-          finalLine = _smartStartLine - 1; // No progress
+      case SmartRecorded(
+          :final sessions,
+          :final linesWritten,
+          :final overlappingPages
+        ):
+        if (overlappingPages.isNotEmpty &&
+            !await _confirmSmartOverlap(overlappingPages)) {
+          return;
         }
-      }
+        if (!mounted) return;
 
-      if (finalMezuza < _smartStartPage ||
-          (finalMezuza == _smartStartPage && finalLine < _smartStartLine)) {
-        showAppError(context, "לא נרשמה התקדמות בכתיבה");
-        return;
-      }
+        setState(() => history.addAll(_stampWorkingDay(sessions)));
+        await _storageService.saveHistory(history);
+        await _storageService.saveLastPosition(
+            project.id, _smartCurrentPage, _smartCurrentLine);
 
-      int totalLinesWritten = 0;
-      if (finalMezuza == _smartStartPage) {
-        totalLinesWritten = finalLine - _smartStartLine + 1;
-      } else {
-        // Lines in the first mezuza
-        totalLinesWritten += (linesPerMezuza - _smartStartLine + 1);
-        // Lines in full mezuzot between start and final
-        totalLinesWritten +=
-            (finalMezuza - _smartStartPage - 1) * linesPerMezuza;
-        // Lines in the final mezuza
-        totalLinesWritten += finalLine;
-      }
-
-      if (totalLinesWritten <= 0) {
-        showAppError(context, "לא נרשמה התקדמות בכתיבה");
-        return;
-      }
-
-      int numFullMezuzot = totalLinesWritten ~/ linesPerMezuza;
-      int remainingLines = totalLinesWritten % linesPerMezuza;
-
-      List<WorkSession> newSessions = [];
-      if (numFullMezuzot > 0) {
-        newSessions.add(WorkSession(
-          id: IdGenerator.generate(),
-          projectId: _selectedProject!.id,
-          startTime: DateTime.now(), // Placeholder
-          endTime: DateTime.now(), // Placeholder
-          amount: numFullMezuzot,
-          startLine: 0,
-          endLine: 0,
-          description: "$numFullMezuzot מזוזות",
-          isManual: false,
-        ));
-      }
-
-      if (remainingLines > 0) {
-        newSessions.add(WorkSession(
-          id: IdGenerator.generate(suffix: 'p'),
-          projectId: _selectedProject!.id,
-          startTime: DateTime.now(), // Placeholder
-          endTime: DateTime.now(), // Placeholder
-          amount: 1,
-          startLine: 1, // Assumption for partial
-          endLine: remainingLines,
-          description: "מזוזה (עד שורה $remainingLines)",
-          isManual: false,
-        ));
-      }
-      // --- Time Distribution ---
-      DateTime sessionEnd = DateTime.now();
-      Duration totalNetTime = _clock.lastSitting;
-      double msPerLine = totalNetTime.inMilliseconds / totalLinesWritten;
-      DateTime tempEndTime = sessionEnd;
-
-      for (int i = newSessions.length - 1; i >= 0; i--) {
-        WorkSession s = newSessions[i];
-        int linesInThisSession =
-            (s.endLine > 0) ? s.endLine : s.amount * linesPerMezuza;
-
-        Duration partDuration =
-            Duration(milliseconds: (msPerLine * linesInThisSession).round());
-        DateTime partStartTime = tempEndTime.subtract(partDuration);
-
-        newSessions[i] = WorkSession(
-            id: s.id,
-            projectId: s.projectId,
-            startTime: partStartTime,
-            endTime: tempEndTime,
-            amount: s.amount,
-            startLine: s.startLine,
-            endLine: s.endLine,
-            description: s.description,
-            isManual: s.isManual);
-        tempEndTime = partStartTime;
-      }
-
-      setState(() => history.addAll(_stampWorkingDay(newSessions)));
-      _storageService.saveHistory(history);
-      _storageService.saveLastPosition(
-          _selectedProject!.id, _smartCurrentPage, _smartCurrentLine);
-
-      showAppSuccess(
+        if (!mounted) return;
+        showAppSuccess(
           context,
           breakDuration > Duration.zero
-              ? "הסשן נשמר בהצלחה! סה\"כ נכתבו $totalLinesWritten שורות.\nזמן כתיבה נטו: ${formatClock(_clock.lastSitting)}, זמן הפסקה: ${formatClock(breakDuration)}"
-              : "הסשן נשמר בהצלחה! סה\"כ נכתבו $totalLinesWritten שורות.");
-    } else {
-      // --- Logic for Sefer Torah Projects ---
-      final int linesPerPage =
-          ProductionCalculator.linesPerPageOf(_selectedProject!);
-
-      int finalPage = _smartCurrentPage;
-      int finalLine = _smartCurrentLine - 1;
-
-      if (finalLine < 1) {
-        if (finalPage > _smartStartPage) {
-          finalPage--;
-          finalLine = linesPerPage;
-        } else {
-          finalLine = _smartStartLine - 1;
-        }
-      }
-
-      if (finalPage < _smartStartPage ||
-          (finalPage == _smartStartPage && finalLine < _smartStartLine)) {
-        showAppError(context, "לא נרשמה התקדמות בכתיבה");
-        return;
-      }
-
-      List<WorkSession> newSessions = [];
-      int totalLinesWritten = 0;
-
-      for (int p = _smartStartPage; p <= finalPage; p++) {
-        int start = (p == _smartStartPage) ? _smartStartLine : 1;
-        int end = (p == finalPage) ? finalLine : linesPerPage;
-
-        if (end >= start) {
-          int linesInThisPage = end - start + 1;
-          totalLinesWritten += linesInThisPage;
-
-          newSessions.add(WorkSession(
-            id: IdGenerator.generate(suffix: '\$p'),
-            projectId: _selectedProject!.id,
-            startTime: DateTime.now(),
-            endTime: DateTime.now(),
-            amount: p,
-            startLine: start,
-            endLine: end,
-            description: "כתיבה רציפה (עמוד ${formatHebrewNumber(p)})",
-            isManual: false,
-            linesPerPageAtEntry: linesPerPage,
-          ));
-        }
-      }
-
-      if (totalLinesWritten == 0) {
-        showAppError(context, "לא נרשמה התקדמות בכתיבה");
-        return;
-      }
-
-      // The smart flow wrote straight to history without ever checking for
-      // duplicates, so using "edit position" to jump back and rewriting a
-      // range produced a silent double entry.
-      final overlapping = newSessions
-          .where((s) => _checkOverlap(
-              _selectedProject!.id, s.amount, s.startLine, s.endLine))
-          .toList();
-      if (overlapping.isNotEmpty) {
-        final pages =
-            overlapping.map((s) => formatHebrewNumber(s.amount)).join(', ');
-        final confirm = await showDialog<bool>(
-              context: context,
-              builder: (c) => AlertDialog(
-                title: const Text("שים לב: כפילות"),
-                content: Text(
-                    "חלק מהשורות בעמוד $pages כבר נכתבו בעבר. האם לשמור בכל זאת?"),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(c, false),
-                      child: const Text("ביטול")),
-                  TextButton(
-                      onPressed: () => Navigator.pop(c, true),
-                      child: const Text("שמור בכל זאת")),
-                ],
-              ),
-            ) ??
-            false;
-        if (!confirm || !mounted) return;
-      }
-
-      DateTime sessionEnd = DateTime.now();
-      Duration totalNetTime = _clock.lastSitting;
-      double msPerLine = totalNetTime.inMilliseconds / totalLinesWritten;
-      DateTime tempEndTime = sessionEnd;
-
-      for (int i = newSessions.length - 1; i >= 0; i--) {
-        WorkSession s = newSessions[i];
-        int linesInThisSession = ProductionCalculator.seferLinesInSession(s);
-        Duration partDuration =
-            Duration(milliseconds: (msPerLine * linesInThisSession).round());
-
-        DateTime partStartTime = tempEndTime.subtract(partDuration);
-
-        newSessions[i] = WorkSession(
-            id: s.id,
-            projectId: s.projectId,
-            startTime: partStartTime,
-            endTime: tempEndTime,
-            amount: s.amount,
-            startLine: s.startLine,
-            endLine: s.endLine,
-            description: s.description,
-            isManual: s.isManual);
-
-        tempEndTime = partStartTime;
-      }
-
-      setState(() => history.addAll(_stampWorkingDay(newSessions)));
-      _storageService.saveHistory(history);
-      _storageService.saveLastPosition(
-          _selectedProject!.id, _smartCurrentPage, _smartCurrentLine);
-
-      showAppSuccess(
-          context,
-          breakDuration > Duration.zero
-              ? "הסשן נשמר בהצלחה! נכתבו $totalLinesWritten שורות.\nזמן כתיבה נטו: ${formatClock(_clock.lastSitting)}, זמן הפסקה: ${formatClock(breakDuration)}"
-              : "הסשן נשמר בהצלחה! נכתבו $totalLinesWritten שורות.");
+              ? "הסשן נשמר בהצלחה! נכתבו $linesWritten שורות.\n"
+                  "זמן כתיבה נטו: ${formatClock(_clock.lastSitting)}, "
+                  "זמן הפסקה: ${formatClock(breakDuration)}"
+              : "הסשן נשמר בהצלחה! נכתבו $linesWritten שורות.",
+        );
     }
   }
 
-  /// Empties every field of the entry form.
-  ///
-  /// One place, because two of the six were being missed: after "הוסף" the page
-  /// and line the writer had reached stayed behind while the ones they started
-  /// from were cleared.
+  /// Smart mode used to write straight to history without ever looking, so
+  /// jumping back with "ערוך מיקום" and rewriting a stretch produced a silent
+  /// double entry.
+  Future<bool> _confirmSmartOverlap(List<int> pages) async =>
+      await showDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: const Text("שים לב: כפילות"),
+          content: Text("חלק מהשורות בעמוד "
+              "${pages.map(formatHebrewNumber).join(', ')} כבר נכתבו בעבר. "
+              "האם לשמור בכל זאת?"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text("ביטול"),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text("שמור בכל זאת"),
+            ),
+          ],
+        ),
+      ) ??
+      false;
+
   /// Opens the form that records work.
   ///
   /// The form owns its own fields and its own rules. What is left here is what
@@ -965,44 +800,26 @@ class _SoferHomeState extends State<SoferHome>
     }
     if (page <= 0) return;
 
-    final maxLines = project.type == ProjectType.mezuza
+    final linesPerUnit = project.type == ProjectType.mezuza
         ? ProductionCalculator.linesPerMezuza
         : ProductionCalculator.linesPerPageOf(project);
-
-    // Next line after the one just recorded, rolling onto the next page.
-    var nextPage = page;
-    var nextLine = lastLine + 1;
-    if (nextLine > maxLines) {
-      nextPage += 1;
-      nextLine = 1;
-    }
+    final next = SmartPosition.after(
+        page: page, line: lastLine, linesPerUnit: linesPerUnit);
 
     final stored = await _storageService.getLastPosition(project.id);
-    final storedPage = (stored['page'] as int?) ?? 0;
-    final storedLine = (stored['line'] as int?) ?? 0;
-    final isAhead =
-        nextPage > storedPage || (nextPage == storedPage && nextLine > storedLine);
-    if (!isAhead) return;
+    final current = SmartPosition(
+        (stored['page'] as int?) ?? 0, (stored['line'] as int?) ?? 0);
+    if (!next.isAfter(current)) return;
 
-    await _storageService.saveLastPosition(project.id, nextPage, nextLine);
+    await _storageService.saveLastPosition(project.id, next.page, next.line);
     if (!mounted) return;
     if (_selectedProject?.id == project.id) {
       setState(() {
-        _smartCurrentPage = nextPage;
-        _smartCurrentLine = nextLine;
+        _smartCurrentPage = next.page;
+        _smartCurrentLine = next.line;
       });
     }
   }
-
-  bool _checkOverlap(String projId, int page, int start, int end) =>
-      SessionLogic.hasSeferOverlap(
-        history: history,
-        projectId: projId,
-        page: page,
-        startLine: start,
-        endLine: end,
-        projectType: _selectedProject?.type ?? ProjectType.sefer,
-      );
 
   bool _checkDailyGoalMet(Project project) {
     if (project.targetDaily <= 0) return true;
