@@ -2366,12 +2366,20 @@ class _SoferHomeState extends State<SoferHome>
           );
         },
       ),
+      // The same four destinations as the ruled layout, in the same order. With
+      // three, "סיכומים" sat at index 0 and was drawn as the selected tab while
+      // the writer was looking at the home screen.
       bottomNavigationBar: BottomNavigationBar(
         backgroundColor: Colors.deepPurple.shade50,
         selectedItemColor: Colors.deepPurple.shade800,
         unselectedItemColor: Colors.grey.shade700,
         type: BottomNavigationBarType.fixed,
+        currentIndex: 0,
         items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.edit_outlined),
+            label: "בית",
+          ),
           BottomNavigationBarItem(
             icon: Icon(Icons.bar_chart_rounded),
             label: "סיכומים",
@@ -2386,11 +2394,11 @@ class _SoferHomeState extends State<SoferHome>
           ),
         ],
         onTap: (index) {
-          if (index == 0) _navigateToSummary();
+          if (index == 1) _navigateToSummary();
           // Expenses moved into the projects screen: costs are attributed to
           // the work they belong to, so that is where they are managed.
-          if (index == 1) _navigateToProjects();
-          if (index == 2) _navigateToSettings();
+          if (index == 2) _navigateToProjects();
+          if (index == 3) _navigateToSettings();
         },
       ),
     );
@@ -2629,12 +2637,20 @@ class _SoferHomeState extends State<SoferHome>
           ),
         ),
       ),
+      // The same four destinations as the ruled layout, in the same order. With
+      // three, "סיכומים" sat at index 0 and was drawn as the selected tab while
+      // the writer was looking at the home screen.
       bottomNavigationBar: BottomNavigationBar(
         backgroundColor: Colors.deepPurple.shade50,
         selectedItemColor: Colors.deepPurple.shade800,
         unselectedItemColor: Colors.grey.shade700,
         type: BottomNavigationBarType.fixed,
+        currentIndex: 0,
         items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.edit_outlined),
+            label: "בית",
+          ),
           BottomNavigationBarItem(
             icon: Icon(Icons.bar_chart_rounded),
             label: "סיכומים",
@@ -2649,11 +2665,11 @@ class _SoferHomeState extends State<SoferHome>
           ),
         ],
         onTap: (index) {
-          if (index == 0) _navigateToSummary();
+          if (index == 1) _navigateToSummary();
           // Expenses moved into the projects screen: costs are attributed to
           // the work they belong to, so that is where they are managed.
-          if (index == 1) _navigateToProjects();
-          if (index == 2) _navigateToSettings();
+          if (index == 2) _navigateToProjects();
+          if (index == 3) _navigateToSettings();
         },
       ),
     );
