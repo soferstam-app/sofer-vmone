@@ -1733,6 +1733,12 @@ class _SoferHomeState extends State<SoferHome>
 
     final bool backlogOnly = isManual && _manualDate == null;
 
+    // Stated, not inferred later from start == end. A writer who chose not to
+    // give a time and a sitting that happened to measure nothing are different
+    // facts, and only here is it known which this is.
+    final bool timeRecorded =
+        isManual ? (_manualDate != null && _manualIncludeTime) : true;
+
     int amount = 0;
     int startLine = 0;
     int endLine = 0;
@@ -1821,6 +1827,7 @@ class _SoferHomeState extends State<SoferHome>
             description: "עמוד ${formatHebrewNumber(p)} (1-$linesPerPage)",
             isManual: isManual,
             backlogOnly: backlogOnly,
+            timeRecorded: timeRecorded,
             linesPerPageAtEntry: linesPerPage,
           ));
         }
@@ -1972,6 +1979,7 @@ class _SoferHomeState extends State<SoferHome>
           description: desc,
           isManual: isManual,
           backlogOnly: backlogOnly,
+          timeRecorded: timeRecorded,
           linesPerPageAtEntry:
               _selectedProject!.type == ProjectType.sefer
                   ? ProductionCalculator.linesPerPageOf(_selectedProject!)

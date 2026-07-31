@@ -2359,6 +2359,115 @@ void main() {
     });
   });
 
+  group('WorkSession.timeRecorded', () {
+    WorkSession session({
+      required DateTime start,
+      required DateTime end,
+      bool? timeRecorded,
+    }) =>
+        WorkSession(
+          id: 's',
+          projectId: 'p',
+          startTime: start,
+          endTime: end,
+          amount: 1,
+          startLine: 1,
+          endLine: 42,
+          description: '',
+          isManual: true,
+          timeRecorded: timeRecorded,
+        );
+
+    test('survives a round trip in both states', () {
+      final withTime = session(
+        start: DateTime(2026, 7, 20, 9),
+        end: DateTime(2026, 7, 20, 12),
+        timeRecorded: true,
+      );
+      final without = session(
+        start: DateTime(2026, 7, 20, 12),
+        end: DateTime(2026, 7, 20, 12),
+        timeRecorded: false,
+      );
+
+      expect(
+          WorkSession.fromJson(jsonDecode(jsonEncode(withTime.toJson())))
+              .timeRecorded,
+          isTrue);
+      expect(
+          WorkSession.fromJson(jsonDecode(jsonEncode(without.toJson())))
+              .timeRecorded,
+          isFalse);
+    });
+
+    test('what was stored wins over what the times suggest', () {
+      // The whole point of the field: a writer who did not give a time is not
+      // the same as a sitting that measured none, and the stored answer is not
+      // re-derived behind their back.
+      final stated = session(
+        start: DateTime(2026, 7, 20, 9),
+        end: DateTime(2026, 7, 20, 12),
+        timeRecorded: false,
+      );
+      expect(
+          WorkSession.fromJson(jsonDecode(jsonEncode(stated.toJson())))
+              .timeRecorded,
+          isFalse);
+    });
+
+    test('a session written before the field existed reads its times', () {
+      // The migration is lossless because the older writer had exactly one way
+      // to say "no time": an end equal to the start.
+      Map<String, dynamic> legacy(String start, String end) => {
+            'id': 's',
+            'projectId': 'p',
+            'startTime': start,
+            'endTime': end,
+            'amount': 1,
+            'startLine': 1,
+            'endLine': 42,
+            'description': '',
+            'isManual': true,
+          };
+
+      expect(
+          WorkSession.fromJson(
+                  legacy('2026-07-20T09:00:00', '2026-07-20T12:00:00'))
+              .timeRecorded,
+          isTrue);
+      expect(
+          WorkSession.fromJson(
+                  legacy('2026-07-20T12:00:00', '2026-07-20T12:00:00'))
+              .timeRecorded,
+          isFalse);
+    });
+
+    test('editing an amount does not invent a time', () {
+      final without = session(
+        start: DateTime(2026, 7, 20, 12),
+        end: DateTime(2026, 7, 20, 12),
+        timeRecorded: false,
+      );
+      expect(without.copyWith(amount: 7).timeRecorded, isFalse);
+      expect(without.copyWith(timeRecorded: true).timeRecorded, isTrue);
+    });
+
+    test('an unstated value is read off the times', () {
+      expect(
+          session(
+                  start: DateTime(2026, 7, 20, 9),
+                  end: DateTime(2026, 7, 20, 12))
+              .timeRecorded,
+          isTrue);
+      expect(
+          session(
+                  start: DateTime(2026, 7, 20, 12),
+                  end: DateTime(2026, 7, 20, 12))
+              .timeRecorded,
+          isFalse);
+    });
+  });
+
   group('QuoteExpense', () {
     test('a cost per unit is the same whatever the quantity', () {
       const parchment =

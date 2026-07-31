@@ -224,6 +224,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
     required Project project,
     required String outputText,
     required Duration worked,
+    required bool someWithoutTime,
     required String avgTimeText,
     required double profit,
     required double? hourlyRate,
@@ -262,7 +263,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                   height: 1.15,
                   color: t.ink)),
           const SizedBox(height: 12),
-          SoferStatRow("זמן עבודה", _formatDuration(worked)),
+          SoferStatRow("זמן עבודה", _workedLabel(worked, someWithoutTime)),
           if (avgTimeText.isNotEmpty) SoferStatRow("ממוצע", avgTimeText),
           SoferStatRow("רווח נקי", "₪${profit.toStringAsFixed(2)}"),
           if (hourlyRate != null)
@@ -302,6 +303,13 @@ class _SummaryScreenState extends State<SummaryScreen> {
     for (var s in sessionsForStats) {
       totalDuration += s.duration;
     }
+
+    // Plenty of sofrim record what they wrote and never how long it took. The
+    // total is then true but incomplete, and saying so is the difference
+    // between a figure that is partial and a figure that is wrong.
+    final bool someWithoutTime =
+        sessionsForStats.any((s) => !s.timeRecorded);
+
     int linesForStats = 0;
     int unitsForStats = 0;
     int parshiyotForStats = 0;
@@ -408,6 +416,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
         project: project,
         outputText: outputText,
         worked: totalDuration,
+        someWithoutTime: someWithoutTime,
         avgTimeText: avgTimeText,
         profit: profit,
         hourlyRate: hourlyRate,
@@ -430,8 +439,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
             ),
             const Divider(),
             _buildInfoRow(Icons.edit_note, "הספק:", outputText),
-            _buildInfoRow(
-                Icons.timer, "זמן עבודה:", _formatDuration(totalDuration)),
+            _buildInfoRow(Icons.timer, "זמן עבודה:",
+                _workedLabel(totalDuration, someWithoutTime)),
             if (avgTimeText.isNotEmpty)
               _buildInfoRow(Icons.speed, "ממוצע:", avgTimeText),
             _buildInfoRow(Icons.monetization_on, "רווח נקי:",
@@ -751,6 +760,25 @@ class _SummaryScreenState extends State<SummaryScreen> {
       return "${getHebrewMonthName(jewishDate.getJewishMonth(), jewishDate.isJewishLeapYear())} ${formatHebrewYear(jewishDate.getJewishYear())}";
     }
     return formatter.format(jewishDate);
+  }
+
+  /// A session's working time, or the fact that none was given.
+  ///
+  /// A record with no time used to print as 00:00, which reads as "wrote for no
+  /// time at all" rather than "did not say".
+  String _sessionTime(WorkSession s) =>
+      s.timeRecorded ? _formatDuration(s.duration) : "ללא זמן";
+
+  /// A total, said to be partial when part of the work carries no time.
+  ///
+  /// Without the qualifier the figure is simply an undercount, and there is no
+  /// way to tell it from a short day.
+  String _workedLabel(Duration worked, bool someWithoutTime) {
+    final total = _formatDuration(worked);
+    if (!someWithoutTime) return total;
+    return worked == Duration.zero
+        ? "לא נרשם זמן"
+        : "$total · חלק ללא זמן";
   }
 
   String _formatDuration(Duration d) {
@@ -1243,8 +1271,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
                                   // under, not its clock date, or this list
                                   // contradicts the day it was opened from.
                                   showAllDays
-                                      ? "${formatDisplayDate(DateLogic.workingDateOf(s, _dayStart), widget.useGregorianDates)} · ${s.description}\n${_formatDuration(s.duration)}"
-                                      : "${s.description}\n${_formatDuration(s.duration)}",
+                                      ? "${formatDisplayDate(DateLogic.workingDateOf(s, _dayStart), widget.useGregorianDates)} · ${s.description}\n${_sessionTime(s)}"
+                                      : "${s.description}\n${_sessionTime(s)}",
                                 ),
                                 isThreeLine: true,
                                 trailing: Row(
@@ -1448,6 +1476,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
       // actively restating when this work happened, so the current reckoning is
       // the one they mean. Editing a 23:00 session to 00:30 must move it.
       workingDateAtEntry: DateLogic.effectiveDate(range.start, _dayStart),
+      // The editor asks for a start and an end, so once it is saved the session
+      // has a time whether or not it had one before.
+      timeRecorded: true,
     );
     final newHistory =
         widget.history.map((e) => e.id == s.id ? updated : e).toList();

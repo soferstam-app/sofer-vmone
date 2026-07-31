@@ -199,6 +199,24 @@ class WorkSession {
   /// When true: counts only for project total written (הספק); excluded from profit, averages, daily goal.
   final bool backlogOnly;
 
+  /// Whether a working time was actually given for this session.
+  ///
+  /// Plenty of sofrim record only what they wrote and never how long it took.
+  /// That used to be stored as a session beginning at midday and lasting no time
+  /// at all — an invented fact sitting in a raw field, and afterwards
+  /// indistinguishable from a sitting that genuinely measured zero. Nothing
+  /// could tell the two apart again, which is precisely what a later change to
+  /// any time-dependent calculation would have to be able to do.
+  ///
+  /// [duration] stays derived from the timestamps and is still zero here. This
+  /// says *why* it is zero, and it is the flag to read before presenting or
+  /// computing anything per hour.
+  ///
+  /// Sessions written before this field existed derive it from the times they
+  /// carry: an end after the start means a time was given. That reading loses
+  /// nothing, because it is the only thing the older writer could have meant.
+  final bool timeRecorded;
+
   /// Lines per page as configured when this session was recorded (sefer only).
   ///
   /// Production and profit are derived from lines divided by page size, so
@@ -245,6 +263,7 @@ class WorkSession {
     'description',
     'isManual',
     'backlogOnly',
+    'timeRecorded',
     'linesPerPageAtEntry',
     'workingDateAtEntry',
     'lastUpdated',
@@ -264,12 +283,18 @@ class WorkSession {
     required this.description,
     required this.isManual,
     this.backlogOnly = false,
+    bool? timeRecorded,
     this.linesPerPageAtEntry,
     this.workingDateAtEntry,
     DateTime? lastUpdated,
     this.isDeleted = false,
     this.extraFields = const {},
-  }) : lastUpdated = lastUpdated ?? DateTime.now();
+  })  : // Left unstated, it is read off the times — the same rule that migrates
+        // a session recorded before the field existed. Callers that know the
+        // answer say so, because a writer who chose not to give a time is not
+        // the same as a sitting that happened to measure nothing.
+        timeRecorded = timeRecorded ?? endTime.isAfter(startTime),
+        lastUpdated = lastUpdated ?? DateTime.now();
 
   Duration get duration => endTime.difference(startTime);
 
@@ -302,6 +327,7 @@ class WorkSession {
       'description': description,
       'isManual': isManual,
       'backlogOnly': backlogOnly,
+      'timeRecorded': timeRecorded,
       'linesPerPageAtEntry': linesPerPageAtEntry,
       'workingDateAtEntry': workingDateAtEntry?.toIso8601String(),
       'lastUpdated': lastUpdated.toIso8601String(),
@@ -317,11 +343,12 @@ class WorkSession {
     if (id.isEmpty) throw const FormatException('session without an id');
 
     final start = JsonCompat.date(json['startTime'], DateTime(1970));
+    final end = JsonCompat.date(json['endTime'], start);
     return WorkSession(
       id: id,
       projectId: JsonCompat.string(json['projectId']),
       startTime: start,
-      endTime: JsonCompat.date(json['endTime'], start),
+      endTime: end,
       amount: JsonCompat.integer(json['amount'], 0),
       startLine: JsonCompat.integer(json['startLine'], 0),
       endLine: JsonCompat.integer(json['endLine'], 0),
@@ -330,6 +357,10 @@ class WorkSession {
       description: JsonCompat.string(json['description']),
       isManual: JsonCompat.boolean(json['isManual'], false),
       backlogOnly: JsonCompat.boolean(json['backlogOnly'], false),
+      // Absent on anything written before the field existed. Reading it off the
+      // times is exactly what the old writer meant by them.
+      timeRecorded:
+          JsonCompat.boolean(json['timeRecorded'], end.isAfter(start)),
       linesPerPageAtEntry: JsonCompat.intOrNull(json['linesPerPageAtEntry']),
       workingDateAtEntry: JsonCompat.dateOrNull(json['workingDateAtEntry']),
       lastUpdated: JsonCompat.date(json['lastUpdated'], DateTime.now()),
@@ -346,6 +377,7 @@ class WorkSession {
     int? endLine,
     String? description,
     bool? backlogOnly,
+    bool? timeRecorded,
     bool? isDeleted,
     DateTime? workingDateAtEntry,
   }) {
@@ -362,6 +394,10 @@ class WorkSession {
       description: description ?? this.description,
       isManual: isManual,
       backlogOnly: backlogOnly ?? this.backlogOnly,
+      // Carried through rather than re-derived: editing an amount must not turn
+      // a session that never had a time into one that did, or the other way
+      // round.
+      timeRecorded: timeRecorded ?? this.timeRecorded,
       linesPerPageAtEntry: linesPerPageAtEntry,
       workingDateAtEntry: workingDateAtEntry ?? this.workingDateAtEntry,
       lastUpdated: DateTime.now(),
