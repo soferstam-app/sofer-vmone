@@ -1,11 +1,9 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:window_manager/window_manager.dart';
 import 'home_screen.dart';
-import 'netfree_cert.dart';
 import 'notification_service.dart';
 import 'theme/theme_controller.dart';
 
@@ -15,47 +13,8 @@ final ValueNotifier<bool> windowsFloatingMode = ValueNotifier<bool>(false);
 /// [windowsFloatingMode] is: one app-wide switch with no owner below the root.
 final ThemeController themeController = ThemeController();
 
-class MyHttpOverrides extends HttpOverrides {
-  @override
-  HttpClient createHttpClient(SecurityContext? context) {
-    final SecurityContext securityContext =
-        context ?? SecurityContext(withTrustedRoots: true);
-
-    try {
-      if (netfreeCertContent.contains("BEGIN CERTIFICATE")) {
-        securityContext
-            .setTrustedCertificatesBytes(utf8.encode(netfreeCertContent));
-      } else {
-        debugPrint("שגיאה: תוכן תעודת נטפרי ריק או לא תקין");
-      }
-    } catch (e) {
-      debugPrint("שגיאה בטעינת תעודת נטפרי: $e");
-    }
-
-    final HttpClient client = super.createHttpClient(securityContext);
-
-    client.badCertificateCallback =
-        (X509Certificate cert, String host, int port) {
-      final bool isGoogle = host.contains("google.com") ||
-          host.contains("googleapis.com") ||
-          host.contains("gstatic.com");
-      final bool isNetfree = host.contains("netfree.link");
-      final bool isNetfreeIssuer = cert.issuer.toString().contains("NetFree");
-
-      if (isGoogle || isNetfree || isNetfreeIssuer) {
-        return true;
-      }
-
-      return false;
-    };
-
-    return client;
-  }
-}
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  HttpOverrides.global = MyHttpOverrides();
   await NotificationService().init();
 
   if (Platform.isAndroid) {

@@ -6,6 +6,7 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:window_manager/window_manager.dart';
 import 'logic/id_generator.dart';
+import 'logic/entry_builder.dart';
 import 'logic/date_logic.dart';
 import 'logic/hebrew_clock.dart';
 import 'logic/production_calculator.dart';
@@ -1901,329 +1902,150 @@ class _SoferHomeState extends State<SoferHome>
     }
   }
 
+  /// Turns what is on the form into records, and saves them.
+  ///
+  /// The reading and the rules live in [EntryBuilder], which is pure and
+  /// tested. What is left here is what genuinely needs the screen: the stretch
+  /// of time the form was set to, asking the writer about an overlap, showing a
+  /// refusal, and writing to storage.
   Future<bool> _validateAndSave(
     BuildContext dialogContext,
     bool isManual,
   ) async {
-    DateTime sessionStart;
-    DateTime sessionEnd;
+    final project = _selectedProject;
+    if (project == null) return false;
 
-    if (isManual) {
-      final bool noDate = _manualDate == null;
-      if (noDate) {
-        sessionStart = DateTime(2000, 1, 1, 12, 0);
-        sessionEnd = sessionStart;
-      } else {
-        final date = _manualDate!;
-        if (_manualIncludeTime) {
-          final range = SessionLogic.buildTimeRange(
-            date: date,
-            startHour: _manualStartTime.hour,
-            startMinute: _manualStartTime.minute,
-            endHour: _manualEndTime.hour,
-            endMinute: _manualEndTime.minute,
-          );
-          sessionStart = range.start;
-          sessionEnd = range.end;
-        } else {
-          sessionStart = DateTime(date.year, date.month, date.day, 12, 0);
-          sessionEnd = sessionStart;
-        }
-      }
-    } else {
-      sessionEnd = _timerEndTime ?? DateTime.now();
-      sessionStart = _sittingTimeUsed
-          ? sessionEnd
-          : sessionEnd.subtract(_lastSessionTime);
-    }
+    final times = _entryTimes(isManual);
+    final backlogOnly = isManual && _manualDate == null;
 
-    if (_selectedProject == null) return false;
+    final outcome = EntryBuilder.build(
+      input: EntryInput(
+        project: project,
+        start: times.start,
+        end: times.end,
+        isManual: isManual,
+        backlogOnly: backlogOnly,
+        // Stated, not inferred later from start == end. A writer who chose not
+        // to give a time and a sitting that happened to measure nothing are
+        // different facts, and only here is it known which this is.
+        timeRecorded: isManual
+            ? (_manualDate != null && _manualIncludeTime)
+            : !_sittingTimeUsed,
+        pageFrom: _pageCtrl.text,
+        pageTo: _pageToCtrl.text,
+        lineFrom: _lineFromCtrl.text,
+        lineTo: _lineToCtrl.text,
+        amount: _amountCtrl.text,
+        partialLine: _mezuzaLineCtrl.text,
+        tefillinMode: _tefillinMode,
+        tefillinPart: _tefillinPartType,
+        tefillinParshiya: _tefillinParshiyaIndex,
+      ),
+      history: history,
+    );
 
-    final bool backlogOnly = isManual && _manualDate == null;
-
-    // Stated, not inferred later from start == end. A writer who chose not to
-    // give a time and a sitting that happened to measure nothing are different
-    // facts, and only here is it known which this is.
-    final bool timeRecorded = isManual
-        ? (_manualDate != null && _manualIncludeTime)
-        : !_sittingTimeUsed;
-
-    int amount = 0;
-    int startLine = 0;
-    int endLine = 0;
-    String desc = "";
-    String? tefillinType;
-    int? parshiya;
-
-    if (_selectedProject!.type == ProjectType.sefer) {
-      final int? totalPages = _selectedProject!.totalPages;
-      final int linesPerPage =
-          ProductionCalculator.linesPerPageOf(_selectedProject!);
-
-      int pageFrom = int.tryParse(_pageCtrl.text.trim()) ??
-          parseHebrewPageToNumber(_pageCtrl.text.trim());
-      String pageToStr = _pageToCtrl.text.trim();
-      int? pageToParsed = pageToStr.isEmpty
-          ? null
-          : (int.tryParse(pageToStr) ?? parseHebrewPageToNumber(pageToStr));
-      if (pageToParsed != null && pageToParsed == 0) pageToParsed = null;
-
-      final bool isRange = pageToParsed != null &&
-          pageToParsed >= pageFrom &&
-          pageToParsed != pageFrom;
-
-      if (pageFrom == 0) {
-        _showError(dialogContext, "יש להזין לפחות עמוד התחלה תקין");
+    switch (outcome) {
+      case EntryRejected(:final message):
+        _showError(dialogContext, message);
         return false;
-      }
-      if (totalPages != null && pageFrom > totalPages) {
-        _showError(
-          dialogContext,
-          "מספר העמוד חורג מהגדרת הספר ($totalPages)",
-        );
-        return false;
-      }
 
-      if (isRange) {
-        if (totalPages != null && pageToParsed > totalPages) {
-          _showError(
-            dialogContext,
-            "עמוד הסיום חורג מהגדרת הספר ($totalPages)",
-          );
+      case EntryBuilt(
+          :final sessions,
+          :final overlapsRecordedWork,
+          :final reachedPage,
+          :final reachedLine
+        ):
+        if (overlapsRecordedWork &&
+            !await _confirmOverlap(dialogContext, sessions.length > 1)) {
           return false;
         }
-        bool hasOverlap = false;
-        final int pageTo = pageToParsed;
-        for (int p = pageFrom; p <= pageTo; p++) {
-          if (_checkOverlap(_selectedProject!.id, p, 1, linesPerPage)) {
-            hasOverlap = true;
-            break;
-          }
-        }
-        if (hasOverlap) {
-          final bool confirm = await showDialog(
-                context: dialogContext,
-                builder: (c) => AlertDialog(
-                  title: const Text("שים לב: כפילות"),
-                  content: const Text(
-                    "חלק מהשורות בטווח העמודים כבר נכתבו בעבר. האם לשמור בכל זאת?",
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(c, false),
-                      child: const Text("ביטול"),
-                    ),
-                    TextButton(
-                      onPressed: () => Navigator.pop(c, true),
-                      child: const Text("שמור בכל זאת"),
-                    ),
-                  ],
-                ),
-              ) ??
-              false;
-          if (!confirm) return false;
-        }
-        final List<WorkSession> rangeSessions = [];
-        final pageCount = pageTo - pageFrom + 1;
-        // One stretch of time was entered for the whole range, so it is divided
-        // between the pages rather than handed to each of them whole. See
-        // SessionLogic.splitRange for what that used to cost.
-        final slices = SessionLogic.splitRange(
-            start: sessionStart, end: sessionEnd, parts: pageCount);
-        for (int i = 0; i < pageCount; i++) {
-          final p = pageFrom + i;
-          rangeSessions.add(WorkSession(
-            id: IdGenerator.generate(suffix: '$p'),
-            projectId: _selectedProject!.id,
-            startTime: slices[i].start,
-            endTime: slices[i].end,
-            amount: p,
-            startLine: 1,
-            endLine: linesPerPage,
-            description: "עמוד ${formatHebrewNumber(p)} (1-$linesPerPage)",
-            isManual: isManual,
-            backlogOnly: backlogOnly,
-            timeRecorded: timeRecorded,
-            linesPerPageAtEntry: linesPerPage,
-          ));
-        }
+
         setState(() {
-          history.addAll(_stampWorkingDay(rangeSessions));
+          history.addAll(_stampWorkingDay(sessions));
           _storageService.saveHistory(history);
         });
+
+        // Keeps the smart-workflow position in step with entries made by hand.
+        // Otherwise typing pages in and then starting a smart session resumes
+        // from wherever the writer was before, and rewrites work already
+        // recorded.
         await _advanceSmartPositionAfterEntry(
-          project: _selectedProject!,
-          page: pageTo,
-          lastLine: linesPerPage,
+          project: project,
+          page: reachedPage,
+          lastLine: reachedLine,
           backlogOnly: backlogOnly,
         );
-        if (Platform.isAndroid && _checkDailyGoalMet(_selectedProject!)) {
+
+        if (Platform.isAndroid && _checkDailyGoalMet(project)) {
           NotificationService().cancelDailyReminder();
         }
         return true;
-      }
-
-      startLine = int.tryParse(_lineFromCtrl.text) ?? 0;
-      endLine = int.tryParse(_lineToCtrl.text) ?? 0;
-      final lineError = SessionLogic.validateSeferLines(
-        startLine: startLine,
-        endLine: endLine,
-        linesPerPage: linesPerPage,
-      );
-      if (lineError != null) {
-        _showError(dialogContext, lineError);
-        return false;
-      }
-
-      bool hasOverlap = _checkOverlap(
-        _selectedProject!.id,
-        pageFrom,
-        startLine,
-        endLine,
-      );
-      if (hasOverlap) {
-        bool confirm = await showDialog(
-              context: dialogContext,
-              builder: (c) => AlertDialog(
-                title: const Text("שים לב: כפילות"),
-                content: const Text(
-                  "חלק מהשורות בעמוד זה כבר נכתבו בעבר. האם לשמור בכל זאת?",
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(c, false),
-                    child: const Text("ביטול"),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.pop(c, true),
-                    child: const Text("שמור בכל זאת"),
-                  ),
-                ],
-              ),
-            ) ??
-            false;
-        if (!confirm) return false;
-      }
-
-      amount = pageFrom;
-      startLine = startLine;
-      endLine = endLine;
-      desc = "עמוד ${formatHebrewNumber(pageFrom)} ($startLine-$endLine)";
-    } else {
-      if (_selectedProject!.type == ProjectType.tefillin &&
-          _tefillinMode == 'parshiya') {
-        amount = 1;
-        endLine = int.tryParse(_mezuzaLineCtrl.text) ?? 0;
-
-        tefillinType = _tefillinPartType;
-        parshiya = _tefillinParshiyaIndex;
-
-        int maxLines = _tefillinPartType == 'head' ? 4 : 7;
-        if (endLine > maxLines) {
-          _showError(
-            dialogContext,
-            "בתפילין ${_tefillinPartType == 'head' ? 'של ראש' : 'של יד'} יש עד $maxLines שורות",
-          );
-          return false;
-        }
-
-        String part = _tefillinPartType == 'head' ? "ראש" : "יד";
-        String parshiyaName = "";
-        switch (_tefillinParshiyaIndex) {
-          case 1:
-            parshiyaName = "קדש";
-            break;
-          case 2:
-            parshiyaName = "והיה כי יביאך";
-            break;
-          case 3:
-            parshiyaName = "שמע";
-            break;
-          case 4:
-            parshiyaName = "והיה אם שמוע";
-            break;
-        }
-        desc = "פרשיית $parshiyaName של $part";
-        if (endLine > 0) desc += " (עד שורה $endLine)";
-      } else {
-        amount = int.tryParse(_amountCtrl.text) ?? 0;
-        if (amount == 0) {
-          _showError(dialogContext, "יש להזין כמות");
-          return false;
-        }
-
-        if (_selectedProject!.type == ProjectType.mezuza) {
-          int line = int.tryParse(_mezuzaLineCtrl.text) ?? 0;
-          if (line > 22) {
-            _showError(dialogContext, "במזוזה יש רק 22 שורות");
-            return false;
-          }
-          endLine = line;
-          if (line > 0) {
-            desc = "$amount מזוזות (עד שורה $line)";
-          } else {
-            desc = "$amount מזוזות";
-          }
-        } else {
-          if (_tefillinMode == 'set') {
-            desc = "$amount סטים של תפילין";
-          } else if (_tefillinMode == 'head') {
-            desc = "$amount תפילין של ראש";
-            tefillinType = 'head';
-          } else if (_tefillinMode == 'hand') {
-            desc = "$amount תפילין של יד";
-            tefillinType = 'hand';
-          } else {
-            desc = "$amount יחידות";
-          }
-        }
-      }
     }
-
-    setState(() {
-      history.add(
-        WorkSession(
-          id: IdGenerator.generate(),
-          projectId: _selectedProject!.id,
-          startTime: sessionStart,
-          endTime: sessionEnd,
-          amount: amount,
-          startLine: startLine,
-          endLine: endLine,
-          tefillinType: tefillinType,
-          parshiya: parshiya,
-          description: desc,
-          isManual: isManual,
-          backlogOnly: backlogOnly,
-          timeRecorded: timeRecorded,
-          linesPerPageAtEntry:
-              _selectedProject!.type == ProjectType.sefer
-                  ? ProductionCalculator.linesPerPageOf(_selectedProject!)
-                  : null,
-          workingDateAtEntry:
-              DateLogic.effectiveDate(sessionStart, _dayStart),
-        ),
-      );
-      _storageService.saveHistory(history);
-    });
-
-    // Keep the smart-workflow position in step with manual entries, otherwise
-    // entering pages by hand and then starting a smart session resumes from
-    // wherever the writer was before and rewrites work already recorded.
-    await _advanceSmartPositionAfterEntry(
-      project: _selectedProject!,
-      page: amount,
-      lastLine: endLine,
-      backlogOnly: backlogOnly,
-    );
-
-
-    if (Platform.isAndroid && _checkDailyGoalMet(_selectedProject!)) {
-      NotificationService().cancelDailyReminder();
-    }
-
-    return true;
   }
+
+  /// The stretch of time the entry covers.
+  ///
+  /// Four cases, and they are not interchangeable: a measured sitting, a manual
+  /// entry with hours, one with a date but no hours, and one with no date at
+  /// all. The last two both come out as an instant rather than a stretch —
+  /// which is why the record says outright whether a time was given, instead of
+  /// leaving a later reader to guess from a duration of zero.
+  ({DateTime start, DateTime end}) _entryTimes(bool isManual) {
+    if (!isManual) {
+      final end = _timerEndTime ?? DateTime.now();
+      // A sitting's measured time belongs to one record. A second record added
+      // without closing carries none of its own.
+      return (
+        start: _sittingTimeUsed ? end : end.subtract(_lastSessionTime),
+        end: end,
+      );
+    }
+
+    final date = _manualDate;
+    if (date == null) {
+      // No date at all — a backlog record, counting towards output and nothing
+      // else. The timestamp is a placeholder; backlogOnly is what carries the
+      // meaning.
+      final placeholder = DateTime(2000, 1, 1, 12, 0);
+      return (start: placeholder, end: placeholder);
+    }
+    if (!_manualIncludeTime) {
+      final noon = DateTime(date.year, date.month, date.day, 12, 0);
+      return (start: noon, end: noon);
+    }
+    final range = SessionLogic.buildTimeRange(
+      date: date,
+      startHour: _manualStartTime.hour,
+      startMinute: _manualStartTime.minute,
+      endHour: _manualEndTime.hour,
+      endMinute: _manualEndTime.minute,
+    );
+    return (start: range.start, end: range.end);
+  }
+
+  /// Writing over lines already recorded is a correction, not a mistake, so it
+  /// is a question rather than a refusal.
+  Future<bool> _confirmOverlap(BuildContext ctx, bool isRange) async =>
+      await showDialog<bool>(
+        context: ctx,
+        builder: (c) => AlertDialog(
+          title: const Text("שים לב: כפילות"),
+          content: Text(isRange
+              ? "חלק מהשורות בטווח העמודים כבר נכתבו בעבר. האם לשמור בכל זאת?"
+              : "חלק מהשורות בעמוד זה כבר נכתבו בעבר. האם לשמור בכל זאת?"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text("ביטול"),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text("שמור בכל זאת"),
+            ),
+          ],
+        ),
+      ) ??
+      false;
 
   /// Moves the stored smart-workflow position forward when a manual entry ends
   /// past it. Never moves it backwards, so filling in an earlier gap does not
