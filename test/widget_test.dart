@@ -2359,6 +2359,50 @@ void main() {
     });
   });
 
+  group('SessionLogic.splitRange', () {
+    final start = DateTime(2026, 7, 20, 9);
+    final end = DateTime(2026, 7, 20, 12);
+
+    test('one part is the whole stretch', () {
+      final slices = SessionLogic.splitRange(start: start, end: end, parts: 1);
+      expect(slices, hasLength(1));
+      expect(slices.single.start, start);
+      expect(slices.single.end, end);
+    });
+
+    test('the parts add back up to exactly what was entered', () {
+      // The point of the whole thing: five pages written in an hour are an
+      // hour, not five.
+      for (final parts in [2, 3, 5, 7, 245]) {
+        final slices =
+            SessionLogic.splitRange(start: start, end: end, parts: parts);
+        expect(slices, hasLength(parts));
+        final total = slices.fold(
+            Duration.zero, (sum, s) => sum + s.end.difference(s.start));
+        expect(total, end.difference(start), reason: '$parts parts');
+      }
+    });
+
+    test('the parts run consecutively from the start to the end', () {
+      final slices = SessionLogic.splitRange(start: start, end: end, parts: 7);
+      expect(slices.first.start, start);
+      expect(slices.last.end, end);
+      for (var i = 1; i < slices.length; i++) {
+        expect(slices[i].start, slices[i - 1].end,
+            reason: 'a gap or an overlap at slice $i');
+      }
+    });
+
+    test('an entry with no working time splits into nothing', () {
+      final slices =
+          SessionLogic.splitRange(start: start, end: start, parts: 4);
+      expect(slices, hasLength(4));
+      for (final s in slices) {
+        expect(s.end.difference(s.start), Duration.zero);
+      }
+    });
+  });
+
   group('WorkSession.timeRecorded', () {
     WorkSession session({
       required DateTime start,

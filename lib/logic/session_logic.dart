@@ -44,6 +44,37 @@ class SessionLogic {
     return (start: start, end: end);
   }
 
+  /// Divides one stretch of time into [parts] consecutive slices.
+  ///
+  /// A page range is entered once and recorded as one session per page. Giving
+  /// every page the whole stretch multiplied the day by the number of pages:
+  /// five pages written in an hour were stored as five hours, and every figure
+  /// per hour along with them.
+  ///
+  /// The last slice takes the remainder, so the slices add back up to exactly
+  /// the time that was entered rather than to a rounded-down approximation of
+  /// it. An empty stretch — an entry with no working time — yields empty slices,
+  /// which is the honest answer and not a division by zero.
+  static List<({DateTime start, DateTime end})> splitRange({
+    required DateTime start,
+    required DateTime end,
+    required int parts,
+  }) {
+    if (parts <= 1) return [(start: start, end: end)];
+
+    final totalMs = end.difference(start).inMilliseconds;
+    final sliceMs = totalMs ~/ parts;
+    return [
+      for (var i = 0; i < parts; i++)
+        (
+          start: start.add(Duration(milliseconds: sliceMs * i)),
+          end: i == parts - 1
+              ? end
+              : start.add(Duration(milliseconds: sliceMs * (i + 1))),
+        ),
+    ];
+  }
+
   /// Validates a sefer line range against the project's page size.
   ///
   /// Returns null when valid, or a ready-to-show Hebrew message.
