@@ -14,6 +14,20 @@
 /// Without the second half, a round trip through an older build would silently
 /// strip data: export from the phone, import on the PC, export back, and the
 /// newer fields are gone.
+/// A stored record this build cannot interpret, and must not guess at.
+///
+/// A record that throws this is dropped from the working set and kept in
+/// storage exactly as it was, so a build that does understand it still can. The
+/// app counts them and says so, because a total that is quietly short is worse
+/// than one that admits what it left out.
+class UnreadableRecord implements Exception {
+  final String reason;
+  const UnreadableRecord(this.reason);
+
+  @override
+  String toString() => 'UnreadableRecord: $reason';
+}
+
 class JsonCompat {
   const JsonCompat._();
 
@@ -57,15 +71,13 @@ class JsonCompat {
   static List<String> strings(Object? value) =>
       value is List ? value.whereType<String>().toList() : const [];
 
-  /// Reads an enum stored by index, clamping anything out of range.
+  /// A stored record this build cannot interpret.
   ///
-  /// A newer build may add a value an older one cannot name; falling back is
-  /// better than crashing on the whole import.
-  static T enumByIndex<T>(Object? value, List<T> values, T fallback) {
-    final index = intOrNull(value);
-    if (index == null || index < 0 || index >= values.length) return fallback;
-    return values[index];
-  }
+  /// Thrown rather than guessed at. The record is kept in storage untouched and
+  /// simply takes no part in anything the app computes, which is recoverable;
+  /// substituting a default would make it silently the wrong kind of work, and
+  /// every figure it feeds silently wrong with it.
+  static Never unreadable(String why) => throw UnreadableRecord(why);
 
   /// Reads an enum written as its name, falling back to the index a older file
   /// carries.
@@ -94,11 +106,20 @@ class JsonCompat {
         if (value.name == name) return value;
       }
       // A name this build does not know — a kind of work added by a newer
-      // version. The index beside it is no more trustworthy in that case, so
-      // fall back rather than guess.
-      return fallback;
+      // version. The index beside it is no more trustworthy, and neither is any
+      // default: a mezuza read as a sefer is not a smaller mistake than a
+      // record left out, it is a bigger one, because it is invisible.
+      unreadable('$nameKey "$name" is not a value this version knows');
     }
-    return enumByIndex(json[indexKey], values, fallback);
+
+    final index = intOrNull(json[indexKey]);
+    // Neither key is there at all: written before the field existed, and the
+    // documented default is what it meant.
+    if (index == null) return fallback;
+    if (index < 0 || index >= values.length) {
+      unreadable('$indexKey $index is outside what this version knows');
+    }
+    return values[index];
   }
 
   /// Reads the two tombstone registers, migrating a record that carried only a

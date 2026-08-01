@@ -17,6 +17,7 @@ import 'package:sofer_vmone/logic/expense_logic.dart';
 import 'package:sofer_vmone/logic/hebrew_clock.dart';
 import 'package:sofer_vmone/logic/hebrew_work_calendar.dart';
 import 'package:sofer_vmone/logic/id_generator.dart';
+import 'package:sofer_vmone/logic/json_compat.dart';
 import 'package:sofer_vmone/logic/merge_service.dart';
 import 'package:sofer_vmone/logic/production_calculator.dart';
 import 'package:sofer_vmone/logic/profit_calculator.dart';
@@ -1652,13 +1653,23 @@ void main() {
       expect(loose.type, ProjectType.mezuza);
     });
 
-    test('an enum index from the future falls back rather than crashing', () {
-      final project =
-          Project.fromJson(<String, dynamic>{'id': 'p1', 'type': 99});
-      expect(project.type, ProjectType.sefer);
+    test('an enum from the future is refused, not guessed at', () {
+      // Reading it as the first value of the enum would make a mezuza a sefer
+      // and every figure it feeds silently wrong. Refusing keeps the record in
+      // storage untouched and out of the arithmetic, which is recoverable.
+      expect(() => Project.fromJson(<String, dynamic>{'id': 'p1', 'type': 99}),
+          throwsA(isA<UnreadableRecord>()));
+      expect(
+          () => Expense.fromJson(
+              <String, dynamic>{'id': 'e1', 'allocation': 99, 'amount': 5}),
+          throwsA(isA<UnreadableRecord>()));
+    });
 
-      final expense = Expense.fromJson(
-          <String, dynamic>{'id': 'e1', 'allocation': 99, 'amount': 5});
+    test('a field that never existed still falls back', () {
+      // The other direction, and it must keep working: an old record simply
+      // has no allocation, and the documented default is what it meant.
+      final expense =
+          Expense.fromJson(<String, dynamic>{'id': 'e1', 'amount': 5});
       expect(expense.allocation, ExpenseAllocation.month);
     });
 
@@ -2446,7 +2457,7 @@ void main() {
       expect(Project.fromJson(json).type, ProjectType.tefillin);
     });
 
-    test('a kind of work this build does not know falls back', () {
+    test('a kind of work this build does not know is refused', () {
       final json = {
         'id': 'p',
         'name': 'x',
@@ -2457,7 +2468,7 @@ void main() {
         'targetDaily': 1,
         'targetMonthly': 1,
       };
-      expect(Project.fromJson(json).type, ProjectType.sefer);
+      expect(() => Project.fromJson(json), throwsA(isA<UnreadableRecord>()));
     });
 
     test('an expense allocation is stored the same way', () {

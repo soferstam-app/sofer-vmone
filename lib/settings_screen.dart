@@ -28,6 +28,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _useGregorianDates = false;
   bool _isExporting = false;
   String _soferName = '';
+
+  /// Stored records this build cannot read. They are kept untouched and take no
+  /// part in any figure, so the app has to say they are there rather than
+  /// quietly reporting totals that are short.
+  int _unreadable = 0;
   final StorageService _storage = StorageService();
 
   @override
@@ -42,6 +47,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final dayStart = await _storage.getDayStart();
     final useGregorian = await _storage.getUseGregorianDates();
     final soferName = await _storage.getSoferName();
+    final unreadable = await _storage.unreadableRecordCount();
     if (mounted) {
       setState(() {
         _notificationsEnabled = enabled;
@@ -49,6 +55,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _dayStart = dayStart;
         _useGregorianDates = useGregorian;
         _soferName = soferName;
+        _unreadable = unreadable;
       });
     }
   }
@@ -546,6 +553,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _entry("גיבוי הנתונים", _isExporting ? "מייצא…" : "ייצוא / שחזור",
             note: "פרויקטים, היסטוריה, הוצאות והגדרות בקובץ אחד",
             onTap: _isExporting ? null : _showBackupOptions),
+        if (_unreadable > 0)
+          _entry("רשומות שגרסה זו אינה מבינה", "$_unreadable",
+              note: "נשמרות כמו שהן ואינן נכנסות לאף חישוב. "
+                  "גרסה חדשה יותר תדע לקרוא אותן"),
         if (Platform.isWindows || Platform.isMacOS)
           _entry("בדוק עדכונים", "", onTap: _checkForUpdates),
         const SoferRule(strong: true),
@@ -759,6 +770,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           : const Icon(Icons.chevron_left),
                       onTap: _isExporting ? null : _showBackupOptions,
                     ),
+                    if (_unreadable > 0)
+                      ListTile(
+                        leading: Icon(Icons.help_outline,
+                            color: SoferTokens.of(context).caution),
+                        title: Text("$_unreadable רשומות שגרסה זו אינה מבינה"),
+                        subtitle: const Text(
+                            "נשמרות כמו שהן ואינן נכנסות לאף חישוב. "
+                            "גרסה חדשה יותר תדע לקרוא אותן",
+                            style: TextStyle(fontSize: 12)),
+                      ),
                     if (Platform.isWindows || Platform.isMacOS)
                       ListTile(
                         title: const Text("בדוק עדכונים"),
