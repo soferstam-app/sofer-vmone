@@ -13,6 +13,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late DateTime now;
+  late Duration mono;
   late TimerController clock;
   late int ticks;
 
@@ -20,13 +21,19 @@ void main() {
     // start() and stop() clear the stored sitting.
     SharedPreferences.setMockInitialValues({});
     now = DateTime(2026, 7, 20, 9);
+    mono = Duration.zero;
     ticks = 0;
-    clock = TimerController(onTick: () => ticks++, now: () => now);
+    clock = TimerController(
+        onTick: () => ticks++, now: () => now, monotonic: () => mono);
   });
 
   tearDown(() => clock.dispose());
 
-  void pass(Duration d) => now = now.add(d);
+  /// Ordinary time passing: both instruments agree.
+  void pass(Duration d) {
+    now = now.add(d);
+    mono += d;
+  }
 
   group('measuring a sitting', () {
     test('counts from the clock, not from a stopwatch', () {
@@ -158,7 +165,8 @@ void main() {
       pass(const Duration(minutes: 30));
       final stored = clock.toJson();
 
-      final revived = TimerController(onTick: () {}, now: () => now);
+      final revived = TimerController(
+          onTick: () {}, now: () => now, monotonic: () => mono);
       addTearDown(revived.dispose);
       pass(const Duration(minutes: 20));
 
@@ -173,7 +181,8 @@ void main() {
       clock.pause();
       final stored = clock.toJson();
 
-      final revived = TimerController(onTick: () {}, now: () => now);
+      final revived = TimerController(
+          onTick: () {}, now: () => now, monotonic: () => mono);
       addTearDown(revived.dispose);
       pass(const Duration(hours: 8));
 
@@ -187,6 +196,42 @@ void main() {
       expect(clock.restoreFrom(const {}), isFalse);
       expect(clock.elapsed, Duration.zero);
       expect(clock.isActive, isFalse);
+    });
+  });
+
+  group('a wall clock that jumps mid-sitting', () {
+    // The failure this guards: the phone corrects its clock by NTP, or daylight
+    // saving arrives, or the writer changes the time by hand — and an hour of
+    // writing that never happened was added to the record with nothing left to
+    // recover the truth from.
+    test('does not add writing time that never happened', () {
+      clock.start();
+      mono += const Duration(minutes: 10);
+      now = now.add(const Duration(hours: 1, minutes: 10));
+      expect(clock.elapsed, const Duration(minutes: 10));
+    });
+
+    test('does not take writing time away either', () {
+      clock.start();
+      mono += const Duration(minutes: 40);
+      now = now.subtract(const Duration(minutes: 30));
+      expect(clock.elapsed, const Duration(minutes: 40));
+      expect(clock.stop().worked, const Duration(minutes: 40));
+    });
+
+    test('still measures the stretch the app was closed for', () {
+      // The one thing the wall clock is the only witness to.
+      clock.start();
+      pass(const Duration(minutes: 30));
+      final stored = clock.toJson();
+
+      final revived = TimerController(
+          onTick: () {}, now: () => now, monotonic: () => mono);
+      addTearDown(revived.dispose);
+      now = now.add(const Duration(minutes: 45));
+
+      expect(revived.restoreFrom(stored), isTrue);
+      expect(revived.elapsed, const Duration(minutes: 75));
     });
   });
 

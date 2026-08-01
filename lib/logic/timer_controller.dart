@@ -29,10 +29,13 @@ class StoppedSitting {
 
 /// The stopwatch behind a sitting.
 ///
-/// Time is kept as timestamps and not as a [Stopwatch]'s own count. A Stopwatch
-/// stops when the process is killed, and a sofer who closes the app mid-sitting
-/// — or whose phone decides to close it for him — must not lose the hour. The
-/// Stopwatch that is here answers only whether the clock is running.
+/// Two instruments, each for what it is good at. A monotonic clock measures the
+/// stretch the app has been running for, because it cannot be corrected,
+/// changed by hand or moved by daylight saving in the middle of a sitting. The
+/// wall clock records when the sitting began and takes over for exactly one
+/// thing: the stretch the app was not running for, which nothing monotonic
+/// survives — and a sofer who closes the app mid-sitting, or whose phone closes
+/// it for him, must not lose the hour.
 ///
 /// Pulled out of the home screen, where it was tangled with the entry form and
 /// the smart workflow through a dozen fields nobody could hold in their head at
@@ -48,15 +51,32 @@ class TimerController {
   /// seconds to pass.
   final DateTime Function() _now;
 
+  /// A clock that only ever moves forward, used to measure the stretch the app
+  /// has been running for.
+  ///
+  /// The wall clock is not a reliable instrument for measuring a duration. It
+  /// gets corrected by the network, changed by hand, and moved by daylight
+  /// saving — and any of those in the middle of a sitting silently added or
+  /// removed writing time that never happened, with nothing left to recover it
+  /// from. This one cannot jump. It also cannot survive the process dying,
+  /// which is the one case that still falls back to the wall clock, and it does
+  /// so exactly once, at [restoreFrom].
+  final Duration Function() _monotonic;
+
   TimerController({
     required this.onTick,
     StorageService? storage,
     DateTime Function()? now,
+    Duration Function()? monotonic,
   })  : _storage = storage ?? StorageService(),
-        _now = now ?? DateTime.now;
+        _now = now ?? DateTime.now,
+        _monotonic = monotonic ?? _sinceProcessStart;
 
-  final Stopwatch _running = Stopwatch();
   Timer? _ticker;
+  bool _isRunning = false;
+
+  /// The monotonic reading when the current run began.
+  Duration _runMark = Duration.zero;
 
   /// When the current break began, or null when the writer is not on one.
   /// A timestamp for the same reason the writing time is one.
@@ -64,13 +84,16 @@ class TimerController {
 
   DateTime? _startedAt;
   DateTime? _endedAt;
-  int _accumulatedSeconds = 0;
+
+  /// Writing time confirmed before the current run — banked at every pause, and
+  /// once more at a restore for the stretch the app was not running for.
+  Duration _banked = Duration.zero;
   bool _isPaused = false;
   Duration _lastLap = Duration.zero;
   Duration _lastSitting = Duration.zero;
   Duration _breakSoFar = Duration.zero;
 
-  bool get isRunning => _running.isRunning;
+  bool get isRunning => _isRunning;
   bool get isPaused => _isPaused;
 
   /// Running or paused — a sitting is under way either way.
@@ -93,14 +116,12 @@ class TimerController {
 
   /// Time written so far in this sitting.
   ///
-  /// The accumulated seconds from before the last pause, plus however long it
-  /// has been running since — worked out from the clock, so it stays right
-  /// across a restart.
-  Duration get elapsed {
-    final started = _startedAt;
-    final since = started == null ? 0 : _now().difference(started).inSeconds;
-    return Duration(seconds: _accumulatedSeconds + since);
-  }
+  /// What was banked before the current run, plus what the monotonic clock has
+  /// measured since it began.
+  Duration get elapsed => _banked + _sinceRunStart;
+
+  Duration get _sinceRunStart =>
+      _isRunning ? _monotonic() - _runMark : Duration.zero;
 
   /// Time since the writer last marked a line finished.
   Duration get sinceLastLap => elapsed - _lastLap;
@@ -113,7 +134,8 @@ class TimerController {
       _breakSoFar += breakElapsed;
       _breakStartedAt = null;
     }
-    _running.start();
+    _isRunning = true;
+    _runMark = _monotonic();
     _startedAt ??= _now();
     _ticker?.cancel();
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => onTick());
@@ -121,14 +143,11 @@ class TimerController {
   }
 
   void pause() {
-    final started = _startedAt;
-    if (started != null) {
-      // Banked, so that the time already written survives the pause without
-      // depending on a Stopwatch that a restart would reset.
-      _accumulatedSeconds += _now().difference(started).inSeconds;
-      _startedAt = null;
-    }
-    _running.stop();
+    // Banked, so the time already written survives the pause and, through
+    // toJson, the app being closed.
+    _banked += _sinceRunStart;
+    _isRunning = false;
+    _startedAt = null;
     _ticker?.cancel();
     _isPaused = true;
     _breakStartedAt = _now();
@@ -143,8 +162,7 @@ class TimerController {
     // ends.
     final onBreak = _breakSoFar + breakElapsed;
 
-    _running.stop();
-    _running.reset();
+    _isRunning = false;
     _ticker?.cancel();
     _breakStartedAt = null;
     _isPaused = false;
@@ -152,7 +170,7 @@ class TimerController {
     _lastSitting = worked;
     _lastLap = Duration.zero;
     _startedAt = null;
-    _accumulatedSeconds = 0;
+    _banked = Duration.zero;
     _breakSoFar = Duration.zero;
 
     _storage.clearTimerState();
@@ -178,23 +196,33 @@ class TimerController {
   Map<String, dynamic> toJson() => {
         'isPaused': _isPaused,
         'sessionStartTime': _startedAt?.toIso8601String(),
-        'accumulatedElapsedSeconds': _accumulatedSeconds,
+        'accumulatedElapsedSeconds': _banked.inSeconds,
       };
 
   /// Picks a sitting back up. Returns true when the clock is running again, so
   /// the screen knows to start its animation.
   bool restoreFrom(Map<String, dynamic> state) {
     final isPaused = state['isPaused'] == true;
-    _accumulatedSeconds =
-        (state['accumulatedElapsedSeconds'] as num?)?.toInt() ?? 0;
+    _banked = Duration(
+        seconds: (state['accumulatedElapsedSeconds'] as num?)?.toInt() ?? 0);
     final started = state['sessionStartTime'] as String?;
     // A paused sitting has no start to count from: its time is all banked.
-    _startedAt =
+    final resumedFrom =
         started != null && !isPaused ? DateTime.tryParse(started) : null;
     _isPaused = isPaused;
+    _startedAt = null;
 
-    if (_startedAt == null) return false;
-    _running.start();
+    if (resumedFrom == null) return false;
+
+    // The stretch while the app was not running can only be measured by the
+    // wall clock — nothing monotonic survives a process dying. It is folded
+    // into the bank once, here, and the monotonic clock takes over from now on.
+    final away = _now().difference(resumedFrom);
+    if (away > Duration.zero) _banked += away;
+
+    _startedAt = _now();
+    _isRunning = true;
+    _runMark = _monotonic();
     _ticker?.cancel();
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => onTick());
     return true;
@@ -239,7 +267,7 @@ class TimerController {
     );
     await FlutterForegroundTask.saveData(
       key: 'timerAccumulatedSeconds',
-      value: _accumulatedSeconds,
+      value: _banked.inSeconds,
     );
     await FlutterForegroundTask.startService(
       serviceId: 256,
@@ -256,3 +284,8 @@ class TimerController {
 
   void dispose() => _ticker?.cancel();
 }
+
+/// One monotonic clock for the process, started the first time anything asks.
+final Stopwatch _processClock = Stopwatch()..start();
+
+Duration _sinceProcessStart() => _processClock.elapsed;
