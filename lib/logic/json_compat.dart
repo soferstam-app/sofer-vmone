@@ -101,6 +101,29 @@ class JsonCompat {
     return enumByIndex(json[indexKey], values, fallback);
   }
 
+  /// Reads the two tombstone registers, migrating a record that carried only a
+  /// flag.
+  ///
+  /// A record written before the registers existed says `isDeleted: true` and
+  /// nothing more. The moment the flag was set is not recorded anywhere, and
+  /// `lastUpdated` is the closest thing to it that exists — the write that set
+  /// the flag was, by definition, the last write. The reading is exact for
+  /// every record that has not been edited since it was deleted, and no worse
+  /// than the flag itself for any other.
+  static ({DateTime? deletedAt, DateTime? restoredAt}) tombstone(
+    Map<String, dynamic> json,
+    DateTime lastUpdated,
+  ) {
+    final deletedAt = dateOrNull(json['deletedAt']);
+    final restoredAt = dateOrNull(json['restoredAt']);
+    if (deletedAt != null || restoredAt != null) {
+      return (deletedAt: deletedAt, restoredAt: restoredAt);
+    }
+    return boolean(json['isDeleted'], false)
+        ? (deletedAt: lastUpdated, restoredAt: null)
+        : (deletedAt: null, restoredAt: null);
+  }
+
   /// Everything in [json] that is not in [known].
   ///
   /// Returned as a plain map so a model can hold it and spread it back into its

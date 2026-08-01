@@ -124,7 +124,7 @@ void main() {
         date: DateTime(2026, 3, 1),
         amount: 120.5,
         lastUpdated: DateTime(2026, 3, 2, 10, 30),
-        isDeleted: true,
+        deletedAt: DateTime(2026, 3, 2, 10, 30),
       );
 
       final restored = Expense.fromJson(original.toJson());
@@ -541,7 +541,7 @@ void main() {
           endLine: to,
           description: '',
           isManual: false,
-          isDeleted: deleted,
+          deletedAt: deleted ? DateTime(2026, 1, 1) : null,
         );
 
     final history = [s('a', 5, 1, 20), s('b', 6, 1, 42)];
@@ -1069,7 +1069,7 @@ void main() {
         amount: 999,
         allocation: ExpenseAllocation.project,
         projectIds: const ['p1'],
-        isDeleted: true,
+        deletedAt: DateTime(2026, 1, 1),
       );
       expect(ExpenseLogic.totalForProject('p1', [deleted]), 0);
       expect(ExpenseLogic.totalForMonth(DateTime(2026, 5), [deleted]), 0);
@@ -1114,15 +1114,13 @@ void main() {
           targetDaily: 1,
           targetMonthly: 20,
           lastUpdated: updated ?? DateTime(2026, 1, 1),
-          isDeleted: deleted,
+          deletedAt: deleted ? (updated ?? DateTime(2026, 1, 1)) : null,
         );
 
     test('records present on only one side are all kept', () {
       final r = MergeService.mergeById<Project>(
         [project('a')],
         [project('b')],
-        (p) => p.id,
-        (p) => p.lastUpdated,
       );
       expect(r.merged.map((p) => p.id).toSet(), {'a', 'b'});
       expect(r.stats.added, 1);
@@ -1133,8 +1131,6 @@ void main() {
       final r = MergeService.mergeById<Project>(
         [project('a'), project('b'), project('c')],
         [], // an empty backup
-        (p) => p.id,
-        (p) => p.lastUpdated,
       );
       expect(r.merged.length, 3);
       expect(r.stats.added, 0);
@@ -1145,40 +1141,74 @@ void main() {
       final newer = project('a', updated: DateTime(2026, 6, 1));
 
       final incomingNewer = MergeService.mergeById<Project>(
-          [older], [newer], (p) => p.id, (p) => p.lastUpdated);
+          [older], [newer]);
       expect(incomingNewer.merged.single.lastUpdated, DateTime(2026, 6, 1));
       expect(incomingNewer.stats.updated, 1);
 
       // And the other way round: a stale backup must not overwrite newer work
       final incomingOlder = MergeService.mergeById<Project>(
-          [newer], [older], (p) => p.id, (p) => p.lastUpdated);
+          [newer], [older]);
       expect(incomingOlder.merged.single.lastUpdated, DateTime(2026, 6, 1));
       expect(incomingOlder.stats.updated, 0);
       expect(incomingOlder.stats.unchanged, 1);
     });
 
-    test('a recent deletion survives so it can propagate', () {
-      final justDeleted = project('a', updated: DateTime.now(), deleted: true);
-      final kept = MergeService.purgeOldDeleted(
-          [justDeleted], (p) => p.isDeleted, (p) => p.lastUpdated);
-      expect(kept, hasLength(1));
+    test('a deletion is not undone by an edit made on a stale copy', () {
+      // The failure this replaced: one device deletes a project, another that
+      // has not synced yet edits its own live copy, and because an edit is
+      // newer than a deletion the record came back.
+      final deleted = project('a', updated: DateTime(2026, 6, 1), deleted: true);
+      final editedLater = project('a', updated: DateTime(2026, 6, 20));
+
+      for (final r in [
+        MergeService.mergeById<Project>([deleted], [editedLater]),
+        MergeService.mergeById<Project>([editedLater], [deleted]),
+      ]) {
+        expect(r.merged.single.isDeleted, isTrue);
+        // The edit still wins the payload — only the deletion is protected.
+        expect(r.merged.single.lastUpdated, DateTime(2026, 6, 20));
+      }
     });
 
-    test('a deletion older than the retention window is dropped', () {
+    test('a restore made after the deletion does undo it', () {
+      final deleted = project('a', updated: DateTime(2026, 6, 1), deleted: true);
+      final restored = deleted.copyWith(isDeleted: false);
+
+      for (final r in [
+        MergeService.mergeById<Project>([deleted], [restored]),
+        MergeService.mergeById<Project>([restored], [deleted]),
+      ]) {
+        expect(r.merged.single.isDeleted, isFalse);
+      }
+    });
+
+    test('a deletion survives however long a device was away', () {
+      // Tombstones are never dropped. A device left in a drawer for a year
+      // still holds its live copy, and the tombstone is the only evidence the
+      // deletion ever happened.
       final longGone = project('a',
-          updated: DateTime.now().subtract(const Duration(days: 40)),
+          updated: DateTime.now().subtract(const Duration(days: 400)),
           deleted: true);
-      final kept = MergeService.purgeOldDeleted(
-          [longGone], (p) => p.isDeleted, (p) => p.lastUpdated);
-      expect(kept, isEmpty);
+      final staleLiveCopy = project('a',
+          updated: DateTime.now().subtract(const Duration(days: 500)));
+
+      final r =
+          MergeService.mergeById<Project>([longGone], [staleLiveCopy]);
+      expect(r.merged, hasLength(1));
+      expect(r.merged.single.isDeleted, isTrue);
     });
 
-    test('live records are never purged regardless of age', () {
-      final ancient =
-          project('a', updated: DateTime(2020, 1, 1), deleted: false);
-      final kept = MergeService.purgeOldDeleted(
-          [ancient], (p) => p.isDeleted, (p) => p.lastUpdated);
-      expect(kept, hasLength(1));
+    test('merging is the same whichever file arrives first', () {
+      final a = project('a', updated: DateTime(2026, 6, 1), deleted: true);
+      final b = project('a', updated: DateTime(2026, 6, 20));
+
+      final forward = MergeService.mergeById<Project>([a], [b]).merged.single;
+      final backward = MergeService.mergeById<Project>([b], [a]).merged.single;
+
+      expect(forward.isDeleted, backward.isDeleted);
+      expect(forward.lastUpdated, backward.lastUpdated);
+      expect(forward.deletedAt, backward.deletedAt);
+      expect(forward.restoredAt, backward.restoredAt);
     });
 
     test('mergeBackup reports what happened per list', () {

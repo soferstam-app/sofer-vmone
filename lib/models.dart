@@ -1,8 +1,10 @@
 import 'logic/json_compat.dart';
+import 'logic/mergeable.dart';
 
 enum ProjectType { sefer, mezuza, tefillin }
 
-class Project {
+class Project implements Mergeable<Project> {
+  @override
   final String id;
   final String name;
   final ProjectType type;
@@ -23,8 +25,30 @@ class Project {
   /// estimated for the project.
   final int? targetUnits;
 
+  @override
   final DateTime lastUpdated;
-  final bool isDeleted;
+
+  /// When this record was deleted, and when it was restored. Two independent
+  /// registers rather than one flag.
+  ///
+  /// Merging used to resolve a disagreement by whichever device wrote last, so
+  /// an edit made on a stale copy beat a deletion made on another device and
+  /// the record came back from the dead. Registers merge on their own: each
+  /// side takes the later of the two, and a deletion is undone only by a
+  /// restore that is genuinely later than it — never by an unrelated edit.
+  @override
+  final DateTime? deletedAt;
+  @override
+  final DateTime? restoredAt;
+
+  /// Whether this record counts as deleted.
+  bool get isDeleted {
+    final deleted = deletedAt;
+    if (deleted == null) return false;
+    final restored = restoredAt;
+    return restored == null || deleted.isAfter(restored);
+  }
+
   final String? clientEmail;
   final DateTime? targetCompletionDate;
 
@@ -51,6 +75,8 @@ class Project {
     'targetUnits',
     'lastUpdated',
     'isDeleted',
+    'deletedAt',
+    'restoredAt',
     'clientEmail',
     'targetCompletionDate',
   };
@@ -75,7 +101,8 @@ class Project {
     this.linesPerPage,
     this.targetUnits,
     DateTime? lastUpdated,
-    this.isDeleted = false,
+    this.deletedAt,
+    this.restoredAt,
     this.clientEmail,
     this.targetCompletionDate,
     this.extraFields = const {},
@@ -101,7 +128,12 @@ class Project {
       'linesPerPage': linesPerPage,
       'targetUnits': targetUnits,
       'lastUpdated': lastUpdated.toIso8601String(),
+      // The flag is still written because an older build looks for it and
+      // would read every record as alive without it. The registers are what
+      // this build reads.
       'isDeleted': isDeleted,
+      'deletedAt': deletedAt?.toIso8601String(),
+      'restoredAt': restoredAt?.toIso8601String(),
       'clientEmail': clientEmail,
       'targetCompletionDate': targetCompletionDate?.toIso8601String(),
     };
@@ -113,6 +145,9 @@ class Project {
   factory Project.fromJson(Map<String, dynamic> json) {
     final id = JsonCompat.string(json['id']);
     if (id.isEmpty) throw const FormatException('project without an id');
+
+    final lastUpdated = JsonCompat.date(json['lastUpdated'], DateTime.now());
+    final tombstone = JsonCompat.tombstone(json, lastUpdated);
 
     return Project(
       id: id,
@@ -127,8 +162,9 @@ class Project {
       totalPages: JsonCompat.intOrNull(json['totalPages']),
       linesPerPage: JsonCompat.intOrNull(json['linesPerPage']),
       targetUnits: JsonCompat.intOrNull(json['targetUnits']),
-      lastUpdated: JsonCompat.date(json['lastUpdated'], DateTime.now()),
-      isDeleted: JsonCompat.boolean(json['isDeleted'], false),
+      lastUpdated: lastUpdated,
+      deletedAt: tombstone.deletedAt,
+      restoredAt: tombstone.restoredAt,
       clientEmail: json['clientEmail'] as String?,
       targetCompletionDate: JsonCompat.dateOrNull(json['targetCompletionDate']),
       extraFields: JsonCompat.unknownKeys(json, _knownKeys),
@@ -162,12 +198,36 @@ class Project {
       linesPerPage: linesPerPage ?? this.linesPerPage,
       targetUnits: targetUnits ?? this.targetUnits,
       lastUpdated: DateTime.now(),
-      isDeleted: isDeleted ?? this.isDeleted,
+      // Deleting and restoring each move their own register, so a later edit
+      // can never undo either of them by accident.
+      deletedAt: isDeleted == true ? DateTime.now() : deletedAt,
+      restoredAt: isDeleted == false ? DateTime.now() : restoredAt,
       clientEmail: clientEmail ?? this.clientEmail,
       targetCompletionDate: targetCompletionDate ?? this.targetCompletionDate,
       extraFields: extraFields,
     );
   }
+
+  @override
+  Project withTombstone({DateTime? deletedAt, DateTime? restoredAt}) => Project(
+        id: id,
+        name: name,
+        type: type,
+        price: price,
+        expenses: expenses,
+        targetDaily: targetDaily,
+        targetMonthly: targetMonthly,
+        dailyGoalInLines: dailyGoalInLines,
+        totalPages: totalPages,
+        linesPerPage: linesPerPage,
+        targetUnits: targetUnits,
+        lastUpdated: lastUpdated,
+        deletedAt: deletedAt,
+        restoredAt: restoredAt,
+        clientEmail: clientEmail,
+        targetCompletionDate: targetCompletionDate,
+        extraFields: extraFields,
+      );
 
   @override
   bool operator ==(Object other) =>
@@ -178,7 +238,8 @@ class Project {
   int get hashCode => id.hashCode;
 }
 
-class WorkSession {
+class WorkSession implements Mergeable<WorkSession> {
+  @override
   final String id;
   final String projectId;
   final DateTime startTime;
@@ -248,8 +309,29 @@ class WorkSession {
   /// the best available answer for a record that never stated one.
   final DateTime? workingDateAtEntry;
 
+  @override
   final DateTime lastUpdated;
-  final bool isDeleted;
+
+  /// When this record was deleted, and when it was restored. Two independent
+  /// registers rather than one flag.
+  ///
+  /// Merging used to resolve a disagreement by whichever device wrote last, so
+  /// an edit made on a stale copy beat a deletion made on another device and
+  /// the record came back from the dead. Registers merge on their own: each
+  /// side takes the later of the two, and a deletion is undone only by a
+  /// restore that is genuinely later than it — never by an unrelated edit.
+  @override
+  final DateTime? deletedAt;
+  @override
+  final DateTime? restoredAt;
+
+  /// Whether this record counts as deleted.
+  bool get isDeleted {
+    final deleted = deletedAt;
+    if (deleted == null) return false;
+    final restored = restoredAt;
+    return restored == null || deleted.isAfter(restored);
+  }
 
   /// Fields written by a newer version, carried through untouched. See
   /// [Project.extraFields].
@@ -273,6 +355,8 @@ class WorkSession {
     'workingDateAtEntry',
     'lastUpdated',
     'isDeleted',
+    'deletedAt',
+    'restoredAt',
   };
 
   WorkSession({
@@ -292,7 +376,8 @@ class WorkSession {
     this.linesPerPageAtEntry,
     this.workingDateAtEntry,
     DateTime? lastUpdated,
-    this.isDeleted = false,
+    this.deletedAt,
+    this.restoredAt,
     this.extraFields = const {},
   })  : // Left unstated, it is read off the times — the same rule that migrates
         // a session recorded before the field existed. Callers that know the
@@ -336,7 +421,12 @@ class WorkSession {
       'linesPerPageAtEntry': linesPerPageAtEntry,
       'workingDateAtEntry': workingDateAtEntry?.toIso8601String(),
       'lastUpdated': lastUpdated.toIso8601String(),
+      // The flag is still written because an older build looks for it and
+      // would read every record as alive without it. The registers are what
+      // this build reads.
       'isDeleted': isDeleted,
+      'deletedAt': deletedAt?.toIso8601String(),
+      'restoredAt': restoredAt?.toIso8601String(),
     };
   }
 
@@ -349,6 +439,9 @@ class WorkSession {
 
     final start = JsonCompat.date(json['startTime'], DateTime(1970));
     final end = JsonCompat.date(json['endTime'], start);
+    final lastUpdated = JsonCompat.date(json['lastUpdated'], DateTime.now());
+    final tombstone = JsonCompat.tombstone(json, lastUpdated);
+
     return WorkSession(
       id: id,
       projectId: JsonCompat.string(json['projectId']),
@@ -368,11 +461,36 @@ class WorkSession {
           JsonCompat.boolean(json['timeRecorded'], end.isAfter(start)),
       linesPerPageAtEntry: JsonCompat.intOrNull(json['linesPerPageAtEntry']),
       workingDateAtEntry: JsonCompat.dateOrNull(json['workingDateAtEntry']),
-      lastUpdated: JsonCompat.date(json['lastUpdated'], DateTime.now()),
-      isDeleted: JsonCompat.boolean(json['isDeleted'], false),
+      lastUpdated: lastUpdated,
+      deletedAt: tombstone.deletedAt,
+      restoredAt: tombstone.restoredAt,
       extraFields: JsonCompat.unknownKeys(json, _knownKeys),
     );
   }
+
+  @override
+  WorkSession withTombstone({DateTime? deletedAt, DateTime? restoredAt}) =>
+      WorkSession(
+        id: id,
+        projectId: projectId,
+        startTime: startTime,
+        endTime: endTime,
+        amount: amount,
+        startLine: startLine,
+        endLine: endLine,
+        tefillinType: tefillinType,
+        parshiya: parshiya,
+        description: description,
+        isManual: isManual,
+        backlogOnly: backlogOnly,
+        timeRecorded: timeRecorded,
+        linesPerPageAtEntry: linesPerPageAtEntry,
+        workingDateAtEntry: workingDateAtEntry,
+        lastUpdated: lastUpdated,
+        deletedAt: deletedAt,
+        restoredAt: restoredAt,
+        extraFields: extraFields,
+      );
 
   WorkSession copyWith({
     DateTime? startTime,
@@ -406,7 +524,10 @@ class WorkSession {
       linesPerPageAtEntry: linesPerPageAtEntry,
       workingDateAtEntry: workingDateAtEntry ?? this.workingDateAtEntry,
       lastUpdated: DateTime.now(),
-      isDeleted: isDeleted ?? this.isDeleted,
+      // Deleting and restoring each move their own register, so a later edit
+      // can never undo either of them by accident.
+      deletedAt: isDeleted == true ? DateTime.now() : deletedAt,
+      restoredAt: isDeleted == false ? DateTime.now() : restoredAt,
       extraFields: extraFields,
     );
   }
@@ -429,7 +550,8 @@ enum ExpenseAllocation {
   month,
 }
 
-class Expense {
+class Expense implements Mergeable<Expense> {
+  @override
   final String id;
   final String product;
   final DateTime date;
@@ -449,8 +571,29 @@ class Expense {
   final DateTime? periodStart;
   final DateTime? periodEnd;
 
+  @override
   final DateTime lastUpdated;
-  final bool isDeleted;
+
+  /// When this record was deleted, and when it was restored. Two independent
+  /// registers rather than one flag.
+  ///
+  /// Merging used to resolve a disagreement by whichever device wrote last, so
+  /// an edit made on a stale copy beat a deletion made on another device and
+  /// the record came back from the dead. Registers merge on their own: each
+  /// side takes the later of the two, and a deletion is undone only by a
+  /// restore that is genuinely later than it — never by an unrelated edit.
+  @override
+  final DateTime? deletedAt;
+  @override
+  final DateTime? restoredAt;
+
+  /// Whether this record counts as deleted.
+  bool get isDeleted {
+    final deleted = deletedAt;
+    if (deleted == null) return false;
+    final restored = restoredAt;
+    return restored == null || deleted.isAfter(restored);
+  }
 
   /// Fields written by a newer version, carried through untouched. See
   /// [Project.extraFields].
@@ -468,6 +611,8 @@ class Expense {
     'periodEnd',
     'lastUpdated',
     'isDeleted',
+    'deletedAt',
+    'restoredAt',
   };
 
   Expense({
@@ -480,7 +625,8 @@ class Expense {
     this.periodStart,
     this.periodEnd,
     DateTime? lastUpdated,
-    this.isDeleted = false,
+    this.deletedAt,
+    this.restoredAt,
     this.extraFields = const {},
   }) : lastUpdated = lastUpdated ?? DateTime.now();
 
@@ -502,7 +648,12 @@ class Expense {
       'periodStart': periodStart?.toIso8601String(),
       'periodEnd': periodEnd?.toIso8601String(),
       'lastUpdated': lastUpdated.toIso8601String(),
+      // The flag is still written because an older build looks for it and
+      // would read every record as alive without it. The registers are what
+      // this build reads.
       'isDeleted': isDeleted,
+      'deletedAt': deletedAt?.toIso8601String(),
+      'restoredAt': restoredAt?.toIso8601String(),
     };
   }
 
@@ -511,15 +662,19 @@ class Expense {
     if (id.isEmpty) throw const FormatException('expense without an id');
 
     final date = JsonCompat.date(json['date'], DateTime.now());
+    // Older backups have no lastUpdated: fall back to the expense date so
+    // merging still has a deterministic timestamp.
+    final lastUpdated = JsonCompat.date(json['lastUpdated'], date);
+    final tombstone = JsonCompat.tombstone(json, lastUpdated);
+
     return Expense(
       id: id,
       product: JsonCompat.string(json['product']),
       date: date,
       amount: JsonCompat.number(json['amount'], 0),
-      // Older backups have no lastUpdated: fall back to the expense date so
-      // merging still has a deterministic timestamp.
-      lastUpdated: JsonCompat.date(json['lastUpdated'], date),
-      isDeleted: JsonCompat.boolean(json['isDeleted'], false),
+      lastUpdated: lastUpdated,
+      deletedAt: tombstone.deletedAt,
+      restoredAt: tombstone.restoredAt,
       // Expenses saved before allocation existed behave as they did then:
       // charged to the month of their date.
       allocation: JsonCompat.enumByName(json, 'allocationName', 'allocation',
@@ -530,6 +685,22 @@ class Expense {
       extraFields: JsonCompat.unknownKeys(json, _knownKeys),
     );
   }
+
+  @override
+  Expense withTombstone({DateTime? deletedAt, DateTime? restoredAt}) => Expense(
+        id: id,
+        product: product,
+        date: date,
+        amount: amount,
+        allocation: allocation,
+        projectIds: projectIds,
+        periodStart: periodStart,
+        periodEnd: periodEnd,
+        lastUpdated: lastUpdated,
+        deletedAt: deletedAt,
+        restoredAt: restoredAt,
+        extraFields: extraFields,
+      );
 
   Expense copyWith({
     String? product,
@@ -551,7 +722,10 @@ class Expense {
       periodStart: periodStart ?? this.periodStart,
       periodEnd: periodEnd ?? this.periodEnd,
       lastUpdated: DateTime.now(),
-      isDeleted: isDeleted ?? this.isDeleted,
+      // Deleting and restoring each move their own register, so a later edit
+      // can never undo either of them by accident.
+      deletedAt: isDeleted == true ? DateTime.now() : deletedAt,
+      restoredAt: isDeleted == false ? DateTime.now() : restoredAt,
       extraFields: extraFields,
     );
   }

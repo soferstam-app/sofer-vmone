@@ -10,6 +10,9 @@ class RecycleBinScreen extends StatefulWidget {
   State<RecycleBinScreen> createState() => _RecycleBinScreenState();
 }
 
+/// How long a deleted project stays listed here.
+const Duration _binWindow = Duration(days: 30);
+
 class _RecycleBinScreenState extends State<RecycleBinScreen> {
   List<Project> _deletedProjects = [];
   bool _isLoading = true;
@@ -24,8 +27,17 @@ class _RecycleBinScreenState extends State<RecycleBinScreen> {
   Future<void> _loadDeletedItems() async {
     setState(() => _isLoading = true);
     final allProjects = await _storage.loadProjects();
-    final deleted = allProjects.where((p) => p.isDeleted).toList();
-    deleted.sort((a, b) => b.lastUpdated.compareTo(a.lastUpdated));
+    // Deleted records are kept for ever — dropping a tombstone is how a
+    // deletion gets undone by a device that was away. The bin shows the recent
+    // ones; the rest stop being listed, which is all "the bin empties itself"
+    // ever meant.
+    final cutoff = DateTime.now().subtract(_binWindow);
+    final deleted = allProjects
+        .where((p) =>
+            p.isDeleted && (p.deletedAt == null || p.deletedAt!.isAfter(cutoff)))
+        .toList();
+    deleted.sort((a, b) => (b.deletedAt ?? b.lastUpdated)
+        .compareTo(a.deletedAt ?? a.lastUpdated));
 
     if (mounted) {
       setState(() {
@@ -121,9 +133,10 @@ class _RecycleBinScreenState extends State<RecycleBinScreen> {
                   itemCount: _deletedProjects.length,
                   itemBuilder: (context, index) {
                     final p = _deletedProjects[index];
-                    final daysDeleted =
-                        DateTime.now().difference(p.lastUpdated).inDays;
-                    final daysLeft = 30 - daysDeleted;
+                    final since = DateTime.now()
+                        .difference(p.deletedAt ?? p.lastUpdated)
+                        .inDays;
+                    final daysLeft = _binWindow.inDays - since;
 
                     final t = SoferTokens.of(context);
 
@@ -149,8 +162,8 @@ class _RecycleBinScreenState extends State<RecycleBinScreen> {
                                   const SizedBox(height: 2),
                                   Text(
                                     daysLeft <= 0
-                                        ? "יימחק לצמיתות בניקוי הבא"
-                                        : "יימחק לצמיתות בעוד $daysLeft ימים",
+                                        ? "יוסתר מהסל בקרוב"
+                                        : "יוסתר מהסל בעוד $daysLeft ימים",
                                     style: TextStyle(
                                         fontFamily: t.labelFamily,
                                         fontSize: 12,
@@ -182,7 +195,7 @@ class _RecycleBinScreenState extends State<RecycleBinScreen> {
                         leading:
                             Icon(Icons.history, color: SoferTokens.of(context).caution),
                         title: Text(p.name),
-                        subtitle: Text("יימחק לצמיתות בעוד $daysLeft ימים"),
+                        subtitle: Text("יוסתר מהסל בעוד $daysLeft ימים"),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
