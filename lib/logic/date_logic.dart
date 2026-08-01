@@ -78,15 +78,24 @@ class DateLogic {
 
   /// The working day a recorded [session] belongs to.
   ///
-  /// Prefers the day frozen onto the session when it was entered. Deriving it
-  /// afresh on every read would mean that a writer who moves his day boundary
-  /// re-files all of his past work — but how a past day was reckoned is a fact
-  /// about that day, not about today's setting.
+  /// Applies the rule that was in force when the work was recorded, rather than
+  /// today's. Both halves of that matter and they used to be in conflict:
+  /// deriving with the current setting re-filed years of past work the moment a
+  /// writer changed his boundary, and freezing the resulting day instead made a
+  /// mistake in the sunset computation permanent. Freezing the *rule* and
+  /// applying it now gives both — nothing moves when the setting changes, and
+  /// everything moves when the computation is corrected.
   ///
-  /// Sessions from before the snapshot existed fall back to deriving it, which
-  /// is the old behaviour.
-  static DateTime workingDateOf(WorkSession session, DayStart dayStart) =>
-      session.workingDateAtEntry ?? effectiveDate(session.startTime, dayStart);
+  /// A session recorded before the rule was kept has the frozen day and nothing
+  /// else, and that is exactly what it was counted under at the time. One older
+  /// still has neither, and falls back to the current setting, which is the old
+  /// behaviour and the best answer available for a record that never stated one.
+  static DateTime workingDateOf(WorkSession session, DayStart dayStart) {
+    final rule = session.dayRule;
+    if (rule != null) return effectiveDate(session.startTime, rule);
+    return session.workingDateAtEntry ??
+        effectiveDate(session.startTime, dayStart);
+  }
 
   /// Whether [session] was filed under the working day containing [day].
   static bool sessionIsOnDay(

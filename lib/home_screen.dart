@@ -112,16 +112,20 @@ class _SoferHomeState extends State<SoferHome>
   DateTime _effectiveDate(DateTime now) =>
       DateLogic.effectiveDate(now, _dayStart);
 
-  /// Freezes onto each session the working day it is being filed under.
+  /// Freezes onto each session the day-boundary rule it is being filed under.
   ///
-  /// Every path that records work goes through here. The day is settled once,
-  /// now, with the boundary the writer has set now — so that changing the
-  /// boundary later cannot re-file work that was already counted under a
-  /// different reckoning.
+  /// Every path that records work goes through here. The rule is settled once,
+  /// now — so that changing the boundary later cannot re-file work that was
+  /// already counted under a different reckoning, while a correction to how a
+  /// boundary is computed still reaches every record ever made.
+  ///
+  /// The day the rule produces is written alongside it, for an older build that
+  /// looks for the day and knows nothing about rules.
   List<WorkSession> _stampWorkingDay(List<WorkSession> sessions) => sessions
-      .map((s) => s.workingDateAtEntry != null
+      .map((s) => s.dayRule != null
           ? s
           : s.copyWith(
+              dayRule: _dayStart,
               workingDateAtEntry:
                   DateLogic.effectiveDate(s.startTime, _dayStart)))
       .toList();

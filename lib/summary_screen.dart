@@ -1475,6 +1475,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
       // Re-settled from the new time with today's boundary: the writer is
       // actively restating when this work happened, so the current reckoning is
       // the one they mean. Editing a 23:00 session to 00:30 must move it.
+      // Re-settled with today's rule: the writer is actively restating when
+      // this work happened, so the current reckoning is the one they mean.
+      dayRule: _dayStart,
       workingDateAtEntry: DateLogic.effectiveDate(range.start, _dayStart),
       // The editor asks for a start and an end, so once it is saved the session
       // has a time whether or not it had one before.

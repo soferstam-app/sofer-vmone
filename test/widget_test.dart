@@ -2173,6 +2173,79 @@ void main() {
     });
   });
 
+  group('the rule is frozen, not the day it produced', () {
+    WorkSession ruled(DateTime start, DayStart? rule, {DateTime? frozenDay}) =>
+        WorkSession(
+          id: 's1',
+          projectId: 'p1',
+          startTime: start,
+          endTime: start.add(const Duration(hours: 1)),
+          amount: 1,
+          startLine: 1,
+          endLine: 42,
+          description: '',
+          isManual: false,
+          dayRule: rule,
+          workingDateAtEntry: frozenDay,
+        );
+
+    const midnight = DayStart.midnight;
+    const oneAm = DayStart(boundary: DayBoundary.fixedHour, hour: 1);
+    final justAfterMidnight = DateTime(2026, 5, 11, 0, 30);
+
+    test('changing the setting today moves nothing recorded yesterday', () {
+      final session = ruled(justAfterMidnight, oneAm);
+      // Read with the boundary now set to midnight — the session keeps its own.
+      expect(DateLogic.workingDateOf(session, midnight), DateTime(2026, 5, 10));
+    });
+
+    test('the rule it carries is what decides, whatever it is', () {
+      // The same instant, recorded under two different rules, is two different
+      // working days. That is the whole point of keeping the rule.
+      expect(DateLogic.workingDateOf(ruled(justAfterMidnight, oneAm), midnight),
+          DateTime(2026, 5, 10));
+      expect(DateLogic.workingDateOf(ruled(justAfterMidnight, midnight), oneAm),
+          DateTime(2026, 5, 11));
+    });
+
+    test('the day is derived, so a corrected computation reaches history', () {
+      // Nothing about the day is stored on a ruled session: no frozen date to
+      // contradict a fix. This asserts the absence, which is the property that
+      // makes a correction possible at all.
+      final session = ruled(justAfterMidnight, oneAm);
+      expect(session.workingDateAtEntry, isNull);
+    });
+
+    test('a session recorded before rules were kept uses its frozen day', () {
+      final legacy = ruled(justAfterMidnight, null,
+          frozenDay: DateTime(2026, 5, 10));
+      expect(DateLogic.workingDateOf(legacy, midnight), DateTime(2026, 5, 10));
+    });
+
+    test('a session with neither falls back to the current setting', () {
+      final ancient = ruled(justAfterMidnight, null);
+      expect(DateLogic.workingDateOf(ancient, oneAm), DateTime(2026, 5, 10));
+      expect(DateLogic.workingDateOf(ancient, midnight), DateTime(2026, 5, 11));
+    });
+
+    test('the rule survives a round trip', () {
+      final stored = ruled(justAfterMidnight, oneAm).toJson();
+      final back = WorkSession.fromJson(jsonDecode(jsonEncode(stored)));
+      expect(back.dayRule?.boundary, DayBoundary.fixedHour);
+      expect(back.dayRule?.hour, 1);
+      expect(DateLogic.workingDateOf(back, midnight), DateTime(2026, 5, 10));
+    });
+
+    test('an older build still finds the day where it looks for it', () {
+      // It knows nothing about rules and would otherwise re-derive the day with
+      // whatever setting happens to be current on that device.
+      final session = ruled(justAfterMidnight, oneAm)
+          .copyWith(workingDateAtEntry: DateTime(2026, 5, 10));
+      expect(session.toJson()['workingDateAtEntry'], isNotNull);
+      expect(session.toJson()['dayRule'], isNotNull);
+    });
+  });
+
   group('DayStart and the zmanim clock', () {
     test('survives a round trip and tolerates an unknown boundary', () {
       const original = DayStart(boundary: DayBoundary.nightfall, hour: 3);

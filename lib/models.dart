@@ -1,3 +1,4 @@
+import 'logic/hebrew_clock.dart';
 import 'logic/json_compat.dart';
 import 'logic/mergeable.dart';
 
@@ -292,6 +293,20 @@ class WorkSession implements Mergeable<WorkSession> {
   /// back to the project's current setting.
   final int? linesPerPageAtEntry;
 
+  /// The day-boundary rule that was in force when this session was recorded.
+  ///
+  /// The *rule*, not the day it produced. Freezing the day protected history
+  /// from a later change of setting, which is right — but it also meant that a
+  /// mistake in the sunset or nightfall computation could never be corrected
+  /// for work already recorded, and that adding per-city zmanim would leave
+  /// every past record reckoned by the wrong place for ever. Freezing the rule
+  /// gives both: the setting may change and nothing moves, and the computation
+  /// may be corrected and everything does.
+  ///
+  /// Null on sessions recorded before the rule was kept. Those keep
+  /// [workingDateAtEntry], which is exactly what they were counted under.
+  final DayStart? dayRule;
+
   /// The working day this session was filed under when it was recorded.
   ///
   /// Derived once, at entry, from the day-boundary setting in force at the time
@@ -307,6 +322,10 @@ class WorkSession implements Mergeable<WorkSession> {
   /// Null on sessions recorded before this field existed; those fall back to
   /// deriving the day from the current setting, which is the old behaviour and
   /// the best available answer for a record that never stated one.
+  ///
+  /// Still written by this build, even though [dayRule] is what it reads. An
+  /// older build looks for this and would otherwise re-derive the day with
+  /// whatever setting happens to be current on that device.
   final DateTime? workingDateAtEntry;
 
   @override
@@ -352,6 +371,7 @@ class WorkSession implements Mergeable<WorkSession> {
     'backlogOnly',
     'timeRecorded',
     'linesPerPageAtEntry',
+    'dayRule',
     'workingDateAtEntry',
     'lastUpdated',
     'isDeleted',
@@ -374,6 +394,7 @@ class WorkSession implements Mergeable<WorkSession> {
     this.backlogOnly = false,
     bool? timeRecorded,
     this.linesPerPageAtEntry,
+    this.dayRule,
     this.workingDateAtEntry,
     DateTime? lastUpdated,
     this.deletedAt,
@@ -419,6 +440,7 @@ class WorkSession implements Mergeable<WorkSession> {
       'backlogOnly': backlogOnly,
       'timeRecorded': timeRecorded,
       'linesPerPageAtEntry': linesPerPageAtEntry,
+      'dayRule': dayRule?.toJson(),
       'workingDateAtEntry': workingDateAtEntry?.toIso8601String(),
       'lastUpdated': lastUpdated.toIso8601String(),
       // The flag is still written because an older build looks for it and
@@ -460,6 +482,9 @@ class WorkSession implements Mergeable<WorkSession> {
       timeRecorded:
           JsonCompat.boolean(json['timeRecorded'], end.isAfter(start)),
       linesPerPageAtEntry: JsonCompat.intOrNull(json['linesPerPageAtEntry']),
+      dayRule: json['dayRule'] is Map
+          ? DayStart.fromJson(Map<String, dynamic>.from(json['dayRule'] as Map))
+          : null,
       workingDateAtEntry: JsonCompat.dateOrNull(json['workingDateAtEntry']),
       lastUpdated: lastUpdated,
       deletedAt: tombstone.deletedAt,
@@ -485,6 +510,7 @@ class WorkSession implements Mergeable<WorkSession> {
         backlogOnly: backlogOnly,
         timeRecorded: timeRecorded,
         linesPerPageAtEntry: linesPerPageAtEntry,
+        dayRule: dayRule,
         workingDateAtEntry: workingDateAtEntry,
         lastUpdated: lastUpdated,
         deletedAt: deletedAt,
@@ -502,6 +528,7 @@ class WorkSession implements Mergeable<WorkSession> {
     bool? backlogOnly,
     bool? timeRecorded,
     bool? isDeleted,
+    DayStart? dayRule,
     DateTime? workingDateAtEntry,
   }) {
     return WorkSession(
@@ -522,6 +549,7 @@ class WorkSession implements Mergeable<WorkSession> {
       // round.
       timeRecorded: timeRecorded ?? this.timeRecorded,
       linesPerPageAtEntry: linesPerPageAtEntry,
+      dayRule: dayRule ?? this.dayRule,
       workingDateAtEntry: workingDateAtEntry ?? this.workingDateAtEntry,
       lastUpdated: DateTime.now(),
       // Deleting and restoring each move their own register, so a later edit
