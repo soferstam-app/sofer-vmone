@@ -63,13 +63,21 @@ class _RecycleBinScreenState extends State<RecycleBinScreen> {
     }
   }
 
-  Future<void> _deletePermanently(Project project) async {
+  /// Deletes the work recorded against a project that is already in the bin.
+  ///
+  /// It used to re-stamp the project as deleted as well, which reset the
+  /// countdown beside it — so a button offering to get rid of something sooner
+  /// made it stay thirty days longer. The stamp was there to win a merge
+  /// against a device still holding a live copy; that is what the tombstone
+  /// registers do now, and they cannot be beaten by an edit at all.
+  Future<void> _deleteRecords(Project project) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("מחיקה לצמיתות"),
-        content:
-            const Text("האם אתה בטוח? לא ניתן יהיה לשחזר את הפרויקט לאחר מכן."),
+        title: const Text("מחיקת הרשומות"),
+        content: const Text(
+            "רשומות העבודה של הפרויקט יימחקו גם הן. הפרויקט עצמו כבר בסל, "
+            "ויוסתר ממנו מעצמו."),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -83,30 +91,17 @@ class _RecycleBinScreenState extends State<RecycleBinScreen> {
       ),
     );
 
-    if (confirm == true) {
-      final allProjects = await _storage.loadProjects();
-      final index = allProjects.indexWhere((p) => p.id == project.id);
-      if (index != -1) {
-        // Backdating lastUpdated to force a purge used to lose the merge
-        // against any device still holding a newer copy, which brought the
-        // project back to life. copyWith stamps the deletion as the most
-        // recent change instead, so it wins and propagates.
-        allProjects[index] = project.copyWith(isDeleted: true);
-        await _storage.saveProjects(allProjects);
+    if (confirm != true) return;
 
-        // Sessions belonging to the project were previously left behind,
-        // referencing a project that no longer exists.
-        final history = await _storage.loadHistory();
-        final updatedHistory = history
-            .map((s) => s.projectId == project.id && !s.isDeleted
-                ? s.copyWith(isDeleted: true)
-                : s)
-            .toList();
-        await _storage.saveHistory(updatedHistory);
-
-          await _loadDeletedItems();
-      }
-    }
+    // Sessions belonging to the project were previously left behind,
+    // referencing a project that no longer exists.
+    final history = await _storage.loadHistory();
+    await _storage.saveHistory(history
+        .map((s) => s.projectId == project.id && !s.isDeleted
+            ? s.copyWith(isDeleted: true)
+            : s)
+        .toList());
+    await _loadDeletedItems();
   }
 
   @override
@@ -178,10 +173,10 @@ class _RecycleBinScreenState extends State<RecycleBinScreen> {
                                 onPressed: () => _restoreProject(p),
                                 child: const Text("שחזר")),
                             TextButton(
-                              onPressed: () => _deletePermanently(p),
+                              onPressed: () => _deleteRecords(p),
                               style: TextButton.styleFrom(
                                   foregroundColor: t.danger),
-                              child: const Text("מחק"),
+                              child: const Text("מחק רשומות"),
                             ),
                           ],
                         ),
@@ -208,8 +203,8 @@ class _RecycleBinScreenState extends State<RecycleBinScreen> {
                             IconButton(
                               icon: Icon(Icons.delete_forever,
                                   color: SoferTokens.of(context).danger),
-                              tooltip: "מחק לצמיתות",
-                              onPressed: () => _deletePermanently(p),
+                              tooltip: "מחק גם את רשומות העבודה",
+                              onPressed: () => _deleteRecords(p),
                             ),
                           ],
                         ),

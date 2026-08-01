@@ -14,9 +14,13 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sofer_vmone/models.dart';
+import 'package:sofer_vmone/storage_service.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   /// Fields from a version that does not exist yet, of every shape JSON has.
   Map<String, dynamic> junk(String tag) => {
         'futureScalar_$tag': 'שדה מגרסה עתידית',
@@ -164,6 +168,97 @@ void main() {
 
       expect(after['amount'], 1300);
       expectPreserved(before, after, 'expense');
+    });
+  });
+
+  group('a record this build cannot read at all', () {
+    // Not a field it does not understand — a whole record. It is dropped from
+    // the working list so that one bad entry does not cost the rest, and the
+    // list was then written back without it. "Cannot read" became "erased" on
+    // the next save of anything.
+    final storage = StorageService();
+
+    /// An entry no build can parse: a record has to have an id to be mergeable,
+    /// so one without is refused.
+    Map<String, dynamic> unreadable(String tag) => {
+          'writtenBy': 'a version that does not exist yet',
+          'tag': tag,
+          ...junk(tag),
+        };
+
+    test('survives a save of the records around it', () async {
+      SharedPreferences.setMockInitialValues({
+        'flutter.projects': jsonEncode([
+          {
+            'id': 'p1',
+            'name': 'ספר',
+            'typeName': 'sefer',
+            'price': 1,
+            'expenses': 0,
+            'targetDaily': 1,
+            'targetMonthly': 1,
+          },
+          unreadable('kept'),
+        ]),
+      });
+
+      final loaded = await storage.loadProjects();
+      expect(loaded, hasLength(1), reason: 'the unreadable one is not returned');
+
+      // The app does what it always does: saves the list it is holding.
+      await storage.saveProjects(loaded);
+
+      final prefs = await SharedPreferences.getInstance();
+      final stored =
+          jsonDecode(prefs.getString('projects')!) as List<dynamic>;
+      expect(stored, hasLength(2), reason: 'the unreadable record was erased');
+
+      final carried = stored.firstWhere((e) => e['tag'] == 'kept')
+          as Map<String, dynamic>;
+      expectPreserved(unreadable('kept'), carried, 'kept');
+    });
+
+    test('survives being saved over and over', () async {
+      SharedPreferences.setMockInitialValues({
+        'flutter.history': jsonEncode([unreadable('session')]),
+      });
+
+      for (var i = 0; i < 3; i++) {
+        await storage.saveHistory(await storage.loadHistory());
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      final stored =
+          jsonDecode(prefs.getString('history')!) as List<dynamic>;
+      expect(stored, hasLength(1));
+    });
+
+    test('is counted, so the app can say the totals are short', () async {
+      SharedPreferences.setMockInitialValues({
+        'flutter.projects': jsonEncode([unreadable('a')]),
+        'flutter.history': jsonEncode([unreadable('b'), unreadable('c')]),
+        'flutter.expenses': jsonEncode([]),
+      });
+      expect(await storage.unreadableRecordCount(), 3);
+    });
+
+    test('is not duplicated when a record of the same id is written', () async {
+      // A later build that does understand the record writes it properly; the
+      // raw copy must not survive alongside it.
+      SharedPreferences.setMockInitialValues({
+        'flutter.expenses': jsonEncode([
+          {'id': 'e1', 'product': 'קלף', 'amount': 10, 'brokenBy': 'nothing'},
+        ]),
+      });
+
+      final expenses = await storage.loadExpenses();
+      expect(expenses, hasLength(1));
+      await storage.saveExpenses(expenses);
+
+      final prefs = await SharedPreferences.getInstance();
+      final stored =
+          jsonDecode(prefs.getString('expenses')!) as List<dynamic>;
+      expect(stored, hasLength(1));
     });
   });
 

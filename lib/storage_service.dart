@@ -24,10 +24,82 @@ class StorageService {
   static const String _keyAppTheme = 'app_theme';
   static const String _keyAutoNightTheme = 'auto_night_theme';
 
-  Future<void> saveProjects(List<Project> projects) async {
+  Future<void> saveProjects(List<Project> projects) => _saveList(
+      _keyProjects, projects.map((p) => p.toJson()).toList(), Project.fromJson);
+
+  /// Writes a list back, carrying through every stored entry this build could
+  /// not read.
+  ///
+  /// [_parseList] drops what it cannot parse so that one bad record does not
+  /// cost the user the rest of the list — but the list was then written back
+  /// without it, which turned "could not read" into "erased". A record written
+  /// by a newer version, or reshaped by a hand repair, was gone the next time
+  /// anything was saved.
+  ///
+  /// Preserving it needs no understanding of it: an entry is kept when it
+  /// cannot be parsed and its id is not among the records being written. The id
+  /// is read as a bare string, which works even when nothing else about the
+  /// entry does.
+  Future<void> _saveList<T>(
+    String key,
+    List<Map<String, dynamic>> records,
+    T Function(Map<String, dynamic>) fromJson,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
-    final String data = jsonEncode(projects.map((p) => p.toJson()).toList());
-    await prefs.setString(_keyProjects, data);
+    final written = {
+      for (final record in records)
+        if (record['id'] is String) record['id'] as String,
+    };
+
+    final carried = <dynamic>[];
+    for (final entry in _rawEntries(prefs.getString(key))) {
+      if (entry is! Map) continue;
+      final map = Map<String, dynamic>.from(entry);
+      if (written.contains(map['id'])) continue;
+      try {
+        fromJson(map);
+      } catch (_) {
+        carried.add(entry);
+      }
+    }
+
+    await prefs.setString(key, jsonEncode([...records, ...carried]));
+  }
+
+  /// The stored entries of a list, without trying to understand any of them.
+  List<dynamic> _rawEntries(String? raw) {
+    if (raw == null || raw.isEmpty) return const [];
+    try {
+      final decoded = jsonDecode(raw);
+      return decoded is List ? decoded : const [];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// How many stored records this build cannot read, across all three lists.
+  ///
+  /// They are kept and written back untouched, but they take no part in any
+  /// figure the app shows — so the app has to be able to say they are there
+  /// rather than quietly reporting totals that are short.
+  Future<int> unreadableRecordCount() async {
+    final prefs = await SharedPreferences.getInstance();
+    var count = 0;
+    void tally<T>(String key, T Function(Map<String, dynamic>) fromJson) {
+      for (final entry in _rawEntries(prefs.getString(key))) {
+        if (entry is! Map) continue;
+        try {
+          fromJson(Map<String, dynamic>.from(entry));
+        } catch (_) {
+          count++;
+        }
+      }
+    }
+
+    tally(_keyProjects, Project.fromJson);
+    tally(_keyHistory, WorkSession.fromJson);
+    tally(_keyExpenses, Expense.fromJson);
+    return count;
   }
 
   /// Parses a stored list, dropping only the records that cannot be read.
@@ -60,11 +132,8 @@ class StorageService {
     return _parseList(prefs.getString(_keyProjects), Project.fromJson);
   }
 
-  Future<void> saveHistory(List<WorkSession> history) async {
-    final prefs = await SharedPreferences.getInstance();
-    final String data = jsonEncode(history.map((s) => s.toJson()).toList());
-    await prefs.setString(_keyHistory, data);
-  }
+  Future<void> saveHistory(List<WorkSession> history) => _saveList(_keyHistory,
+      history.map((s) => s.toJson()).toList(), WorkSession.fromJson);
 
   Future<List<WorkSession>> loadHistory() async {
     final prefs = await SharedPreferences.getInstance();
@@ -325,11 +394,8 @@ class StorageService {
     await prefs.setString(_keySoferName, name.trim());
   }
 
-  Future<void> saveExpenses(List<Expense> expenses) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-        _keyExpenses, jsonEncode(expenses.map((e) => e.toJson()).toList()));
-  }
+  Future<void> saveExpenses(List<Expense> expenses) => _saveList(_keyExpenses,
+      expenses.map((e) => e.toJson()).toList(), Expense.fromJson);
 
   Future<List<Expense>> loadExpenses() async {
     final prefs = await SharedPreferences.getInstance();
