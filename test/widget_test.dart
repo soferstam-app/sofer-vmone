@@ -1482,14 +1482,30 @@ void main() {
     });
 
     test('month grouping follows the frozen day across a month boundary', () {
-      // Written 00:30 on 1 June, filed under 31 May.
-      final s = session(DateTime(2026, 6, 1, 0, 30),
-          filedUnder: DateTime(2026, 5, 31));
+      // Months here are Hebrew ones, so the boundary is derived rather than
+      // written out: the last day of Av and the first of Elul, whichever
+      // Gregorian dates those happen to be.
+      // Asked for rather than assumed: Av has 30 days, and hardcoding 29 put
+      // both dates inside the same month and quietly tested nothing.
+      final av = JewishDate.initDate(
+          jewishYear: 5786, jewishMonth: JewishDate.AV, jewishDayOfMonth: 1);
+      final lastOfAv = JewishDate.initDate(
+              jewishYear: 5786,
+              jewishMonth: JewishDate.AV,
+              jewishDayOfMonth: av.getDaysInJewishMonth())
+          .getGregorianCalendar();
+      final firstOfElul = lastOfAv.add(const Duration(days: 1));
 
-      expect(DateLogic.sessionIsInMonth(s, DateTime(2026, 5), DayStart.midnight),
-          isTrue);
-      expect(DateLogic.sessionIsInMonth(s, DateTime(2026, 6), DayStart.midnight),
-          isFalse);
+      // Written at 00:30 on the first of Elul, filed under the last of Av.
+      final s = session(
+          DateTime(firstOfElul.year, firstOfElul.month, firstOfElul.day, 0, 30),
+          filedUnder: lastOfAv);
+
+      expect(DateLogic.sessionIsInMonth(s, lastOfAv, DayStart.midnight), isTrue,
+          reason: 'it belongs to the month it was filed under');
+      expect(
+          DateLogic.sessionIsInMonth(s, firstOfElul, DayStart.midnight), isFalse,
+          reason: 'not the month the clock had reached');
     });
 
     test('the snapshot survives storage and an unrelated edit', () {
