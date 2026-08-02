@@ -10,6 +10,8 @@
 /// screens.
 library;
 
+import 'models.dart';
+
 /// `₪1234` — a sum of money, rounded to the shekel.
 ///
 /// For a figure the writer weighs rather than reconciles: what a commission
@@ -77,6 +79,23 @@ String formatSpanLong(Duration d) {
 
 bool _startsWithDigit(String s) =>
     s.isNotEmpty && s.codeUnitAt(0) >= 0x30 && s.codeUnitAt(0) <= 0x39;
+
+/// A session's working time, or the fact that none was given.
+///
+/// A record with no time used to print as `00:00`, which reads as "wrote for no
+/// time at all" rather than "did not say".
+String sessionTimeLabel(WorkSession s) =>
+    s.timeRecorded ? formatClock(s.duration, seconds: false) : "ללא זמן";
+
+/// A total, said to be partial when part of the work carries no time.
+///
+/// Without the qualifier the figure is simply an undercount, and there is no
+/// way to tell it from a short day.
+String workedLabel(Duration worked, bool someWithoutTime) {
+  final total = formatClock(worked, seconds: false);
+  if (!someWithoutTime) return total;
+  return worked == Duration.zero ? "לא נרשם זמן" : "$total · חלק ללא זמן";
+}
 
 /// One, two and many, which Hebrew says three different ways. Only the third
 /// takes the numeral: "שעתיים", never "2 שעות".
