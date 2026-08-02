@@ -118,16 +118,21 @@ class EntryBuilder {
     required EntryInput input,
     required Iterable<WorkSession> history,
   }) {
+    // One mark for the whole entry, settled before anything is built, so that
+    // every record it produces carries the same one — including an entry that
+    // turns out to produce a single record.
+    final entryId = IdGenerator.generate();
     return switch (input.project.type) {
-      ProjectType.sefer => _sefer(input, history),
-      ProjectType.mezuza => _counted(input),
+      ProjectType.sefer => _sefer(input, history, entryId),
+      ProjectType.mezuza => _counted(input, entryId),
       ProjectType.tefillin => input.tefillinMode == 'parshiya'
-          ? _parshiya(input)
-          : _counted(input),
+          ? _parshiya(input, entryId)
+          : _counted(input, entryId),
     };
   }
 
-  static EntryOutcome _sefer(EntryInput input, Iterable<WorkSession> history) {
+  static EntryOutcome _sefer(
+      EntryInput input, Iterable<WorkSession> history, String entryId) {
     final project = input.project;
     final totalPages = project.totalPages;
     final linesPerPage = ProductionCalculator.linesPerPageOf(project);
@@ -169,6 +174,7 @@ class EntryBuilder {
             _session(
               input,
               id: IdGenerator.generate(suffix: '${pageFrom + i}'),
+              entryId: entryId,
               start: slices[i].start,
               end: slices[i].end,
               amount: pageFrom + i,
@@ -199,6 +205,7 @@ class EntryBuilder {
         _session(
           input,
           id: IdGenerator.generate(),
+          entryId: entryId,
           start: input.start,
           end: input.end,
           amount: pageFrom,
@@ -217,7 +224,7 @@ class EntryBuilder {
   }
 
   /// A single tefillin parshiya, whole or part-written.
-  static EntryOutcome _parshiya(EntryInput input) {
+  static EntryOutcome _parshiya(EntryInput input, String entryId) {
     final endLine = int.tryParse(input.partialLine.trim()) ?? 0;
     final lineError = SessionLogic.validateTefillinLine(
       tefillinType: input.tefillinPart,
@@ -238,6 +245,7 @@ class EntryBuilder {
         _session(
           input,
           id: IdGenerator.generate(),
+          entryId: entryId,
           start: input.start,
           end: input.end,
           amount: 1,
@@ -255,7 +263,7 @@ class EntryBuilder {
   }
 
   /// Mezuzot, and tefillin counted as sets or as head/hand units.
-  static EntryOutcome _counted(EntryInput input) {
+  static EntryOutcome _counted(EntryInput input, String entryId) {
     final amount = int.tryParse(input.amount.trim()) ?? 0;
     if (amount == 0) return const EntryRejected("יש להזין כמות");
 
@@ -290,6 +298,7 @@ class EntryBuilder {
         _session(
           input,
           id: IdGenerator.generate(),
+          entryId: entryId,
           start: input.start,
           end: input.end,
           amount: amount,
@@ -325,6 +334,7 @@ class EntryBuilder {
   static WorkSession _session(
     EntryInput input, {
     required String id,
+    required String entryId,
     required DateTime start,
     required DateTime end,
     required int amount,
@@ -350,5 +360,6 @@ class EntryBuilder {
         backlogOnly: input.backlogOnly,
         timeRecorded: input.timeRecorded,
         linesPerPageAtEntry: linesPerPageAtEntry,
+        entryId: entryId,
       );
 }

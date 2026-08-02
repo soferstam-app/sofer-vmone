@@ -108,11 +108,15 @@ class SmartSessionBuilder {
         (lastPage == from.page && lastLine < from.line);
     if (wentBackwards) return const SmartNothingWritten();
 
+    // One mark for the whole sitting: the records below are its pages, and the
+    // measured time is divided between them. See [WorkSession.entryId].
+    final entryId = IdGenerator.generate();
+
     return project.type == ProjectType.mezuza
         ? _mezuzot(project, from, lastPage, lastLine, linesPerUnit, worked,
-            endedAt)
+            endedAt, entryId)
         : _pages(project, from, lastPage, lastLine, linesPerUnit, worked,
-            endedAt, history);
+            endedAt, history, entryId);
   }
 
   /// Mezuzot are counted, so a sitting across several of them is recorded as
@@ -125,6 +129,7 @@ class SmartSessionBuilder {
     int linesPerUnit,
     Duration worked,
     DateTime endedAt,
+    String entryId,
   ) {
     final int lines;
     if (lastUnit == from.page) {
@@ -161,7 +166,7 @@ class SmartSessionBuilder {
     ];
 
     return SmartRecorded(
-      sessions: _timed(project, drafts, worked, endedAt),
+      sessions: _timed(project, drafts, worked, endedAt, entryId),
       linesWritten: lines,
     );
   }
@@ -177,6 +182,7 @@ class SmartSessionBuilder {
     Duration worked,
     DateTime endedAt,
     Iterable<WorkSession> history,
+    String entryId,
   ) {
     final drafts = <_Draft>[];
     var lines = 0;
@@ -214,7 +220,7 @@ class SmartSessionBuilder {
     ];
 
     return SmartRecorded(
-      sessions: _timed(project, drafts, worked, endedAt),
+      sessions: _timed(project, drafts, worked, endedAt, entryId),
       linesWritten: lines,
       overlappingPages: overlapping,
     );
@@ -227,6 +233,7 @@ class SmartSessionBuilder {
     List<_Draft> drafts,
     Duration worked,
     DateTime endedAt,
+    String entryId,
   ) {
     final slices = SessionLogic.splitByWeight(
       start: endedAt.subtract(worked),
@@ -246,6 +253,7 @@ class SmartSessionBuilder {
           description: drafts[i].description,
           isManual: false,
           linesPerPageAtEntry: drafts[i].linesPerPage,
+          entryId: entryId,
         ),
     ];
   }

@@ -293,6 +293,28 @@ class WorkSession implements Mergeable<WorkSession> {
   /// back to the project's current setting.
   final int? linesPerPageAtEntry;
 
+  /// The save this record came out of, shared by every record it produced.
+  ///
+  /// One entry becomes several records: a page range is one record per page, a
+  /// sitting in smart mode one per page it touched. The stretch of time entered
+  /// is divided between them, and each record stores its own slice — a
+  /// conclusion sitting in a raw field. Which meant that if the division were
+  /// ever found to be wrong, or a better one wanted, there was nothing left to
+  /// redo it from: the records had scattered and nothing said they belonged
+  /// together.
+  ///
+  /// The slices are contiguous and exhaust the stretch, so with the grouping
+  /// known the original entry is recovered exactly — first to last. That is why
+  /// this is the only thing stored: the stretch, the weights and the division
+  /// all follow from the records themselves, and storing a derived value twice
+  /// is how the two copies come to disagree.
+  ///
+  /// Set on every record this build writes, including one saved alone. A group
+  /// of one has to be marked as such, or an unmarked record is ambiguous
+  /// between "saved by itself" and "saved before any of this existed" — and
+  /// those want opposite treatment.
+  final String? entryId;
+
   /// The day-boundary rule that was in force when this session was recorded.
   ///
   /// The *rule*, not the day it produced. Freezing the day protected history
@@ -371,6 +393,7 @@ class WorkSession implements Mergeable<WorkSession> {
     'backlogOnly',
     'timeRecorded',
     'linesPerPageAtEntry',
+    'entryId',
     'dayRule',
     'workingDateAtEntry',
     'lastUpdated',
@@ -394,6 +417,7 @@ class WorkSession implements Mergeable<WorkSession> {
     this.backlogOnly = false,
     bool? timeRecorded,
     this.linesPerPageAtEntry,
+    this.entryId,
     this.dayRule,
     this.workingDateAtEntry,
     DateTime? lastUpdated,
@@ -440,6 +464,7 @@ class WorkSession implements Mergeable<WorkSession> {
       'backlogOnly': backlogOnly,
       'timeRecorded': timeRecorded,
       'linesPerPageAtEntry': linesPerPageAtEntry,
+      'entryId': entryId,
       'dayRule': dayRule?.toJson(),
       'workingDateAtEntry': workingDateAtEntry?.toIso8601String(),
       'lastUpdated': lastUpdated.toIso8601String(),
@@ -482,6 +507,12 @@ class WorkSession implements Mergeable<WorkSession> {
       timeRecorded:
           JsonCompat.boolean(json['timeRecorded'], end.isAfter(start)),
       linesPerPageAtEntry: JsonCompat.intOrNull(json['linesPerPageAtEntry']),
+      // Empty is absent: a record that names no entry belongs to no group, and
+      // an empty string would gather every such record into one.
+      entryId: switch (json['entryId']) {
+        final String s when s.isNotEmpty => s,
+        _ => null,
+      },
       dayRule: json['dayRule'] is Map
           ? DayStart.fromJson(Map<String, dynamic>.from(json['dayRule'] as Map))
           : null,
@@ -510,6 +541,7 @@ class WorkSession implements Mergeable<WorkSession> {
         backlogOnly: backlogOnly,
         timeRecorded: timeRecorded,
         linesPerPageAtEntry: linesPerPageAtEntry,
+        entryId: entryId,
         dayRule: dayRule,
         workingDateAtEntry: workingDateAtEntry,
         lastUpdated: lastUpdated,
@@ -549,6 +581,10 @@ class WorkSession implements Mergeable<WorkSession> {
       // round.
       timeRecorded: timeRecorded ?? this.timeRecorded,
       linesPerPageAtEntry: linesPerPageAtEntry,
+      // Kept through an edit. A corrected record is still one of the records
+      // that save produced, and losing the mark would strand the rest of the
+      // group with a stretch that no longer accounts for it.
+      entryId: entryId,
       dayRule: dayRule ?? this.dayRule,
       workingDateAtEntry: workingDateAtEntry ?? this.workingDateAtEntry,
       lastUpdated: DateTime.now(),
