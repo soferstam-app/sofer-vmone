@@ -12,6 +12,7 @@ import 'theme/app_theme.dart';
 import 'widgets/sofer_widgets.dart';
 import 'widgets/confirm.dart';
 import 'logic/currency.dart';
+import 'version.dart';
 
 class ProjectsScreen extends StatefulWidget {
   final List<Project> projects;
@@ -136,7 +137,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text('שם האפליקציה: סופר ומונה'),
-              const Text('גרסה: 0.3.0'),
+              Text('גרסה: $appVersion'),
               const SizedBox(height: 12),
               const Text('אתר האפליקציה:',
                   style: TextStyle(fontWeight: FontWeight.bold)),

@@ -15,6 +15,7 @@ import 'dart:io';
 import 'theme/app_theme.dart';
 import 'widgets/feedback.dart';
 import 'logic/currency.dart';
+import 'version.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -453,7 +454,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text('שם האפליקציה: סופר ומונה'),
-              const Text('גרסה: 0.3.0'),
+              Text('גרסה: $appVersion'),
               const SizedBox(height: 12),
               const Text('אתר האפליקציה:',
                   style: TextStyle(fontWeight: FontWeight.bold)),
