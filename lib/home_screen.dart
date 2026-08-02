@@ -833,8 +833,11 @@ class _SoferHomeState extends State<SoferHome>
   }
 
   void _resetAllData() async {
-    await _storageService.saveProjects([]);
-    await _storageService.saveHistory([]);
+    // The one place that erases rather than marks. Saving an empty list used to
+    // do it, which is exactly the confusion that let every other save erase
+    // tombstones by accident; a save no longer removes anything, so asking for
+    // this has to be explicit.
+    await _storageService.eraseAllRecords();
     if (!mounted) return;
     setState(() {
       projects = [];
@@ -853,10 +856,13 @@ class _SoferHomeState extends State<SoferHome>
             _storageService.saveProjects(projects);
           },
           onProjectUpdated: (p) {
+            // A deleted project leaves the screen; it does not leave the file.
+            // Its sessions stay too, and stay alive — the work happened, and
+            // restoring the project from the bin has to bring it back. They
+            // used to be dropped here, so a restore returned an empty project.
             setState(() {
               if (p.isDeleted) {
                 projects.removeWhere((element) => element.id == p.id);
-                history.removeWhere((session) => session.projectId == p.id);
               } else {
                 int index =
                     projects.indexWhere((element) => element.id == p.id);
@@ -866,11 +872,8 @@ class _SoferHomeState extends State<SoferHome>
             _storageService.saveProjects(projects);
           },
           onProjectDeleted: (p) {
-            setState(() {
-              projects.removeWhere((element) => element.id == p.id);
-              history.removeWhere((session) => session.projectId == p.id);
-            });
-            _storageService.saveProjects(projects);
+            setState(() =>
+                projects.removeWhere((element) => element.id == p.id));
           },
           onResetAllData: _resetAllData,
         ),
@@ -919,9 +922,13 @@ class _SoferHomeState extends State<SoferHome>
         builder: (context) => SummaryScreen(
           projects: projects,
           history: history,
+          // What comes back may carry tombstones — the editor marks a record
+          // deleted rather than dropping it. The whole list is written; only
+          // the live records stay on screen.
           onHistoryUpdated: (updatedHistory) {
-            setState(() => history = updatedHistory);
-            _storageService.saveHistory(history);
+            _storageService.saveHistory(updatedHistory);
+            setState(() => history =
+                updatedHistory.where((s) => !s.isDeleted).toList());
           },
           useGregorianDates: _useGregorianDates,
         ),

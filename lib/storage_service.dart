@@ -24,26 +24,31 @@ class StorageService {
   static const String _keyAppTheme = 'app_theme';
   static const String _keyAutoNightTheme = 'auto_night_theme';
 
-  Future<void> saveProjects(List<Project> projects) => _saveList(
-      _keyProjects, projects.map((p) => p.toJson()).toList(), Project.fromJson);
+  Future<void> saveProjects(List<Project> projects) =>
+      _saveList(_keyProjects, projects.map((p) => p.toJson()).toList());
 
-  /// Writes a list back, carrying through every stored entry this build could
-  /// not read.
+  /// Writes records back, leaving every stored entry not among them alone.
   ///
-  /// [_parseList] drops what it cannot parse so that one bad record does not
-  /// cost the user the rest of the list — but the list was then written back
-  /// without it, which turned "could not read" into "erased". A record written
-  /// by a newer version, or reshaped by a hand repair, was gone the next time
-  /// anything was saved.
+  /// A save says "these records are now this"; it does not say "and nothing
+  /// else exists". It used to say both, and that quietly undid the whole point
+  /// of tombstones. Every screen holds the live records — deleted ones are
+  /// filtered out on load — so saving from any screen rewrote the file without
+  /// a single tombstone in it. A project sent to the recycle bin was marked
+  /// deleted and then, two lines later, erased outright; its sessions went with
+  /// it, so restoring from the bin gave back an empty project. And a deletion
+  /// with no tombstone left behind is a deletion that another device, still
+  /// holding a live copy, undoes at the next merge.
   ///
-  /// Preserving it needs no understanding of it: an entry is kept when it
-  /// cannot be parsed and its id is not among the records being written. The id
-  /// is read as a bare string, which works even when nothing else about the
-  /// entry does.
-  Future<void> _saveList<T>(
+  /// A record leaves this app in exactly one way: a tombstone, which is a
+  /// record like any other and is written like one. Absence is not information
+  /// and never removes anything. [eraseList] is the deliberate exception.
+  ///
+  /// This also preserves what the build cannot read — a record from a newer
+  /// version, or one reshaped by a hand repair — which needs no understanding
+  /// of it, since the rule is the same rule: it was not written, so it stays.
+  Future<void> _saveList(
     String key,
     List<Map<String, dynamic>> records,
-    T Function(Map<String, dynamic>) fromJson,
   ) async {
     final prefs = await SharedPreferences.getInstance();
     final written = {
@@ -53,17 +58,33 @@ class StorageService {
 
     final carried = <dynamic>[];
     for (final entry in _rawEntries(prefs.getString(key))) {
-      if (entry is! Map) continue;
-      final map = Map<String, dynamic>.from(entry);
-      if (written.contains(map['id'])) continue;
-      try {
-        fromJson(map);
-      } catch (_) {
-        carried.add(entry);
-      }
+      // An entry with no readable id cannot be matched against what is being
+      // written, so it is kept: dropping it would be guessing that it was meant
+      // to go, and the guess is unrecoverable.
+      final id = entry is Map ? entry['id'] : null;
+      if (id is String && written.contains(id)) continue;
+      carried.add(entry);
     }
 
     await prefs.setString(key, jsonEncode([...records, ...carried]));
+  }
+
+  /// Empties a stored list outright, tombstones and all.
+  ///
+  /// The one way to remove a record rather than mark it removed, and it exists
+  /// for exactly one caller: the writer asking to erase everything. Nothing
+  /// here is recoverable afterwards, which is what makes it the wrong tool for
+  /// anything smaller.
+  Future<void> eraseList(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(key);
+  }
+
+  /// Erases every record the app holds. See [eraseList].
+  Future<void> eraseAllRecords() async {
+    await eraseList(_keyProjects);
+    await eraseList(_keyHistory);
+    await eraseList(_keyExpenses);
   }
 
   /// The stored entries of a list, without trying to understand any of them.
@@ -132,8 +153,8 @@ class StorageService {
     return _parseList(prefs.getString(_keyProjects), Project.fromJson);
   }
 
-  Future<void> saveHistory(List<WorkSession> history) => _saveList(_keyHistory,
-      history.map((s) => s.toJson()).toList(), WorkSession.fromJson);
+  Future<void> saveHistory(List<WorkSession> history) =>
+      _saveList(_keyHistory, history.map((s) => s.toJson()).toList());
 
   Future<List<WorkSession>> loadHistory() async {
     final prefs = await SharedPreferences.getInstance();
@@ -394,8 +415,8 @@ class StorageService {
     await prefs.setString(_keySoferName, name.trim());
   }
 
-  Future<void> saveExpenses(List<Expense> expenses) => _saveList(_keyExpenses,
-      expenses.map((e) => e.toJson()).toList(), Expense.fromJson);
+  Future<void> saveExpenses(List<Expense> expenses) =>
+      _saveList(_keyExpenses, expenses.map((e) => e.toJson()).toList());
 
   Future<List<Expense>> loadExpenses() async {
     final prefs = await SharedPreferences.getInstance();

@@ -1300,32 +1300,25 @@ class _SummaryScreenState extends State<SummaryScreen> {
     );
   }
 
-  void _deleteSelected(BuildContext ctx, Set<String> selectedIds) {
+  /// Marks records deleted. Dropping them from the list instead is what this
+  /// used to do, and a record that is merely absent is a record another device
+  /// puts back at the next merge.
+  Future<void> _deleteSelected(BuildContext ctx, Set<String> selectedIds) async {
     if (selectedIds.isEmpty) return;
-    showDialog(
-      context: context,
-      builder: (dialogCtx) => AlertDialog(
-        title: const Text("מחיקת רשומות"),
-        content: Text("למחוק ${selectedIds.length} רשומות?"),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(dialogCtx),
-              child: const Text("ביטול")),
-          ElevatedButton(
-            onPressed: () {
-              final newHistory = widget.history
-                  .where((s) => !selectedIds.contains(s.id))
-                  .toList();
-              widget.onHistoryUpdated(newHistory);
-              Navigator.pop(dialogCtx);
-              Navigator.pop(ctx);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: SoferTokens.of(context).danger),
-            child: const Text("מחק"),
-          ),
-        ],
-      ),
+    final confirmed = await confirmAction(
+      context,
+      title: "מחיקת רשומות",
+      message: "למחוק ${selectedIds.length} רשומות?",
+      confirmLabel: "מחק",
+      danger: true,
     );
+    if (!confirmed || !mounted) return;
+
+    widget.onHistoryUpdated([
+      for (final s in widget.history)
+        selectedIds.contains(s.id) ? s.copyWith(isDeleted: true) : s,
+    ]);
+    if (ctx.mounted) Navigator.pop(ctx);
   }
 
   void _editSession(BuildContext ctx, WorkSession s) async {
@@ -1451,11 +1444,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
       startLine: startLine,
       endLine: endLine,
       amount: amount,
-      // Re-settled from the new time with today's boundary: the writer is
-      // actively restating when this work happened, so the current reckoning is
-      // the one they mean. Editing a 23:00 session to 00:30 must move it.
       // Re-settled with today's rule: the writer is actively restating when
       // this work happened, so the current reckoning is the one they mean.
+      // Editing a 23:00 session to 00:30 must move it.
       dayRule: _dayStart,
       workingDateAtEntry: DateLogic.effectiveDate(range.start, _dayStart),
       // The editor asks for a start and an end, so once it is saved the session
@@ -1468,29 +1459,21 @@ class _SummaryScreenState extends State<SummaryScreen> {
     if (ctx.mounted) Navigator.pop(ctx);
   }
 
-  void _deleteSession(BuildContext ctx, WorkSession s) {
-    showDialog(
-      context: context,
-      builder: (dialogCtx) => AlertDialog(
-        title: const Text("מחיקת רשומה"),
-        content: const Text("האם אתה בטוח?"),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(dialogCtx),
-              child: const Text("ביטול")),
-          ElevatedButton(
-            onPressed: () {
-              final newHistory = List<WorkSession>.from(widget.history)
-                ..removeWhere((item) => item.id == s.id);
-              widget.onHistoryUpdated(newHistory);
-              Navigator.pop(dialogCtx);
-              Navigator.pop(ctx);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: SoferTokens.of(context).danger),
-            child: const Text("מחק"),
-          ),
-        ],
-      ),
+  /// Marks one record deleted. See [_deleteSelected].
+  Future<void> _deleteSession(BuildContext ctx, WorkSession s) async {
+    final confirmed = await confirmAction(
+      context,
+      title: "מחיקת רשומה",
+      message: "למחוק את הרשומה \"${s.description}\"?",
+      confirmLabel: "מחק",
+      danger: true,
     );
+    if (!confirmed || !mounted) return;
+
+    widget.onHistoryUpdated([
+      for (final item in widget.history)
+        item.id == s.id ? item.copyWith(isDeleted: true) : item,
+    ]);
+    if (ctx.mounted) Navigator.pop(ctx);
   }
 }

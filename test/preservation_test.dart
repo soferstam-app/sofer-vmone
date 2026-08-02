@@ -262,6 +262,127 @@ void main() {
     });
   });
 
+  group('a save does not erase what it was not given', () {
+    // The failure this guards is the one that undid the tombstones entirely.
+    // Every screen holds the live records — deleted ones are filtered out on
+    // load — and a save rewrote the file as exactly that list. So one save from
+    // any screen wiped every tombstone in it, and a deletion with no tombstone
+    // behind it is a deletion the next merge undoes.
+    final storage = StorageService();
+
+    Map<String, dynamic> deletedProject(String id) => {
+          'id': id,
+          'name': 'נמחק',
+          'typeName': 'sefer',
+          'price': 1,
+          'expenses': 0,
+          'targetDaily': 1,
+          'targetMonthly': 1,
+          'isDeleted': true,
+          'deletedAt': DateTime(2026, 7, 1).toIso8601String(),
+        };
+
+    test('a tombstone survives a save of the live records', () async {
+      SharedPreferences.setMockInitialValues({
+        'flutter.projects': jsonEncode([
+          {
+            'id': 'alive',
+            'name': 'ספר',
+            'typeName': 'sefer',
+            'price': 1,
+            'expenses': 0,
+            'targetDaily': 1,
+            'targetMonthly': 1,
+          },
+          deletedProject('buried'),
+        ]),
+      });
+
+      // Exactly what every screen does: load, keep the live ones, save those.
+      final live =
+          (await storage.loadProjects()).where((p) => !p.isDeleted).toList();
+      expect(live, hasLength(1));
+      await storage.saveProjects(live);
+
+      final back = await storage.loadProjects();
+      expect(back, hasLength(2), reason: 'the tombstone was erased');
+      expect(back.firstWhere((p) => p.id == 'buried').isDeleted, isTrue);
+    });
+
+    test('and survives it a hundred times over', () async {
+      SharedPreferences.setMockInitialValues({
+        'flutter.projects': jsonEncode([deletedProject('buried')]),
+      });
+
+      for (var i = 0; i < 100; i++) {
+        final live =
+            (await storage.loadProjects()).where((p) => !p.isDeleted).toList();
+        await storage.saveProjects(live);
+      }
+
+      final back = await storage.loadProjects();
+      expect(back, hasLength(1));
+      expect(back.single.isDeleted, isTrue);
+    });
+
+    test('the work of a deleted project stays, and stays alive', () async {
+      // Deleting a project used to drop its sessions here, so restoring it from
+      // the recycle bin gave back an empty project.
+      SharedPreferences.setMockInitialValues({
+        'flutter.history': jsonEncode([
+          {
+            'id': 's1',
+            'projectId': 'buried',
+            'startTime': DateTime(2026, 7, 1, 9).toIso8601String(),
+            'endTime': DateTime(2026, 7, 1, 12).toIso8601String(),
+            'amount': 5,
+            'startLine': 1,
+            'endLine': 10,
+            'description': 'עמוד ה',
+            'isManual': true,
+          },
+        ]),
+      });
+
+      // The home screen drops them from what it is holding and saves.
+      await storage.saveHistory(const []);
+
+      final back = await storage.loadHistory();
+      expect(back, hasLength(1));
+      expect(back.single.isDeleted, isFalse);
+    });
+
+    test('a record that is written does replace the stored one', () async {
+      // The other half: preserving must not mean refusing to update.
+      SharedPreferences.setMockInitialValues({
+        'flutter.projects': jsonEncode([deletedProject('p')]),
+      });
+
+      final revived = (await storage.loadProjects()).single.copyWith(
+            isDeleted: false,
+            name: 'חזר',
+          );
+      await storage.saveProjects([revived]);
+
+      final back = await storage.loadProjects();
+      expect(back, hasLength(1), reason: 'not kept alongside its own update');
+      expect(back.single.name, 'חזר');
+      expect(back.single.isDeleted, isFalse);
+    });
+
+    test('erasing everything really does erase it', () async {
+      // The deliberate exception, and the only one.
+      SharedPreferences.setMockInitialValues({
+        'flutter.projects': jsonEncode([deletedProject('a')]),
+        'flutter.history': jsonEncode([]),
+        'flutter.expenses': jsonEncode([]),
+      });
+
+      await storage.eraseAllRecords();
+      expect(await storage.loadProjects(), isEmpty);
+    });
+  });
+
   group('a field this build owns', () {
     test('always wins over a stale copy in the unknown bag', () {
       // If a key is both known and somehow present in the bag, the value this
