@@ -20,6 +20,16 @@ class HomeSnapshot {
   /// screen already makes for the other layout.
   final String elapsed;
 
+  /// The current break, and the time since the last line was marked finished.
+  /// Both formatted for the same reason as [elapsed].
+  final String breakElapsed;
+  final String sinceLastLap;
+
+  /// Where the writer left off last time, written out — or null when this
+  /// commission has never been worked on, which is a different thing from
+  /// starting at page one and has to read differently.
+  final String? lastPosition;
+
   /// Smart mode only: where the writer is right now.
   final int currentLine;
 
@@ -45,6 +55,9 @@ class HomeSnapshot {
     required this.isRunning,
     required this.isPaused,
     required this.elapsed,
+    this.breakElapsed = '',
+    this.sinceLastLap = '',
+    this.lastPosition,
     required this.currentLine,
     required this.pageLabel,
     required this.positionUnit,
@@ -70,6 +83,10 @@ class HomeActions {
   final VoidCallback onEditPosition;
   final ValueChanged<Project?> onProjectChanged;
 
+  /// Pausing and resuming are the same button in the cards layout, so it needs
+  /// resuming as its own action rather than as "start".
+  final VoidCallback onResume;
+
   const HomeActions({
     required this.onStart,
     required this.onStop,
@@ -78,6 +95,7 @@ class HomeActions {
     required this.onNextLine,
     required this.onEditPosition,
     required this.onProjectChanged,
+    required this.onResume,
   });
 }
 

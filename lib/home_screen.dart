@@ -26,6 +26,9 @@ import 'logic/profit_calculator.dart';
 import 'theme/app_theme.dart';
 import 'widgets/feedback.dart';
 import 'widgets/confirm.dart';
+import 'logic/daily_goal.dart';
+import 'home/floating_window.dart';
+import 'home/cards_smart_body.dart';
 
 class SoferHome extends StatefulWidget {
   const SoferHome({super.key, this.windowsFloatingMode});
@@ -58,6 +61,11 @@ class _SoferHomeState extends State<SoferHome>
   int _smartCurrentLine = 1;
   int _smartStartPage = 1;
   int _smartStartLine = 1;
+
+  /// Whether the chosen commission has a position stored from a previous
+  /// sitting. Distinct from the position being 1,1, which is where a writer who
+  /// has genuinely begun at the beginning stands.
+  bool _hasStoredPosition = false;
 
 
   DayStart _dayStart = DayStart.midnight;
@@ -271,6 +279,15 @@ class _SoferHomeState extends State<SoferHome>
       isRunning: _clock.isRunning,
       isPaused: _clock.isPaused,
       elapsed: formatClock(_clock.elapsed),
+      breakElapsed: formatClock(_clock.breakElapsed),
+      sinceLastLap: formatClock(_clock.sinceLastLap),
+      // Read off the position already loaded rather than through a
+      // FutureBuilder in the layout, which re-read storage on every rebuild.
+      // Null and "page one" are different things: one is a commission never
+      // touched, the other is one begun at the beginning.
+      lastPosition: _hasStoredPosition
+          ? "מיקום אחרון: ${_positionPageLabel(project)}, שורה $_smartCurrentLine"
+          : null,
       // Clamped at the display boundary too: whatever goes wrong upstream, the
       // screen never shows a page or line zero.
       currentLine: _smartCurrentLine < 1 ? 1 : _smartCurrentLine,
@@ -380,6 +397,7 @@ class _SoferHomeState extends State<SoferHome>
         onNextLine: _smartNextLine,
         onEditPosition: _showEditPositionDialog,
         onProjectChanged: _selectProject,
+        onResume: _startTimer,
       );
 
   /// Choosing a commission in smart mode brings its stored position with it.
@@ -398,6 +416,7 @@ class _SoferHomeState extends State<SoferHome>
     final lastPos = await _storageService.getLastPosition(project.id);
     if (!mounted) return;
     setState(() {
+      _hasStoredPosition = lastPos.isNotEmpty;
       // Clamped rather than trusted: a position stored by an older build, or a
       // hand-edited backup, could carry a zero.
       _smartCurrentPage = ((lastPos['page'] as int?) ?? 1).clamp(1, 1 << 20);
@@ -758,7 +777,13 @@ class _SoferHomeState extends State<SoferHome>
       backlogOnly: save.backlogOnly,
     );
 
-    if (Platform.isAndroid && _checkDailyGoalMet(save.project)) {
+    final metToday = DailyGoal.isMet(
+      project: save.project,
+      history: history,
+      day: DateTime.now(),
+      dayStart: _dayStart,
+    );
+    if (Platform.isAndroid && metToday) {
       NotificationService().cancelDailyReminder();
     }
   }
@@ -799,37 +824,6 @@ class _SoferHomeState extends State<SoferHome>
         _smartCurrentLine = next.line;
       });
     }
-  }
-
-  bool _checkDailyGoalMet(Project project) {
-    if (project.targetDaily <= 0) return true;
-
-    final now = DateTime.now();
-    final todaySessions = history
-        .where((s) =>
-            s.projectId == project.id &&
-            // Backlog entries record work done before the app existed and must
-            // not count towards today's goal. They carry a placeholder date, so
-            // this used to be filtered out only by accident.
-            !s.backlogOnly &&
-            DateLogic.sessionIsOnDay(s, now, _dayStart))
-        .toList();
-
-    int totalDone = 0;
-    int target = project.targetDaily;
-    for (var s in todaySessions) {
-      if (project.type == ProjectType.sefer) {
-        final int linesPerPage = ProductionCalculator.linesPerPageOf(project);
-        totalDone += ProductionCalculator.seferLinesInSession(s);
-        target = project.dailyGoalInLines
-            ? project.targetDaily
-            : (project.targetDaily * linesPerPage);
-        if (totalDone >= target) return true;
-      } else {
-        totalDone += s.amount;
-      }
-    }
-    return totalDone >= target;
   }
 
   void _resetAllData() async {
@@ -944,81 +938,17 @@ class _SoferHomeState extends State<SoferHome>
     await windowManager.center();
   }
 
-  Widget _buildWindowsFloatingOverlay() {
-    return Material(
-      color: Colors.deepPurple.shade900,
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                formatClock(_clock.elapsed),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 42,
-                  fontWeight: FontWeight.w200,
-                  fontFeatures: [FontFeature.tabularFigures()],
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  IconButton.filled(
-                    onPressed: _clock.isPaused ? _startTimer : _pauseTimer,
-                    icon: Icon(_clock.isPaused ? Icons.play_arrow : Icons.pause),
-                    tooltip: _clock.isPaused ? "המשך" : "הפסקה",
-                    style: IconButton.styleFrom(
-                      backgroundColor: Colors.orange.shade700,
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton.filled(
-                    onPressed: _stopTimer,
-                    icon: const Icon(Icons.stop),
-                    tooltip: "סיום",
-                    style: IconButton.styleFrom(
-                      backgroundColor: Colors.red.shade700,
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  if (!_clock.isPaused)
-                    IconButton.filled(
-                      onPressed: _recordLap,
-                      icon: const Icon(Icons.flag),
-                      tooltip: "Lap",
-                      style: IconButton.styleFrom(
-                        backgroundColor: Colors.blue.shade700,
-                        foregroundColor: Colors.white,
-                      ),
-                    ),
-                  const SizedBox(width: 8),
-                  IconButton.filled(
-                    onPressed: _restoreFromFloatingWindow,
-                    icon: const Icon(Icons.open_in_full),
-                    tooltip: "החזר חלון",
-                    style: IconButton.styleFrom(
-                      backgroundColor: Colors.white24,
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     if (Platform.isWindows && (widget.windowsFloatingMode?.value ?? false)) {
-      return _buildWindowsFloatingOverlay();
+      return FloatingTimerWindow(
+        clock: _clock,
+        onStart: _startTimer,
+        onPause: _pauseTimer,
+        onStop: _stopTimer,
+        onLap: _recordLap,
+        onRestore: _restoreFromFloatingWindow,
+      );
     }
 
     // The ruled themes share one home screen for both workflows; the cards
@@ -1036,11 +966,18 @@ class _SoferHomeState extends State<SoferHome>
     }
 
     if (_isSmartWorkflow) {
-      return _buildSmartWorkflowUI();
+      return Scaffold(
+        appBar: _homeAppBar(),
+        body: CardsSmartBody(
+          snapshot: _buildHomeSnapshot(),
+          actions: _homeActions,
+          pulse: _pulseAnimation,
+        ),
+        bottomNavigationBar: _homeBottomNav(),
+      );
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFDF7FF),
       appBar: _homeAppBar(),
       body: LayoutBuilder(
         builder: (context, constraints) {
@@ -1228,312 +1165,12 @@ class _SoferHomeState extends State<SoferHome>
           );
         },
       ),
-      // The same four destinations as the ruled layout, in the same order. With
-      // three, "סיכומים" sat at index 0 and was drawn as the selected tab while
-      // the writer was looking at the home screen.
-      bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: Colors.deepPurple.shade50,
-        selectedItemColor: Colors.deepPurple.shade800,
-        unselectedItemColor: Colors.grey.shade700,
-        type: BottomNavigationBarType.fixed,
-        currentIndex: 0,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.edit_outlined),
-            label: "בית",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.bar_chart_rounded),
-            label: "סיכומים",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.folder_rounded),
-            label: "פרויקטים",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings_rounded),
-            label: "הגדרות",
-          ),
-        ],
-        onTap: (index) {
-          if (index == 1) _navigateToSummary();
-          // Expenses moved into the projects screen: costs are attributed to
-          // the work they belong to, so that is where they are managed.
-          if (index == 2) _navigateToProjects();
-          if (index == 3) _navigateToSettings();
-        },
-      ),
+      // The same bar as every other layout. This used to be a second copy —
+      // same four destinations, same routing, written out again in the older
+      // Material widget with its colours hardcoded, so smart mode was the one
+      // screen the theme did not reach.
+      bottomNavigationBar: _homeBottomNav(),
     );
   }
 
-  Widget _buildSmartWorkflowUI() {
-    return Scaffold(
-      backgroundColor: const Color(0xFFFDF7FF),
-      // The same app bar as plain mode, so the switch back is always in the
-      // same place. Before this, smart mode had no way out but settings.
-      appBar: _homeAppBar(),
-      body: Center(
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (!_clock.isRunning && !_clock.isPaused)
-                Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: DropdownButtonFormField<Project>(
-                    decoration: const InputDecoration(
-                      labelText: "בחר פרויקט להתחלת עבודה",
-                      border: OutlineInputBorder(),
-                    ),
-                    initialValue: _selectedProject,
-                    items: projects
-                        .map((p) =>
-                            DropdownMenuItem(value: p, child: Text(p.name)))
-                        .toList(),
-                    onChanged: _selectProject,
-                  ),
-                ),
-              if (_selectedProject != null) ...[
-                if (_clock.isRunning || _clock.isPaused)
-                  Column(
-                    children: [
-                      Text(
-                        _selectedProject?.type == ProjectType.mezuza
-                            ? "מזוזה ${formatHebrewNumber(_smartCurrentPage)}"
-                            : "עמוד ${formatHebrewNumber(_smartCurrentPage)}",
-                        style: const TextStyle(
-                            fontSize: 24, fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        "שורה $_smartCurrentLine",
-                        style: const TextStyle(
-                            fontSize: 48,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.deepPurple),
-                      ),
-                      const SizedBox(height: 8),
-                      TextButton.icon(
-                        onPressed: _showEditPositionDialog,
-                        icon: const Icon(Icons.edit_location_alt, size: 20),
-                        label: const Text("ערוך מיקום"),
-                      ),
-                    ],
-                  )
-                else
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      FutureBuilder<Map<String, dynamic>>(
-                        future: _storageService
-                            .getLastPosition(_selectedProject!.id),
-                        builder: (context, snapshot) {
-                          if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-                            final unitLabel =
-                                _selectedProject?.type == ProjectType.mezuza
-                                    ? "מזוזה"
-                                    : "עמוד";
-                            return Text(
-                                "מיקום אחרון: $unitLabel ${formatHebrewNumber(snapshot.data!['page'])}, שורה ${snapshot.data!['line']}");
-                          }
-                          return const Text("התחלה חדשה בפרויקט זה");
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                      TextButton.icon(
-                        onPressed: _showEditPositionDialog,
-                        icon: const Icon(Icons.edit_location_alt, size: 20),
-                        label: const Text("ערוך מיקום"),
-                      ),
-                    ],
-                  ),
-                const SizedBox(height: 30),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: FadeTransition(
-                    opacity: _pulseAnimation,
-                    child: Text(
-                      formatClock(_clock.elapsed),
-                      style: const TextStyle(
-                          fontSize: 80, fontWeight: FontWeight.w200),
-                    ),
-                  ),
-                ),
-                if (_clock.isRunning && !_clock.isPaused)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: FadeTransition(
-                      opacity: _pulseAnimation,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 10),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFFF5E6),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                  color: Colors.brown.shade300, width: 1.5),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.brown.withValues(alpha: 0.2),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.brush,
-                                    color: Colors.brown.shade800, size: 26),
-                                const SizedBox(width: 8),
-                                Text("כותב...",
-                                    style: TextStyle(
-                                        color: Colors.brown.shade800,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w500)),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                if (_clock.isPaused)
-                  Text(
-                    "בהפסקה: ${formatClock(_clock.breakElapsed)}",
-                    style: const TextStyle(
-                        color: Colors.orange,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 20),
-                  )
-                else if (_clock.isRunning)
-                  Container(
-                    margin: const EdgeInsets.only(top: 12),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 14),
-                    decoration: BoxDecoration(
-                      color: Colors.blueGrey.shade50,
-                      borderRadius: BorderRadius.circular(12),
-                      border:
-                          Border.all(color: Colors.blueGrey.shade200, width: 1),
-                    ),
-                    child: Column(
-                      children: [
-                        Text(
-                          "הקפה שורה נוכחית",
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.blueGrey.shade700,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          formatClock(_clock.sinceLastLap),
-                          style: const TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blueGrey,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                const SizedBox(height: 40),
-                if (!_clock.isRunning && !_clock.isPaused)
-                  ElevatedButton.icon(
-                    onPressed: _initSmartSession,
-                    icon: const Icon(Icons.login),
-                    label: const Text("כניסה"),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 40, vertical: 20),
-                      textStyle: const TextStyle(fontSize: 20),
-                    ),
-                  )
-                else
-                  Column(
-                    children: [
-                      ElevatedButton.icon(
-                        onPressed: _clock.isPaused ? null : _smartNextLine,
-                        icon: const Icon(Icons.arrow_downward),
-                        label: const Text("מעבר שורה (סיימתי)"),
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 60, vertical: 25),
-                          textStyle: const TextStyle(fontSize: 22),
-                          backgroundColor: Colors.green,
-                          foregroundColor: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          ElevatedButton.icon(
-                            onPressed: _clock.isPaused ? _startTimer : _onBreakTap,
-                            icon: Icon(
-                                _clock.isPaused ? Icons.play_arrow : Icons.coffee),
-                            label: Text(_clock.isPaused ? "המשך כתיבה" : "הפסקת קפה"),
-                            style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.orange,
-                                foregroundColor: Colors.white),
-                          ),
-                          const SizedBox(width: 20),
-                          ElevatedButton.icon(
-                            onPressed: _stopTimer,
-                            icon: const Icon(Icons.logout),
-                            label: const Text("יציאה"),
-                            style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.red,
-                                foregroundColor: Colors.white),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-              ],
-            ],
-          ),
-        ),
-      ),
-      // The same four destinations as the ruled layout, in the same order. With
-      // three, "סיכומים" sat at index 0 and was drawn as the selected tab while
-      // the writer was looking at the home screen.
-      bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: Colors.deepPurple.shade50,
-        selectedItemColor: Colors.deepPurple.shade800,
-        unselectedItemColor: Colors.grey.shade700,
-        type: BottomNavigationBarType.fixed,
-        currentIndex: 0,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.edit_outlined),
-            label: "בית",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.bar_chart_rounded),
-            label: "סיכומים",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.folder_rounded),
-            label: "פרויקטים",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings_rounded),
-            label: "הגדרות",
-          ),
-        ],
-        onTap: (index) {
-          if (index == 1) _navigateToSummary();
-          // Expenses moved into the projects screen: costs are attributed to
-          // the work they belong to, so that is where they are managed.
-          if (index == 2) _navigateToProjects();
-          if (index == 3) _navigateToSettings();
-        },
-      ),
-    );
-  }
 }

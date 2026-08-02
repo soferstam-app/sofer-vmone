@@ -53,6 +53,7 @@ void main() {
     onNextLine: () {},
     onEditPosition: () {},
     onProjectChanged: (_) {},
+    onResume: () {},
   );
 
   Widget host(Widget child, AppTheme theme) => MaterialApp(
