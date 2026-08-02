@@ -10,12 +10,14 @@ import 'notification_service.dart';
 import 'theme_settings_screen.dart';
 import 'widgets/sofer_widgets.dart';
 import 'work_calendar_settings_screen.dart';
-import 'package:auto_updater/auto_updater.dart';
 import 'dart:io';
 import 'theme/app_theme.dart';
 import 'widgets/feedback.dart';
 import 'logic/currency.dart';
 import 'version.dart';
+import 'update_service.dart';
+import 'logic/version_check.dart';
+import 'widgets/confirm.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -39,6 +41,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// than work it out from a total that looks wrong.
   Set<Currency> _inUse = const {};
   bool _isExporting = false;
+  bool _checkingUpdate = false;
   String _soferName = '';
 
   /// Stored records this build cannot read. They are kept untouched and take no
@@ -245,11 +248,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  /// Asks GitHub whether there is a newer release, when the writer asks.
+  ///
+  /// Never on its own: this is the only request the app makes that nobody asked
+  /// for by name, and a good part of this audience is behind content filtering
+  /// where an unbidden call to an API is at best noise and at worst a hang.
+  ///
+  /// Three answers, and all three are said plainly. Failing is ordinary here —
+  /// it means the check could not be made, not that anything is wrong.
   Future<void> _checkForUpdates() async {
-    // URL for the GitHub releases page.
-    String feedURL = 'https://github.com/soferstam-app/sofer-vmone/releases';
-    await autoUpdater.setFeedURL(feedURL);
-    await autoUpdater.checkForUpdates();
+    setState(() => _checkingUpdate = true);
+    final status = await const UpdateService().check();
+    if (!mounted) return;
+    setState(() => _checkingUpdate = false);
+
+    switch (status) {
+      case UpToDate(:final running):
+        showAppSuccess(context, "אתה מריץ את הגרסה האחרונה ($running)");
+
+      case UpdateCheckFailed(:final reason):
+        showAppError(context, reason);
+
+      case UpdateAvailable(:final version, :final pageUrl, :final publishedAt):
+        final when = publishedAt == null
+            ? ""
+            : " (פורסמה ${formatDisplayDate(publishedAt, _useGregorianDates)})";
+        final open = await confirmAction(
+          context,
+          title: "יש גרסה חדשה",
+          // Says what will happen. The app does not download and does not
+          // install — on Android it may not, and anywhere else it should not
+          // pretend to more than it does.
+          message: "גרסה $version פורסמה$when.\n\n"
+              "לפתוח את דף השחרור בדפדפן?",
+          confirmLabel: "פתח",
+        );
+        if (open) await launchUrl(Uri.parse(pageUrl));
+    }
   }
 
   Future<void> _editSoferName() async {
@@ -621,7 +656,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               note: "נשמרות כמו שהן ואינן נכנסות לאף חישוב. "
                   "גרסה חדשה יותר תדע לקרוא אותן"),
         if (Platform.isWindows || Platform.isMacOS)
-          _entry("בדוק עדכונים", "", onTap: _checkForUpdates),
+          _entry("בדוק עדכונים", _checkingUpdate ? "בודק…" : "",
+            onTap: _checkingUpdate ? null : _checkForUpdates),
         const SoferRule(strong: true),
         const SizedBox(height: 24),
       ],

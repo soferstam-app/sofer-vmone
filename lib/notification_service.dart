@@ -4,6 +4,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'storage_service.dart';
+import 'logic/reminder_schedule.dart';
 
 class NotificationService {
   static NotificationService? _instance;
@@ -36,45 +37,77 @@ class NotificationService {
     await flutterLocalNotificationsPlugin.initialize(initializationSettings);
   }
 
+  /// Books the next week of reminders, one notification per day.
+  ///
+  /// Called on every app open and after every entry, which keeps the queue
+  /// full. Booking rather than repeating is what lets a single day be dropped;
+  /// see [ReminderSchedule].
   Future<void> scheduleDailyReminder() async {
     if (!Platform.isAndroid) return;
 
-    if (!await _storage.getNotificationEnabled()) {
-      await cancelDailyReminder();
-      return;
-    }
+    // Clears the ring before refilling it, so a changed hour does not leave
+    // yesterday's booking standing at the old time.
+    await cancelDailyReminder();
+    if (!await _storage.getNotificationEnabled()) return;
 
     final TimeOfDay time = await _storage.getNotificationTime();
+    final when = ReminderSchedule.upcoming(
+      from: DateTime.now(),
+      hour: time.hour,
+      minute: time.minute,
+    );
 
-    try {
-      await flutterLocalNotificationsPlugin.zonedSchedule(
-        0,
-        'תזכורת כתיבה 📜',
-        'האם עמדת ביעד הכתיבה היומי שלך? זה הזמן להשלים!',
-        _nextInstanceOfTime(time),
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'daily_reminder_channel',
-            'תזכורות יומיות',
-            channelDescription: 'תזכורת יומית לכתיבה',
-            importance: Importance.max,
-            priority: Priority.high,
-            // sound: RawResourceAndroidNotificationSound('shofar'),
+    for (final moment in when) {
+      try {
+        await flutterLocalNotificationsPlugin.zonedSchedule(
+          ReminderSchedule.idFor(moment),
+          'סופר ומונה',
+          // Says nothing about whether the day went well. The old text asked
+          // "did you meet your daily target?" of writers who had met it hours
+          // earlier, and of writers who had never set one.
+          'סוף היום — רוצה לרשום מה כתבת?',
+          tz.TZDateTime.from(moment, tz.local),
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'daily_reminder_channel',
+              'תזכורות יומיות',
+              channelDescription: 'תזכורת יומית לרישום העבודה',
+              importance: Importance.max,
+              priority: Priority.high,
+            ),
           ),
-        ),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-        matchDateTimeComponents: DateTimeComponents.time,
-      );
-    } catch (e) {
-      debugPrint("Error scheduling notification: $e");
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+        );
+      } catch (e) {
+        // One day failing to book must not cost the rest of the week.
+        debugPrint("Error scheduling reminder for $moment: $e");
+      }
     }
   }
 
+  /// Drops today's reminder, leaving the rest of the week standing.
+  ///
+  /// For when the day's target has already been met: there is nothing to remind
+  /// anyone of tonight, and there is everything to remind them of tomorrow.
+  Future<void> cancelTodaysReminder() async {
+    if (!Platform.isAndroid) return;
+    await flutterLocalNotificationsPlugin
+        .cancel(ReminderSchedule.idFor(DateTime.now()));
+  }
+
+  /// Clears the whole queue — for the setting being turned off, and before it
+  /// is refilled.
   Future<void> cancelDailyReminder() async {
     if (!Platform.isAndroid) return;
 
+    for (final id in ReminderSchedule.allIds) {
+      await flutterLocalNotificationsPlugin.cancel(id);
+    }
+    // The single repeating reminder this replaced. Cancelled once so that an
+    // app updated from an older build does not keep firing it for ever beside
+    // the new ones — nothing here can reach it after this.
     await flutterLocalNotificationsPlugin.cancel(0);
   }
 
@@ -113,15 +146,5 @@ class NotificationService {
   Future<void> cancelBreakReminder() async {
     if (!Platform.isAndroid) return;
     await flutterLocalNotificationsPlugin.cancel(1);
-  }
-
-  tz.TZDateTime _nextInstanceOfTime(TimeOfDay time) {
-    final tz.TZDateTime now = tz.TZDateTime.now(tz.local);
-    tz.TZDateTime scheduledDate = tz.TZDateTime(
-        tz.local, now.year, now.month, now.day, time.hour, time.minute);
-    if (scheduledDate.isBefore(now)) {
-      scheduledDate = scheduledDate.add(const Duration(days: 1));
-    }
-    return scheduledDate;
   }
 }

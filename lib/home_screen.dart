@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:auto_updater/auto_updater.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:window_manager/window_manager.dart';
@@ -105,7 +104,6 @@ class _SoferHomeState extends State<SoferHome>
     );
 
     _loadData();
-    _initAutoUpdater();
   }
 
   @override
@@ -139,13 +137,6 @@ class _SoferHomeState extends State<SoferHome>
                   DateLogic.effectiveDate(s.startTime, _dayStart)))
       .toList();
 
-  void _initAutoUpdater() async {
-    if (Platform.isWindows || Platform.isMacOS) {
-      String feedURL =
-          'https://github.com/soferstam-app/sofer-vmone/releases/tag/APP';
-      await autoUpdater.setFeedURL(feedURL);
-    }
-  }
 
   @override
   void dispose() {
@@ -783,8 +774,13 @@ class _SoferHomeState extends State<SoferHome>
       day: DateTime.now(),
       dayStart: _dayStart,
     );
+    // Today's only. Cancelling the whole queue is what the old code did, and it
+    // silenced the reminder for every day after as well.
     if (Platform.isAndroid && metToday) {
-      NotificationService().cancelDailyReminder();
+      NotificationService().cancelTodaysReminder();
+    } else {
+      // Tops the week up, so the queue never runs dry for anyone recording work.
+      NotificationService().scheduleDailyReminder();
     }
   }
 

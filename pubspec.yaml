@@ -43,7 +43,6 @@ dependencies:
   url_launcher: ^6.2.5
   flutter_local_notifications: ^17.0.0
   timezone: ^0.9.0
-  auto_updater: ^0.2.0
   window_manager: ^0.4.3
   flutter_foreground_task: ^9.2.0
   # גיבוי וייצוא: שמירה מקומית (כל הפלטפורמות) ושיתוף דרך מערכת ההפעלה
