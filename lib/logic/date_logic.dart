@@ -1,3 +1,5 @@
+import 'package:kosher_dart/kosher_dart.dart';
+
 import '../models.dart';
 import 'hebrew_clock.dart';
 
@@ -106,9 +108,33 @@ class DateLogic {
   }
 
   /// Whether [session] was filed under a day in the same month as [month].
+  /// Whether a session falls in the same **Hebrew** month as [month].
+  ///
+  /// It used to compare Gregorian months, which is a different span. A sofer
+  /// picks his month in a Hebrew picker — "אב תשפ״ו" — and the app then
+  /// gathered whichever Gregorian month that day happened to land in, so a
+  /// summary of Av showed a mixture of Tammuz, Av and Elul. It was neither the
+  /// month asked for nor any other month, and to the writer it simply looked as
+  /// though the monthly summary was showing the wrong work.
+  ///
+  /// Worse, it disagreed with itself: the working days a monthly target is
+  /// measured against were already counted over the Hebrew month, so the output
+  /// and the target were spans up to a fortnight apart.
+  ///
+  /// This is the rule the whole app is built on — the Hebrew calendar is the
+  /// working representation, the Gregorian one is display.
   static bool sessionIsInMonth(
       WorkSession session, DateTime month, DayStart dayStart) {
-    final a = workingDateOf(session, dayStart);
-    return a.year == month.year && a.month == month.month;
+    final a = JewishDate.fromDateTime(workingDateOf(session, dayStart));
+    final b = JewishDate.fromDateTime(month);
+    return a.getJewishYear() == b.getJewishYear() &&
+        a.getJewishMonth() == b.getJewishMonth();
   }
+
+  /// Which day of the Hebrew month a session was filed under, 1–30.
+  ///
+  /// What a chart of a month's days is indexed by, for the same reason.
+  static int hebrewDayOfMonth(WorkSession session, DayStart dayStart) =>
+      JewishDate.fromDateTime(workingDateOf(session, dayStart))
+          .getJewishDayOfMonth();
 }

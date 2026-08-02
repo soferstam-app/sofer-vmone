@@ -168,6 +168,13 @@ class _SummaryScreenState extends State<SummaryScreen> {
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
                     color: t.accent)),
+            const SizedBox(width: 8),
+            // Both layouts get the same way in. See the ruled header.
+            TextButton(
+              onPressed: () => setState(() => _viewByMonth = !_viewByMonth),
+              child: Text(_viewByMonth ? "חודש ▾" : "יום ▾",
+                  style: TextStyle(fontSize: 13, color: t.accent)),
+            ),
           ],
         ),
       );
@@ -185,12 +192,19 @@ class _SummaryScreenState extends State<SummaryScreen> {
                 style: TextStyle(
                     fontFamily: t.numeralFamily, fontSize: 23, color: t.ink)),
           ),
-          Text(_viewByMonth ? "חודש" : "יום",
-              style: TextStyle(
-                  fontFamily: t.labelFamily,
-                  fontSize: 12,
-                  letterSpacing: 1.5,
-                  color: t.inkMuted)),
+          // Tappable. It was a label, and the only way to see a whole month was
+          // a switch inside a dialog called "בחר תאריך עברי" — so writers
+          // reported that the monthly summary showed them a single day, which
+          // is exactly what it does when nobody can find the switch.
+          TextButton(
+            onPressed: () => setState(() => _viewByMonth = !_viewByMonth),
+            child: Text(_viewByMonth ? "חודש ▾" : "יום ▾",
+                style: TextStyle(
+                    fontFamily: t.labelFamily,
+                    fontSize: 12,
+                    letterSpacing: 1.5,
+                    color: t.accent)),
+          ),
         ],
       ),
     );

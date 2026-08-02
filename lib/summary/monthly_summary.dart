@@ -288,13 +288,15 @@ Future<void> showMonthlySummary({
 Widget _monthlyChart(
     List<WorkSession> sessions, DateTime month, DayStart dayStart) {
   Map<int, Duration> dailyTotals = {};
-  int daysCount =
-      DateTime(month.year, month.month + 1, 0).day;
+  // Hebrew days, to match the month the summary is of. Indexed by Gregorian day
+  // it drew a 31-column chart of a 29-day month, with the work landing on
+  // whichever column the Gregorian date happened to fall on.
+  final int daysCount = JewishDate.fromDateTime(month).getDaysInJewishMonth();
 
   for (var s in sessions) {
     // The bar a session lands on is the day it was filed under; using the raw
     // timestamp would put late-night work on the wrong column.
-    final day = DateLogic.workingDateOf(s, dayStart).day;
+    final day = DateLogic.hebrewDayOfMonth(s, dayStart);
     dailyTotals[day] = (dailyTotals[day] ?? Duration.zero) + s.duration;
   }
 
