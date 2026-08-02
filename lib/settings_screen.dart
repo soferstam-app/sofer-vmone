@@ -510,6 +510,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         actions: [
+          // The fonts are under the SIL Open Font License, which asks that the
+          // licence travel with them. Bundling it is not enough on its own —
+          // there has to be a way to read it.
+          TextButton(
+            onPressed: () => showLicensePage(
+              context: context,
+              applicationName: 'סופר ומונה',
+              applicationLegalese: '© סופר ומונה',
+            ),
+            child: const Text("רישיונות"),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text("סגור"),

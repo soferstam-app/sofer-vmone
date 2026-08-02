@@ -83,10 +83,13 @@ flutter:
       fonts:
         - asset: assets/fonts/Heebo-var.ttf
 
-  # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
-  #   - images/a_dot_ham.jpeg
+  # The OFL requires the licence to travel with the fonts, so it is bundled
+  # rather than merely sitting in the repository — a licence that is not in the
+  # APK has not accompanied anything. main.dart registers both with
+  # LicenseRegistry, which is what puts them in front of a user.
+  assets:
+    - assets/fonts/OFL-Heebo.txt
+    - assets/fonts/OFL-FrankRuhlLibre.txt
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
