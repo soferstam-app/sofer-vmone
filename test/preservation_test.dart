@@ -281,4 +281,65 @@ void main() {
       expect(out['name'], 'שם חדש');
     });
   });
+
+  group('money comes back to the agora', () {
+    // Amounts are held as doubles, which is the thing every guide about money
+    // says not to do. It was worth checking rather than assuming: what a sofer
+    // types is what is stored, and a double carries any sum he could plausibly
+    // write down without losing so much as an agora of it. Nothing derived is
+    // ever stored — no total, no quotient, no profit — so the numbers in the
+    // file are only ever the ones he typed.
+    //
+    // That makes the storage sound and this test the thing that keeps it so.
+    // The plausible way it breaks is a well-meant tidy-up: writing amounts as
+    // `toStringAsFixed(2)`, or rounding on the way in. Both would look right on
+    // screen and quietly destroy what was entered.
+    const amounts = [
+      0.07, 0.1, 0.005, 0.3, 4.35, 8.15, 99.99, 123.45, 1200.0, 1234567.89,
+    ];
+
+    test('a project keeps its price and its costs', () {
+      for (final amount in amounts) {
+        final project = Project(
+          id: 'p',
+          name: 'x',
+          type: ProjectType.sefer,
+          price: amount,
+          expenses: amount,
+          targetDaily: 1,
+          targetMonthly: 20,
+        );
+        final back = Project.fromJson(
+            jsonDecode(jsonEncode(project.toJson())) as Map<String, dynamic>);
+        expect(back.price, amount, reason: 'price $amount');
+        expect(back.expenses, amount, reason: 'expenses $amount');
+      }
+    });
+
+    test('an expense keeps its amount', () {
+      for (final amount in amounts) {
+        final expense = Expense(
+          id: 'e',
+          product: 'קלף',
+          date: DateTime(2026, 7, 20),
+          amount: amount,
+          allocation: ExpenseAllocation.month,
+        );
+        final back = Expense.fromJson(
+            jsonDecode(jsonEncode(expense.toJson())) as Map<String, dynamic>);
+        expect(back.amount, amount, reason: 'amount $amount');
+      }
+    });
+
+    test('through an edit that does not touch it', () {
+      final expense = Expense(
+        id: 'e',
+        product: 'קלף',
+        date: DateTime(2026, 7, 20),
+        amount: 1234567.89,
+        allocation: ExpenseAllocation.month,
+      );
+      expect(expense.copyWith(product: 'דיו').amount, 1234567.89);
+    });
+  });
 }
