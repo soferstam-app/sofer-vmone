@@ -161,8 +161,13 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
     // no earnings and their time is a placeholder.
     final hourlyRate =
         ProfitCalculator.profitPerHour(project, sessionsForStats, totalTime);
-    final projectExpenses =
-        ExpenseLogic.totalForProject(project.id, _expenses);
+    // Only the costs actually in the commission's own currency count towards
+    // its net. Anything bought in another is real, but subtracting it here
+    // would be arithmetic across two units.
+    final projectExpenses = ExpenseLogic.totalForProject(project.id, _expenses)
+            .single(project.currency)
+            ?.amount ??
+        0.0;
 
     // One estimator for every project type. A sefer states its size in pages,
     // mezuzot and tefillin in units; both arrive here as billable units, so the
@@ -253,16 +258,16 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                   children: [
                     _statRow("סך הכל נכתב:", totalWrittenStr),
                     _statRow(
-                        "סך הכל רווח:", formatMoneyExact(totalProfit)),
+                        "סך הכל רווח:", formatMoneyExact(totalProfit, project.currency)),
                     if (projectExpenses > 0) ...[
                       _statRow("הוצאות משויכות:",
-                          formatMoneyExact(projectExpenses)),
+                          formatMoneyExact(projectExpenses, project.currency)),
                       _statRow("נטו (לאחר הוצאות):",
-                          formatMoneyExact((totalProfit - projectExpenses))),
+                          formatMoneyExact(totalProfit - projectExpenses, project.currency)),
                     ],
                     if (hourlyRate != null)
                       _statRow("שכר לשעה:",
-                          "${formatMoney(hourlyRate)} לשעה"),
+                          "${formatMoney(hourlyRate, project.currency)} לשעה"),
                     if (avgTimeStr.isNotEmpty) _statRow("ממוצע:", avgTimeStr),
                   ],
                 ),
@@ -453,18 +458,18 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                 const SoferSectionTitle("הכסף", padding: EdgeInsets.zero),
                 const SizedBox(height: 6),
                 if (projectExpenses > 0) ...[
-                  SoferStatRow("רווח", formatMoney(totalProfit)),
+                  SoferStatRow("רווח", formatMoney(totalProfit, project.currency)),
                   SoferStatRow("הוצאות משויכות",
-                      formatMoney(projectExpenses)),
+                      formatMoney(projectExpenses, project.currency)),
                 ],
                 SoferStatRow(
                     projectExpenses > 0 ? "נטו" : "רווח",
-                    formatMoney(net)),
+                    formatMoney(net, project.currency)),
                 SoferStatRow(
                     "לשעה",
                     hourlyRate == null
                         ? "—"
-                        : formatMoney(hourlyRate),
+                        : formatMoney(hourlyRate, project.currency),
                     emphasise: hourlyRate != null,
                     last: true),
               ],

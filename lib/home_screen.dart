@@ -241,7 +241,7 @@ class _SoferHomeState extends State<SoferHome>
 
       final rate =
           ProfitCalculator.profitPerHour(project, todaySessions, worked);
-      if (rate != null) hourlyRate = formatMoney(rate);
+      if (rate != null) hourlyRate = formatMoney(rate, project.currency);
 
       final estimate = CompletionEstimator.estimate(
         project: project,

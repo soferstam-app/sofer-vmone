@@ -15,6 +15,7 @@ import 'format.dart';
 import 'summary/history_editor.dart';
 import 'summary/monthly_summary.dart';
 import 'logic/tefillin_summary.dart';
+import 'logic/currency.dart';
 
 class SummaryScreen extends StatefulWidget {
   final List<Project> projects;
@@ -47,6 +48,10 @@ class _SummaryScreenState extends State<SummaryScreen> {
   /// measured against the days the writer actually writes.
   WorkCalendarRules _rules = WorkCalendarRules.standard;
 
+  /// Only what a total falls back to when there is nothing in it to read a
+  /// currency from. Every amount shown comes from a record that carries its own.
+  Currency _currency = Currency.ils;
+
   @override
   void initState() {
     super.initState();
@@ -55,6 +60,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
     });
     _storage.getWorkCalendarRules().then((r) {
       if (mounted) setState(() => _rules = r);
+    });
+    _storage.getCurrency().then((c) {
+      if (mounted) setState(() => _currency = c);
     });
   }
 
@@ -267,9 +275,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
           const SizedBox(height: 12),
           SoferStatRow("זמן עבודה", workedLabel(worked, someWithoutTime)),
           if (avgTimeText.isNotEmpty) SoferStatRow("ממוצע", avgTimeText),
-          SoferStatRow("רווח נקי", formatMoneyExact(profit)),
+          SoferStatRow("רווח נקי", formatMoneyExact(profit, project.currency)),
           if (hourlyRate != null)
-            SoferStatRow("שכר לשעה", formatMoney(hourlyRate),
+            SoferStatRow("שכר לשעה", formatMoney(hourlyRate, project.currency),
                 emphasise: true, last: !hasTarget),
           if (hasTarget) ...[
             const SizedBox(height: 14),
@@ -446,10 +454,10 @@ class _SummaryScreenState extends State<SummaryScreen> {
             if (avgTimeText.isNotEmpty)
               _buildInfoRow(Icons.speed, "ממוצע:", avgTimeText),
             _buildInfoRow(Icons.monetization_on, "רווח נקי:",
-                formatMoneyExact(profit)),
+                formatMoneyExact(profit, project.currency)),
             if (hourlyRate != null)
               _buildInfoRow(Icons.trending_up, "שכר לשעה:",
-                  "${formatMoney(hourlyRate)} לשעה"),
+                  "${formatMoney(hourlyRate, project.currency)} לשעה"),
             const SizedBox(height: 10),
             const Text("עמידה ביעד יומי:",
                 style: TextStyle(fontWeight: FontWeight.bold)),
@@ -680,6 +688,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
         month: _selectedDate,
         dayStart: _dayStart,
         rules: _rules,
+        currency: _currency,
       );
 
   // --- עריכת היסטוריה ---

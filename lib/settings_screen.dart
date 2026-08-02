@@ -14,6 +14,7 @@ import 'package:auto_updater/auto_updater.dart';
 import 'dart:io';
 import 'theme/app_theme.dart';
 import 'widgets/feedback.dart';
+import 'logic/currency.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -27,6 +28,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   TimeOfDay _notificationTime = const TimeOfDay(hour: 20, minute: 0);
   DayStart _dayStart = DayStart.midnight;
   bool _useGregorianDates = false;
+
+  /// What the *next* amount is entered in. Every stored amount carries its own,
+  /// so this settles nothing about what is already recorded.
+  Currency _currency = Currency.ils;
+
+  /// Every currency records are actually in. More than one means some figures
+  /// cannot be added up, and the writer should hear that from the app rather
+  /// than work it out from a total that looks wrong.
+  Set<Currency> _inUse = const {};
   bool _isExporting = false;
   String _soferName = '';
 
@@ -49,6 +59,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final useGregorian = await _storage.getUseGregorianDates();
     final soferName = await _storage.getSoferName();
     final unreadable = await _storage.unreadableRecordCount();
+    final currency = await _storage.getCurrency();
+    final inUse = await _storage.currenciesInUse();
     if (mounted) {
       setState(() {
         _notificationsEnabled = enabled;
@@ -57,6 +69,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _useGregorianDates = useGregorian;
         _soferName = soferName;
         _unreadable = unreadable;
+        _currency = currency;
+        _inUse = inUse;
       });
     }
   }
@@ -152,6 +166,60 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (result == null) return;
     await _storage.setDayStart(result);
     if (mounted) setState(() => _dayStart = result);
+  }
+
+  /// Which currency new amounts are entered in.
+  ///
+  /// Deliberately says what it will not do. A writer changing this expects one
+  /// of two things, and only one of them is true: it does not convert anything,
+  /// and it does not relabel anything. What is already recorded keeps the
+  /// currency it was entered in, for ever.
+  Future<void> _pickCurrency() async {
+    final chosen = await showDialog<Currency>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("מטבע"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "המטבע שבו יוזנו סכומים חדשים.\n\n"
+              "סכומים שכבר נרשמו נשארים במטבע שבו הוזנו — האפליקציה אינה "
+              "ממירה ואינה משנה אותם למפרע.",
+              style: TextStyle(fontSize: 13, height: 1.5),
+            ),
+            const SizedBox(height: 12),
+            for (final option in Currency.offered)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text("${option.name} (${option.symbol})"),
+                trailing: option == _currency
+                    ? Icon(Icons.check, color: SoferTokens.of(ctx).accent)
+                    : null,
+                onTap: () => Navigator.pop(ctx, option),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("ביטול")),
+        ],
+      ),
+    );
+    if (chosen == null) return;
+    await _storage.setCurrency(chosen);
+    if (mounted) setState(() => _currency = chosen);
+  }
+
+  /// What to say beside the setting: the currency, and a warning when the
+  /// records are not all in it.
+  String get _currencyNote {
+    final others = _inUse.where((c) => c != _currency).toList();
+    if (others.isEmpty) return "";
+    return "יש רשומות גם ב-${others.map((c) => c.name).join(', ')}. "
+        "סכומים ממטבעות שונים אינם מחוברים זה לזה.";
   }
 
   Future<void> _updateNotificationSettings(bool enabled) async {
@@ -517,6 +585,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         }),
         _entry("מעבר יום", _dayStart.summary,
             note: _dayStartSummary, onTap: _pickDayStart),
+        _entry("מטבע", "${_currency.name} (${_currency.symbol})",
+            note: _currencyNote, onTap: _pickCurrency),
         _toggle(
           "תאריכים לועזיים",
           "תצוגה בלבד — החישוב תמיד לפי הלוח העברי",
@@ -724,6 +794,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       leading:
                           Icon(Icons.schedule, color: SoferTokens.of(context).accent),
                       onTap: _pickDayStart,
+                    ),
+                    ListTile(
+                      title: const Text("מטבע"),
+                      subtitle: Text(_currencyNote.isEmpty
+                          ? "${_currency.name} (${_currency.symbol})"
+                          : "${_currency.name} · $_currencyNote"),
+                      leading: Icon(Icons.payments,
+                          color: SoferTokens.of(context).accent),
+                      onTap: _pickCurrency,
                     ),
                     const Divider(),
                     ListTile(

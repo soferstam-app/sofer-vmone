@@ -11,6 +11,7 @@ import 'storage_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/sofer_widgets.dart';
 import 'format.dart';
+import 'logic/currency.dart';
 
 /// Works out what a job would take and what to charge for it, from the
 /// writer's own measured pace rather than a guess.
@@ -54,6 +55,11 @@ class _QuoteScreenState extends State<QuoteScreen> {
   final List<QuoteExpense> _quoteExpenses = [];
 
   WorkCalendarRules _rules = WorkCalendarRules.standard;
+
+  /// A quote is for work that does not exist yet, so there is no record to take
+  /// a currency from: it is priced in whatever the writer is currently working
+  /// in. Once the job is booked, the commission stores its own.
+  Currency _currency = Currency.ils;
   bool _useGregorianDates = false;
   List<Expense> _expenses = const [];
 
@@ -62,6 +68,9 @@ class _QuoteScreenState extends State<QuoteScreen> {
     super.initState();
     _storage.getWorkCalendarRules().then((v) {
       if (mounted) setState(() => _rules = v);
+    });
+    _storage.getCurrency().then((v) {
+      if (mounted) setState(() => _currency = v);
     });
     _storage.getUseGregorianDates().then((v) {
       if (mounted) setState(() => _useGregorianDates = v);
@@ -235,9 +244,9 @@ class _QuoteScreenState extends State<QuoteScreen> {
             const SizedBox(height: 12),
             if (_priceFromHourlyRate)
               _numberField(
-                  _rateCtrl, "שכר לשעה שאני רוצה (₪)", Icons.trending_up)
+                  _rateCtrl, "שכר לשעה שאני רוצה (${_currency.symbol})", Icons.trending_up)
             else
-              _numberField(_unitPriceCtrl, "מחיר ל$_singularLabel (₪)",
+              _numberField(_unitPriceCtrl, "מחיר ל$_singularLabel (${_currency.symbol})",
                   Icons.sell),
             _numberField(_hoursCtrl, "שעות כתיבה ביום עבודה", Icons.schedule),
             _expensesSection(recorded, units),
@@ -324,8 +333,8 @@ class _QuoteScreenState extends State<QuoteScreen> {
                 const SizedBox(height: 6),
                 Text(
                   _priceFromHourlyRate
-                      ? formatMoney(estimate.suggestedPrice)
-                      : "${formatMoney((derivedRate ?? 0))} לשעה",
+                      ? formatMoney(estimate.suggestedPrice, _currency)
+                      : "${formatMoney((derivedRate ?? 0), _currency)} לשעה",
                   style: TextStyle(
                       fontFamily: t.numeralFamily,
                       fontSize: 44,
@@ -367,9 +376,9 @@ class _QuoteScreenState extends State<QuoteScreen> {
                 (v) => setState(() => _priceFromHourlyRate = v),
               ),
               if (_priceFromHourlyRate)
-                _inlineField("שכר לשעה שאני רוצה (₪)", _rateCtrl)
+                _inlineField("שכר לשעה שאני רוצה (${_currency.symbol})", _rateCtrl)
               else
-                _inlineField("מחיר ל$_singularLabel (₪)", _unitPriceCtrl),
+                _inlineField("מחיר ל$_singularLabel (${_currency.symbol})", _unitPriceCtrl),
               _inlineField("שעות כתיבה ביום", _hoursCtrl),
               if (recorded != null)
                 _inlineChoice(
@@ -382,8 +391,8 @@ class _QuoteScreenState extends State<QuoteScreen> {
                   (v) => setState(() => _expensesFromRecords = v),
                 ),
               if (recorded != null && _expensesFromRecords)
-                SoferStatRow("₪ ל$_singularLabel",
-                    formatMoneyExact(recorded), last: true)
+                SoferStatRow("${_currency.symbol} ל$_singularLabel",
+                    formatMoneyExact(recorded, _currency), last: true)
               else ...[
                 if (recorded == null) ...[
                   const SizedBox(height: 10),
@@ -409,10 +418,10 @@ class _QuoteScreenState extends State<QuoteScreen> {
                 SoferStatRow("ימי עבודה", estimate.workDays.toStringAsFixed(1)),
                 SoferStatRow("צפי סיום",
                     formatDisplayDate(estimate.estimatedCompletion, _useGregorianDates)),
-                SoferStatRow("עבודה", formatMoney(estimate.labour)),
-                SoferStatRow("חומרים", formatMoney(estimate.materials)),
+                SoferStatRow("עבודה", formatMoney(estimate.labour, _currency)),
+                SoferStatRow("חומרים", formatMoney(estimate.materials, _currency)),
                 SoferStatRow("מחיר ל$_singularLabel",
-                    formatMoneyExact(estimate.pricePerUnit),
+                    formatMoneyExact(estimate.pricePerUnit, _currency),
                     last: true),
               ],
             ),
@@ -437,7 +446,7 @@ class _QuoteScreenState extends State<QuoteScreen> {
           "(${formatSkippedDays(e.plan, maxReasons: 2)})");
     }
     if (expensesPerUnit > 0) {
-      parts.add("החומרים — ${formatMoney(e.materials)} — כלולים במחיר");
+      parts.add("החומרים — ${formatMoney(e.materials, _currency)} — כלולים במחיר");
     }
     return "${parts.join('. ')}.";
   }
@@ -597,7 +606,7 @@ class _QuoteScreenState extends State<QuoteScreen> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      "${formatMoneyExact(recorded)} ל$_singularLabel — "
+                      "${formatMoneyExact(recorded, _currency)} ל$_singularLabel — "
                       "לפי ההוצאות שרשמת על פרויקטים מסוג זה",
                       style: const TextStyle(fontSize: 13),
                     ),
@@ -655,7 +664,7 @@ class _QuoteScreenState extends State<QuoteScreen> {
             if (_quoteExpenses.isNotEmpty)
               Flexible(
                 child: Text(
-                  "${formatMoneyExact(perUnit)} ל$_singularLabel",
+                  "${formatMoneyExact(perUnit, _currency)} ל$_singularLabel",
                   textAlign: TextAlign.end,
                   style: TextStyle(
                       fontFamily: t.numeralFamily,
@@ -710,7 +719,7 @@ class _QuoteScreenState extends State<QuoteScreen> {
                     Text(
                       e.perUnit
                           ? "לכל $_singularLabel"
-                          : "לכל העבודה · ${formatMoneyExact(e.perUnitOver(units))} ל$_singularLabel",
+                          : "לכל העבודה · ${formatMoneyExact(e.perUnitOver(units), _currency)} ל$_singularLabel",
                       style: TextStyle(
                           fontFamily: t.labelFamily,
                           fontSize: 11,
@@ -722,7 +731,7 @@ class _QuoteScreenState extends State<QuoteScreen> {
             ),
           ),
           const SizedBox(width: 8),
-          Text(formatMoney(e.amount),
+          Text(formatMoney(e.amount, _currency),
               style: TextStyle(
                   fontFamily: t.numeralFamily, fontSize: 17, color: t.ink)),
           IconButton(
@@ -810,7 +819,7 @@ class _QuoteScreenState extends State<QuoteScreen> {
                         style: TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 17)),
                     Text(
-                      formatMoney(derivedRate),
+                      formatMoney(derivedRate, _currency),
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 22,
@@ -823,7 +832,7 @@ class _QuoteScreenState extends State<QuoteScreen> {
                 ),
               ),
             _row("מחיר ל$_singularLabel:",
-                formatMoneyExact(e.pricePerUnit)),
+                formatMoneyExact(e.pricePerUnit, _currency)),
             Padding(
               padding: const EdgeInsets.only(top: 6),
               child: Row(
@@ -833,7 +842,7 @@ class _QuoteScreenState extends State<QuoteScreen> {
                       style: const TextStyle(
                           fontWeight: FontWeight.bold, fontSize: 17)),
                   Text(
-                    formatMoney(e.suggestedPrice),
+                    formatMoney(e.suggestedPrice, _currency),
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 22,

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'logic/currency.dart';
 import 'logic/hebrew_clock.dart';
 import 'logic/hebrew_work_calendar.dart';
 import 'models.dart';
@@ -23,6 +24,7 @@ class StorageService {
   static const String _keyDayStart = 'day_start';
   static const String _keyAppTheme = 'app_theme';
   static const String _keyAutoNightTheme = 'auto_night_theme';
+  static const String _keyCurrency = 'currency';
 
   Future<void> saveProjects(List<Project> projects) =>
       _saveList(_keyProjects, projects.map((p) => p.toJson()).toList());
@@ -207,6 +209,7 @@ class StorageService {
         _keyDayStart: prefs.getString(_keyDayStart),
         _keyAppTheme: prefs.getString(_keyAppTheme),
         _keyAutoNightTheme: prefs.getBool(_keyAutoNightTheme),
+        _keyCurrency: prefs.getString(_keyCurrency),
       },
     };
   }
@@ -367,6 +370,35 @@ class StorageService {
   Future<void> setWorkCalendarRules(WorkCalendarRules rules) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyWorkCalendarRules, jsonEncode(rules.toJson()));
+  }
+
+  /// The currency the *next* amount is entered in.
+  ///
+  /// Only that. Every stored amount carries its own, so changing this settles
+  /// nothing about what is already recorded — which is the whole point: a
+  /// setting that reached backwards would relabel every price the writer ever
+  /// agreed, silently and irreversibly.
+  Future<Currency> getCurrency() async {
+    final prefs = await SharedPreferences.getInstance();
+    return Currency.fromJson(prefs.getString(_keyCurrency));
+  }
+
+  Future<void> setCurrency(Currency currency) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyCurrency, currency.code);
+  }
+
+  /// Every currency any record is actually in, so the app can say when a figure
+  /// would be adding two of them together.
+  Future<Set<Currency>> currenciesInUse() async {
+    final projects = await loadProjects();
+    final expenses = await loadExpenses();
+    return {
+      for (final p in projects)
+        if (!p.isDeleted) p.currency,
+      for (final e in expenses)
+        if (!e.isDeleted) e.currency,
+    };
   }
 
   Future<bool> getUseGregorianDates() async {

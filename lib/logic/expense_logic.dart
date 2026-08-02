@@ -1,5 +1,6 @@
 import '../models.dart';
 import 'profit_calculator.dart';
+import 'currency.dart';
 
 /// A spending category and how it is normally charged against the work.
 class ExpenseCategory {
@@ -67,15 +68,18 @@ class ExpenseLogic {
 
   /// Total charged to [projectId] from expenses assigned to projects.
   ///
-  /// An expense split across several projects contributes its even share.
-  static double totalForProject(
+  /// An expense split across several projects contributes its even share. Kept
+  /// apart by currency: what a commission is priced in and what its materials
+  /// were bought in need not be the same, and there is no rate here to bridge
+  /// them with.
+  static MoneyTotal totalForProject(
       String projectId, Iterable<Expense> expenses) {
-    var total = 0.0;
+    final total = MoneyTotal();
     for (final e in expenses) {
       if (e.isDeleted) continue;
       if (e.allocation != ExpenseAllocation.project) continue;
       if (!e.projectIds.contains(projectId)) continue;
-      total += e.amountPerProject;
+      total.addAmount(e.amountPerProject, e.currency);
     }
     return total;
   }
@@ -85,21 +89,25 @@ class ExpenseLogic {
   /// Monthly expenses count in full. Period expenses contribute the share of
   /// their range that falls inside the month, so a year's supply of ink bought
   /// in Nisan is not charged entirely to Nisan.
-  static double totalForMonth(DateTime month, Iterable<Expense> expenses) {
+  /// Kept apart by currency: a month's costs may have been paid in more than
+  /// one, and adding those together produces a number that is not a total of
+  /// anything. Almost always there is exactly one.
+  static MoneyTotal totalForMonth(DateTime month, Iterable<Expense> expenses) {
     final monthStart = DateTime(month.year, month.month);
     final monthEnd = DateTime(month.year, month.month + 1);
 
-    var total = 0.0;
+    final total = MoneyTotal();
     for (final e in expenses) {
       if (e.isDeleted) continue;
 
       switch (e.allocation) {
         case ExpenseAllocation.month:
           if (e.date.year == month.year && e.date.month == month.month) {
-            total += e.amount;
+            total.addAmount(e.amount, e.currency);
           }
         case ExpenseAllocation.period:
-          total += _periodShareInRange(e, monthStart, monthEnd);
+          total.addAmount(
+              _periodShareInRange(e, monthStart, monthEnd), e.currency);
         case ExpenseAllocation.project:
           // Charged to projects, not to a month.
           break;
@@ -149,7 +157,13 @@ class ExpenseLogic {
     var totalUnits = 0.0;
 
     for (final project in projects.where((p) => p.type == type && !p.isDeleted)) {
-      final cost = totalForProject(project.id, expenses);
+      // Averaged only across commissions whose costs are in the currency the
+      // commission itself is priced in. A per-unit figure mixing two of them
+      // would be a number with no unit.
+      final costs = totalForProject(project.id, expenses).single(project.currency);
+      final cost = costs != null && costs.currency == project.currency
+          ? costs.amount
+          : 0.0;
       if (cost <= 0) continue;
 
       final sessions =

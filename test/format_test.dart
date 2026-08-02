@@ -7,25 +7,26 @@
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sofer_vmone/format.dart';
+import 'package:sofer_vmone/logic/currency.dart';
 
 void main() {
   group('money', () {
     test('rounds to the shekel where agorot are noise', () {
-      expect(formatMoney(1234.56), '₪1235');
-      expect(formatMoney(0), '₪0');
+      expect(formatMoney(1234.56, Currency.ils), '₪1235');
+      expect(formatMoney(0, Currency.ils), '₪0');
     });
 
     test('keeps the agorot where they have to reconcile', () {
-      expect(formatMoneyExact(1234.5), '₪1234.50');
-      expect(formatMoneyExact(0.07), '₪0.07');
+      expect(formatMoneyExact(1234.5, Currency.ils), '₪1234.50');
+      expect(formatMoneyExact(0.07, Currency.ils), '₪0.07');
     });
 
     test('the symbol is written in one place', () {
       // The whole reason these exist. Forty-five call sites had it typed out,
       // and the day a writer abroad wants another currency, this is the file
       // that changes.
-      expect(formatMoney(1), startsWith('₪'));
-      expect(formatMoneyExact(1), startsWith('₪'));
+      expect(formatMoney(1, Currency.ils), startsWith('₪'));
+      expect(formatMoneyExact(1, Currency.ils), startsWith('₪'));
     });
   });
 

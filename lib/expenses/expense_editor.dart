@@ -5,6 +5,7 @@ import '../logic/expense_logic.dart';
 import '../logic/id_generator.dart';
 import '../models.dart';
 import '../theme/app_theme.dart';
+import '../logic/currency.dart';
 
 /// What came back from the expense editor.
 class ExpenseEdit {
@@ -32,6 +33,7 @@ Future<ExpenseEdit?> showExpenseEditor({
   Expense? existing,
   List<Project> projects = const [],
   bool useGregorianDates = false,
+  Currency currency = Currency.ils,
 }) async {
   final isEdit = existing != null;
   final productCtrl = TextEditingController(text: existing?.product ?? '');
@@ -133,9 +135,10 @@ Future<ExpenseEdit?> showExpenseEditor({
                     controller: amountCtrl,
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
-                      labelText: "סכום (₪)",
-                      border: OutlineInputBorder(),
+                    decoration: InputDecoration(
+                      labelText:
+                          "סכום (${(existing?.currency ?? currency).symbol})",
+                      border: const OutlineInputBorder(),
                     ),
                   ),
                   const Divider(height: 26),
@@ -254,6 +257,8 @@ Future<ExpenseEdit?> showExpenseEditor({
                               product: product,
                               date: pickedDate,
                               amount: amount,
+                              // Not restated. Editing what a purchase cost does
+                              // not change what it was paid in.
                               allocation: allocation,
                               projectIds: selectedProjects.toList(),
                               periodStart: start(),
@@ -264,6 +269,7 @@ Future<ExpenseEdit?> showExpenseEditor({
                               product: product,
                               date: pickedDate,
                               amount: amount,
+                              currency: currency,
                               allocation: allocation,
                               projectIds: selectedProjects.toList(),
                               periodStart: start(),

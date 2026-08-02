@@ -13,6 +13,7 @@ import 'package:sofer_vmone/expenses/expense_editor.dart';
 import 'package:sofer_vmone/hebrew_utils.dart';
 import 'package:sofer_vmone/logic/date_logic.dart';
 import 'package:sofer_vmone/logic/completion_estimator.dart';
+import 'package:sofer_vmone/logic/currency.dart';
 import 'package:sofer_vmone/logic/expense_logic.dart';
 import 'package:sofer_vmone/logic/hebrew_clock.dart';
 import 'package:sofer_vmone/logic/hebrew_work_calendar.dart';
@@ -1004,9 +1005,9 @@ void main() {
         exp(amount: 300, allocation: ExpenseAllocation.project, projectIds: ['p1']),
         exp(amount: 500, allocation: ExpenseAllocation.project, projectIds: ['p2']),
       ];
-      expect(ExpenseLogic.totalForProject('p1', expenses), 300);
-      expect(ExpenseLogic.totalForProject('p2', expenses), 500);
-      expect(ExpenseLogic.totalForProject('p3', expenses), 0);
+      expect(ExpenseLogic.totalForProject('p1', expenses).single(Currency.ils)!.amount, 300);
+      expect(ExpenseLogic.totalForProject('p2', expenses).single(Currency.ils)!.amount, 500);
+      expect(ExpenseLogic.totalForProject('p3', expenses).single(Currency.ils)!.amount, 0);
     });
 
     test('an expense split across projects divides evenly', () {
@@ -1017,8 +1018,8 @@ void main() {
             allocation: ExpenseAllocation.project,
             projectIds: ['p1', 'p2', 'p3']),
       ];
-      expect(ExpenseLogic.totalForProject('p1', expenses), 100);
-      expect(ExpenseLogic.totalForProject('p2', expenses), 100);
+      expect(ExpenseLogic.totalForProject('p1', expenses).single(Currency.ils)!.amount, 100);
+      expect(ExpenseLogic.totalForProject('p2', expenses).single(Currency.ils)!.amount, 100);
     });
 
     test('project expenses do not also land in the monthly total', () {
@@ -1026,13 +1027,13 @@ void main() {
       final expenses = [
         exp(amount: 300, allocation: ExpenseAllocation.project, projectIds: ['p1']),
       ];
-      expect(ExpenseLogic.totalForMonth(DateTime(2026, 5), expenses), 0);
+      expect(ExpenseLogic.totalForMonth(DateTime(2026, 5), expenses).single(Currency.ils)!.amount, 0);
     });
 
     test('a monthly expense counts in its own month only', () {
       final expenses = [exp(amount: 800, date: DateTime(2026, 5, 3))];
-      expect(ExpenseLogic.totalForMonth(DateTime(2026, 5), expenses), 800);
-      expect(ExpenseLogic.totalForMonth(DateTime(2026, 6), expenses), 0);
+      expect(ExpenseLogic.totalForMonth(DateTime(2026, 5), expenses).single(Currency.ils)!.amount, 800);
+      expect(ExpenseLogic.totalForMonth(DateTime(2026, 6), expenses).single(Currency.ils)!.amount, 0);
     });
 
     test('a period expense is spread across the months it covers', () {
@@ -1046,9 +1047,9 @@ void main() {
           end: DateTime(2026, 8, 31),
         ),
       ];
-      final may = ExpenseLogic.totalForMonth(DateTime(2026, 5), expenses);
-      final june = ExpenseLogic.totalForMonth(DateTime(2026, 6), expenses);
-      final october = ExpenseLogic.totalForMonth(DateTime(2026, 10), expenses);
+      final may = ExpenseLogic.totalForMonth(DateTime(2026, 5), expenses).single(Currency.ils)!.amount;
+      final june = ExpenseLogic.totalForMonth(DateTime(2026, 6), expenses).single(Currency.ils)!.amount;
+      final october = ExpenseLogic.totalForMonth(DateTime(2026, 10), expenses).single(Currency.ils)!.amount;
 
       expect(may, greaterThan(0));
       expect(may, lessThan(1200)); // not charged entirely to the first month
@@ -1057,7 +1058,9 @@ void main() {
 
       // The whole cost is accounted for across the range it covers
       final total = [5, 6, 7, 8]
-          .map((m) => ExpenseLogic.totalForMonth(DateTime(2026, m), expenses))
+          .map((m) => ExpenseLogic.totalForMonth(DateTime(2026, m), expenses)
+              .single(Currency.ils)!
+              .amount)
           .reduce((a, b) => a + b);
       expect(total, closeTo(1200, 0.01));
     });
@@ -1072,8 +1075,11 @@ void main() {
         projectIds: const ['p1'],
         deletedAt: DateTime(2026, 1, 1),
       );
-      expect(ExpenseLogic.totalForProject('p1', [deleted]), 0);
-      expect(ExpenseLogic.totalForMonth(DateTime(2026, 5), [deleted]), 0);
+      expect(ExpenseLogic.totalForProject('p1', [deleted]).single(Currency.ils)!.amount, 0);
+      expect(ExpenseLogic.totalForMonth(DateTime(2026, 5), [deleted])
+          .single(Currency.ils)!
+          .amount,
+          0);
     });
 
     test('project expenses with no project chosen are flagged', () {
@@ -1100,7 +1106,10 @@ void main() {
       });
       expect(legacy.allocation, ExpenseAllocation.month);
       expect(legacy.projectIds, isEmpty);
-      expect(ExpenseLogic.totalForMonth(DateTime(2026, 5), [legacy]), 200);
+      expect(ExpenseLogic.totalForMonth(DateTime(2026, 5), [legacy])
+          .single(Currency.ils)!
+          .amount,
+          200);
     });
   });
 

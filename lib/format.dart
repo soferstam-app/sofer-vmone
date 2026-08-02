@@ -10,23 +10,26 @@
 /// screens.
 library;
 
+import 'logic/currency.dart';
 import 'models.dart';
 
-/// `₪1234` — a sum of money, rounded to the shekel.
+/// `₪1234` — a sum of money, rounded to the whole unit.
 ///
 /// For a figure the writer weighs rather than reconciles: what a commission
-/// pays, what an hour comes to. Agorot in those is noise.
+/// pays, what an hour comes to. Agorot in those are noise.
 ///
-/// The symbol is written in forty-five places today and nowhere is it a
-/// setting. That is fine while shekels are the only answer, and the moment a
-/// writer abroad wants another it becomes the reason this function exists.
-String formatMoney(num amount) => '₪${amount.toStringAsFixed(0)}';
+/// The currency is required and never defaulted. It was typed out as a shekel
+/// sign in forty-five places, which was true while the shekel was the only
+/// possibility; a default here would put that assumption straight back, one
+/// forgotten argument at a time.
+String formatMoney(num amount, Currency currency) => currency.format(amount);
 
-/// `₪1234.56` — a sum of money to the agora.
+/// `₪1234.56` — a sum of money to the smallest unit.
 ///
 /// For a figure that has to reconcile against something the writer can count:
 /// what a purchase cost, what the expenses of a commission add up to.
-String formatMoneyExact(num amount) => '₪${amount.toStringAsFixed(2)}';
+String formatMoneyExact(num amount, Currency currency) =>
+    currency.format(amount, decimals: 2);
 
 /// `01:14:32`, or `01:14` — a stretch of time read as a clock.
 ///

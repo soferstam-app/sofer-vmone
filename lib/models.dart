@@ -1,3 +1,4 @@
+import 'logic/currency.dart';
 import 'logic/hebrew_clock.dart';
 import 'logic/json_compat.dart';
 import 'logic/mergeable.dart';
@@ -11,6 +12,14 @@ class Project implements Mergeable<Project> {
   final ProjectType type;
   final double price;
   final double expenses;
+
+  /// What [price] and [expenses] are amounts of.
+  ///
+  /// Stored on the commission rather than read from the setting, so that
+  /// changing the setting cannot restate what a job was agreed at. Absent on
+  /// anything recorded before this existed, which reads as shekels — the only
+  /// thing it could have been.
+  final Currency currency;
   final int targetDaily;
   final int targetMonthly;
 
@@ -68,6 +77,7 @@ class Project implements Mergeable<Project> {
     'typeName',
     'price',
     'expenses',
+    'currency',
     'targetDaily',
     'targetMonthly',
     'dailyGoalInLines',
@@ -95,6 +105,7 @@ class Project implements Mergeable<Project> {
     required this.type,
     required this.price,
     required this.expenses,
+    this.currency = Currency.ils,
     required this.targetDaily,
     required this.targetMonthly,
     this.dailyGoalInLines = false,
@@ -122,6 +133,7 @@ class Project implements Mergeable<Project> {
       'type': type.index,
       'price': price,
       'expenses': expenses,
+      'currency': currency.toJson(),
       'targetDaily': targetDaily,
       'targetMonthly': targetMonthly,
       'dailyGoalInLines': dailyGoalInLines,
@@ -157,6 +169,7 @@ class Project implements Mergeable<Project> {
           json, 'typeName', 'type', ProjectType.values, ProjectType.sefer),
       price: JsonCompat.number(json['price'], 0),
       expenses: JsonCompat.number(json['expenses'], 0),
+      currency: Currency.fromJson(json['currency']),
       targetDaily: JsonCompat.integer(json['targetDaily'], 0),
       targetMonthly: JsonCompat.integer(json['targetMonthly'], 0),
       dailyGoalInLines: JsonCompat.boolean(json['dailyGoalInLines'], false),
@@ -176,6 +189,7 @@ class Project implements Mergeable<Project> {
     String? name,
     double? price,
     double? expenses,
+    Currency? currency,
     int? targetDaily,
     int? targetMonthly,
     bool? dailyGoalInLines,
@@ -192,6 +206,7 @@ class Project implements Mergeable<Project> {
       type: type,
       price: price ?? this.price,
       expenses: expenses ?? this.expenses,
+      currency: currency ?? this.currency,
       targetDaily: targetDaily ?? this.targetDaily,
       targetMonthly: targetMonthly ?? this.targetMonthly,
       dailyGoalInLines: dailyGoalInLines ?? this.dailyGoalInLines,
@@ -216,6 +231,7 @@ class Project implements Mergeable<Project> {
         type: type,
         price: price,
         expenses: expenses,
+        currency: currency,
         targetDaily: targetDaily,
         targetMonthly: targetMonthly,
         dailyGoalInLines: dailyGoalInLines,
@@ -621,6 +637,12 @@ class Expense implements Mergeable<Expense> {
   final DateTime date;
   final double amount;
 
+  /// What [amount] is an amount of. See [Project.currency]: stored on the
+  /// record, not read from the setting, so changing the setting cannot restate
+  /// what a purchase cost. Absent on anything from before this existed, which
+  /// reads as shekels — the only thing it could have been.
+  final Currency currency;
+
   /// How this expense is attributed. Defaults to [ExpenseAllocation.month],
   /// which is how every expense behaved before allocation existed.
   final ExpenseAllocation allocation;
@@ -668,6 +690,7 @@ class Expense implements Mergeable<Expense> {
     'product',
     'date',
     'amount',
+    'currency',
     'allocation',
     'allocationName',
     'projectIds',
@@ -684,6 +707,7 @@ class Expense implements Mergeable<Expense> {
     required this.product,
     required this.date,
     required this.amount,
+    this.currency = Currency.ils,
     this.allocation = ExpenseAllocation.month,
     this.projectIds = const [],
     this.periodStart,
@@ -705,6 +729,7 @@ class Expense implements Mergeable<Expense> {
       'product': product,
       'date': date.toIso8601String(),
       'amount': amount,
+      'currency': currency.toJson(),
       // Name and index both — see JsonCompat.enumByName.
       'allocationName': allocation.name,
       'allocation': allocation.index,
@@ -736,6 +761,7 @@ class Expense implements Mergeable<Expense> {
       product: JsonCompat.string(json['product']),
       date: date,
       amount: JsonCompat.number(json['amount'], 0),
+      currency: Currency.fromJson(json['currency']),
       lastUpdated: lastUpdated,
       deletedAt: tombstone.deletedAt,
       restoredAt: tombstone.restoredAt,
@@ -756,6 +782,7 @@ class Expense implements Mergeable<Expense> {
         product: product,
         date: date,
         amount: amount,
+        currency: currency,
         allocation: allocation,
         projectIds: projectIds,
         periodStart: periodStart,
@@ -770,6 +797,7 @@ class Expense implements Mergeable<Expense> {
     String? product,
     DateTime? date,
     double? amount,
+    Currency? currency,
     ExpenseAllocation? allocation,
     List<String>? projectIds,
     DateTime? periodStart,
@@ -781,6 +809,7 @@ class Expense implements Mergeable<Expense> {
       product: product ?? this.product,
       date: date ?? this.date,
       amount: amount ?? this.amount,
+      currency: currency ?? this.currency,
       allocation: allocation ?? this.allocation,
       projectIds: projectIds ?? this.projectIds,
       periodStart: periodStart ?? this.periodStart,

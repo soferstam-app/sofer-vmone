@@ -11,6 +11,7 @@ import 'hebrew_utils.dart';
 import 'theme/app_theme.dart';
 import 'widgets/sofer_widgets.dart';
 import 'widgets/confirm.dart';
+import 'logic/currency.dart';
 
 class ProjectsScreen extends StatefulWidget {
   final List<Project> projects;
@@ -549,11 +550,17 @@ class _ProjectDialogState extends State<ProjectDialog> {
   DateTime? _targetCompletionDate;
   bool _dailyGoalInLines = false;
 
+  /// What a new commission is priced in. An existing one keeps its own.
+  Currency _currency = Currency.ils;
+
   @override
   void initState() {
     super.initState();
     final p = widget.existingProject;
     _type = p?.type ?? ProjectType.sefer;
+    StorageService().getCurrency().then((c) {
+      if (mounted) setState(() => _currency = c);
+    });
     _targetCompletionDate = p?.targetCompletionDate;
     _dailyGoalInLines = p?.dailyGoalInLines ?? false;
 
@@ -905,6 +912,9 @@ class _ProjectDialogState extends State<ProjectDialog> {
         type: _type,
         price: double.tryParse(_priceCtrl.text) ?? 0,
         expenses: double.tryParse(_expensesCtrl.text) ?? 0,
+        // An existing commission keeps what it was agreed in. Only a new one
+        // takes the setting — changing the setting must not restate a price.
+        currency: widget.existingProject?.currency ?? _currency,
         targetDaily: int.tryParse(_dailyCtrl.text) ?? 0,
         targetMonthly: int.tryParse(_monthlyCtrl.text) ?? 0,
         dailyGoalInLines:

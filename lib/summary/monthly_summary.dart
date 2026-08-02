@@ -13,6 +13,7 @@ import '../models.dart';
 import '../storage_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/feedback.dart';
+import '../logic/currency.dart';
 
 /// What a Hebrew month came to.
 ///
@@ -27,6 +28,7 @@ Future<void> showMonthlySummary({
   required DateTime month,
   required DayStart dayStart,
   required WorkCalendarRules rules,
+  required Currency currency,
 }) async {
   // Filed by working day, not by clock time, so the monthly total and the sum
   // of the days it is made of cannot disagree at a month boundary.
@@ -42,7 +44,10 @@ Future<void> showMonthlySummary({
   }
 
   Duration totalMonthTime = Duration.zero;
-  double totalMonthlyProfit = 0;
+  // Kept apart by currency. A month's work may span commissions agreed in more
+  // than one, and there is no rate here to convert with — nor should there be:
+  // the rate that matters is the one on the day of each amount.
+  final earned = MoneyTotal();
   final double workDays = _workDaysInJewishMonth(rules, month);
 
   Duration timeForLineAvg = Duration.zero;
@@ -140,7 +145,7 @@ Future<void> showMonthlySummary({
       actualForGoal = totalUnits.toDouble();
     }
 
-    totalMonthlyProfit += projectProfit;
+    earned.addAmount(projectProfit, project.currency);
 
     double target = 0;
     if (project.targetMonthly > 0) {
@@ -200,9 +205,18 @@ Future<void> showMonthlySummary({
   // to their projects and deliberately excluded here, so no money is counted
   // twice.
   final allExpenses = await StorageService().loadExpenses();
-  final monthlyExpenses =
-      ExpenseLogic.totalForMonth(month, allExpenses);
-  final netAfterExpenses = totalMonthlyProfit - monthlyExpenses;
+  final spent = ExpenseLogic.totalForMonth(month, allExpenses);
+
+  // Net is a subtraction, and a subtraction across currencies is not one. It is
+  // stated only when the month's earnings and its costs are in the same
+  // currency; otherwise the two lines above already say everything true.
+  final earnedOne = earned.single(currency);
+  final spentOne = spent.single(currency);
+  final net = (earnedOne != null &&
+          spentOne != null &&
+          earnedOne.currency == spentOne.currency)
+      ? earnedOne - spentOne
+      : null;
 
   if (!context.mounted) return;
   showDialog(
@@ -218,21 +232,28 @@ Future<void> showMonthlySummary({
                 style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 6),
             Text(
-                "הכנסות כתיבה (חודש): ${formatMoneyExact(totalMonthlyProfit)}",
+                "הכנסות כתיבה (חודש): ${earned.format(currency, decimals: 2)}",
                 style: const TextStyle(fontWeight: FontWeight.bold)),
-            if (totalMonthTime.inSeconds > 0)
+            if (totalMonthTime.inSeconds > 0 && earnedOne != null)
               Text(
-                  "שכר לשעה (חודש): ${formatMoney((totalMonthlyProfit / (totalMonthTime.inSeconds / 3600)))}",
+                  "שכר לשעה (חודש): ${formatMoney(earnedOne.amount / (totalMonthTime.inSeconds / 3600), earnedOne.currency)}",
                   style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: SoferTokens.of(context).accent)),
-            Text("הוצאות (חודש): ${formatMoneyExact(monthlyExpenses)}",
+            Text("הוצאות (חודש): ${spent.format(currency, decimals: 2)}",
                 style: const TextStyle(fontWeight: FontWeight.bold)),
-            Text("נטו (לאחר הוצאות): ${formatMoneyExact(netAfterExpenses)}",
-                style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color:
-                        netAfterExpenses >= 0 ? SoferTokens.of(context).positive : SoferTokens.of(context).danger)),
+            if (net != null)
+              Text("נטו (לאחר הוצאות): ${net.format(decimals: 2)}",
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: net.amount >= 0
+                          ? SoferTokens.of(context).positive
+                          : SoferTokens.of(context).danger))
+            else
+              Text("נטו: לא ניתן לחשב — החודש כולל יותר ממטבע אחד",
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: SoferTokens.of(context).caution)),
             const Divider(),
             SizedBox(
               height: 200,

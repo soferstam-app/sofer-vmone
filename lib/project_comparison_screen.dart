@@ -47,7 +47,7 @@ class ProjectComparisonScreen extends StatelessWidget {
                     text: best.project.name,
                     style: TextStyle(color: t.accent)),
                 TextSpan(
-                    text: " — ${formatMoney(best.profitPerHour!)} לשעה, "
+                    text: " — ${formatMoney(best.profitPerHour!, best.project.currency)} לשעה, "
                         "פי ${(best.profitPerHour! / (worst.profitPerHour == 0 ? 1 : worst.profitPerHour!)).toStringAsFixed(1)} "
                         "מ${worst.project.name}."),
               ]),
@@ -109,7 +109,7 @@ class ProjectComparisonScreen extends StatelessWidget {
                         color: t.ink)),
               ),
               Text(
-                rate == null ? "—" : formatMoney(rate),
+                rate == null ? "—" : formatMoney(rate, p.project.currency),
                 style: TextStyle(
                     fontFamily: t.numeralFamily,
                     fontSize: 23,
@@ -135,7 +135,7 @@ class ProjectComparisonScreen extends StatelessWidget {
               child: Text(
                 "${p.units.toStringAsFixed(1)} ${p.unitNamePlural} · "
                 "${formatSpan(p.timeWorked)} · "
-                "${formatMoney(p.profit)}"
+                "${formatMoney(p.profit, p.project.currency)}"
                 "${p.timePerUnit == null ? '' : ' · ${formatSpan(p.timePerUnit!)} ל${p.unitName}'}",
                 style: TextStyle(
                     fontFamily: t.labelFamily, fontSize: 12, color: t.inkMuted),
@@ -195,8 +195,8 @@ class ProjectComparisonScreen extends StatelessWidget {
                           const SizedBox(height: 10),
                           Text(
                             "${best.project.name} מכניס לך "
-                            "${formatMoney(best.profitPerHour!)} לשעה, "
-                            "מול ${formatMoney(worst.profitPerHour!)} "
+                            "${formatMoney(best.profitPerHour!, best.project.currency)} לשעה, "
+                            "מול ${formatMoney(worst.profitPerHour!, worst.project.currency)} "
                             "ב${worst.project.name}.",
                             style: const TextStyle(fontSize: 15, height: 1.4),
                           ),
@@ -262,7 +262,7 @@ class ProjectComparisonScreen extends StatelessWidget {
                           fontWeight: FontWeight.bold, fontSize: 16)),
                 ),
                 Text(
-                  "${formatMoney(p.profitPerHour!)}/שעה",
+                  "${formatMoney(p.profitPerHour!, p.project.currency)}/שעה",
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 17,
@@ -279,7 +279,7 @@ class ProjectComparisonScreen extends StatelessWidget {
             _row(context, "זמן עבודה:", formatSpan(p.timeWorked)),
             if (p.timePerUnit != null)
               _row(context, "זמן ל${p.unitName}:", formatSpan(p.timePerUnit!)),
-            _row(context, "רווח:", formatMoneyExact(p.profit)),
+            _row(context, "רווח:", formatMoneyExact(p.profit, p.project.currency)),
           ],
         ),
       ),
