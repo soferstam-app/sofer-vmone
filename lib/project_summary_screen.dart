@@ -16,6 +16,8 @@ import 'widgets/feedback.dart';
 import 'format.dart';
 import 'logic/client_update.dart';
 import 'project/progress_grids.dart';
+import 'project/rhythm_panel.dart';
+import 'logic/hebrew_clock.dart';
 
 class ProjectSummaryScreen extends StatefulWidget {
   final List<Project> projects;
@@ -35,6 +37,11 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
   Project? _selectedProject;
   WorkCalendarRules _rules = WorkCalendarRules.standard;
   bool _useGregorianDates = false;
+
+  /// Needed so the rhythm panel files a sitting under the same working day the
+  /// rest of the app does — otherwise late-night work lands on the wrong
+  /// weekday and the "strongest day" is quietly one day out.
+  DayStart _dayStart = DayStart.midnight;
   String _soferName = '';
 
   /// Expenses charged directly to projects, loaded once so the summary can show
@@ -53,6 +60,9 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
     });
     _storage.getUseGregorianDates().then((v) {
       if (mounted) setState(() => _useGregorianDates = v);
+    });
+    _storage.getDayStart().then((v) {
+      if (mounted) setState(() => _dayStart = v);
     });
     _storage.getSoferName().then((v) {
       if (mounted) setState(() => _soferName = v);
@@ -286,6 +296,11 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
             if (project.type == ProjectType.tefillin)
               tefillinProgressGrid(context, project, sessions),
           ],
+          RhythmPanel(
+            project: project,
+            sessions: sessionsForStats,
+            dayStart: _dayStart,
+          ),
         ],
       ),
     );
