@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../format.dart';
 import '../theme/app_theme.dart';
 
 /// A point worth marking on the run from start to delivery.
@@ -26,6 +27,103 @@ class TimelineMark {
     this.current = false,
     this.quiet = false,
   });
+}
+
+/// Where the marks fall on the run, and what the run is.
+///
+/// Pure, and it was not: this sat in the project summary screen reading that
+/// screen's fields, so the arithmetic that decides where "today" is drawn — and
+/// the sentence that tells a writer they are running late — could only be
+/// checked by opening a commission and looking.
+class TimelineRun {
+  /// The day the work began.
+  final DateTime from;
+
+  /// The day it ends: whichever of the estimate and the agreed deadline is
+  /// later, so that both fit on the line.
+  final DateTime end;
+
+  const TimelineRun({required this.from, required this.end});
+
+  static TimelineRun of({
+    required DateTime? started,
+    required DateTime estimatedEnd,
+    DateTime? target,
+  }) {
+    final from = started ?? DateTime.now();
+    var end = estimatedEnd;
+    if (target != null && target.isAfter(end)) end = target;
+    return TimelineRun(from: from, end: end);
+  }
+
+  /// Where a date falls along the run, from 0 to 1.
+  ///
+  /// A run of no length puts everything at the end rather than dividing by
+  /// zero: a commission begun and estimated for the same day is finished.
+  double at(DateTime when) {
+    final span = end.difference(from).inDays;
+    if (span <= 0) return 1;
+    return (when.difference(from).inDays / span).clamp(0.0, 1.0);
+  }
+
+  /// How much of the run has already gone by. This, and not how much has been
+  /// written, is what the line is a measure of.
+  double get elapsed => at(DateTime.now());
+
+  /// Start, today, the estimate and — when there is one — the agreed deadline.
+  ///
+  /// Today carries no date of its own: the caption says which day it is, and
+  /// printing it again only crowds the line.
+  List<TimelineMark> marks({
+    required DateTime estimatedEnd,
+    DateTime? target,
+    required String Function(DateTime) formatDate,
+  }) =>
+      [
+        TimelineMark(caption: "התחלה", value: formatDate(from), at: 0),
+        TimelineMark(caption: "היום", at: at(DateTime.now()), current: true),
+        TimelineMark(
+            caption: "צפי סיום",
+            value: formatDate(estimatedEnd),
+            at: at(estimatedEnd)),
+        if (target != null)
+          TimelineMark(
+              caption: "תאריך יעד",
+              value: formatDate(target),
+              at: at(target),
+              quiet: true),
+      ];
+}
+
+/// Whether the agreed deadline will be met, and by how much.
+///
+/// Null when nothing was agreed — there is no verdict to give on a commission
+/// with no deadline, and "on time" would be an answer to a question nobody
+/// asked.
+({String text, bool late})? deadlineVerdict({
+  required DateTime? target,
+  required DateTime estimatedEnd,
+}) {
+  if (target == null) return null;
+
+  final days = target.difference(estimatedEnd).inDays;
+  // Within three days either way is not a miss. An estimate built from a
+  // measured pace is not precise to the day, and saying "late by one day" from
+  // it would be claiming an accuracy it does not have.
+  if (days.abs() < 3) {
+    return (text: "צפוי להסתיים בדיוק בתאריך היעד", late: false);
+  }
+
+  final off = days.abs();
+  final weeks = off ~/ 7;
+  final amount = weeks >= 1
+      ? hebrewCount(weeks, one: 'שבוע', two: 'שבועיים', many: 'שבועות')
+      : hebrewCount(off, one: 'יום', two: 'יומיים', many: 'ימים');
+
+  final by = hebrewPrefixed('ב', amount);
+  return days > 0
+      ? (text: "אתה מקדים את תאריך היעד $by", late: false)
+      : (text: "אתה מאחר מתאריך היעד $by", late: true);
 }
 
 /// The commission as a line from the day it began to the day it lands.

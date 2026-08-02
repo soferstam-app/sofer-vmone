@@ -58,9 +58,9 @@ String formatSpanLong(Duration d) {
   final minutes = d.inMinutes.remainder(60);
 
   final parts = [
-    if (hours > 0) _count(hours, one: 'שעה', two: 'שעתיים', many: 'שעות'),
+    if (hours > 0) hebrewCount(hours, one: 'שעה', two: 'שעתיים', many: 'שעות'),
     if (minutes > 0)
-      _count(minutes, one: 'דקה', two: 'שתי דקות', many: 'דקות'),
+      hebrewCount(minutes, one: 'דקה', two: 'שתי דקות', many: 'דקות'),
   ];
 
   if (parts.isEmpty) {
@@ -69,13 +69,16 @@ String formatSpanLong(Duration d) {
     return d > Duration.zero ? 'פחות מדקה' : 'אין זמן';
   }
   if (parts.length == 1) return parts.first;
-
-  // The vav is hyphenated onto a numeral and joined straight onto a word:
-  // "שעה ו-14 דקות", but "שעתיים ושתי דקות".
-  final second = parts.last;
-  final vav = _startsWithDigit(second) ? 'ו-' : 'ו';
-  return '${parts.first} $vav$second';
+  return '${parts.first} ${hebrewPrefixed('ו', parts.last)}';
 }
+
+/// Attaches a one-letter prefix — ב, ל, מ, ו — the way Hebrew attaches it.
+///
+/// Hyphenated onto a numeral and joined straight onto a word: "ו-14 דקות", but
+/// "ושתי דקות"; "ב-3 שבועות", but "בשבועיים". Every place that wrote the hyphen
+/// unconditionally produced "ב-שבועיים", which no one says.
+String hebrewPrefixed(String letter, String text) =>
+    _startsWithDigit(text) ? '$letter-$text' : '$letter$text';
 
 bool _startsWithDigit(String s) =>
     s.isNotEmpty && s.codeUnitAt(0) >= 0x30 && s.codeUnitAt(0) <= 0x39;
@@ -99,7 +102,12 @@ String workedLabel(Duration worked, bool someWithoutTime) {
 
 /// One, two and many, which Hebrew says three different ways. Only the third
 /// takes the numeral: "שעתיים", never "2 שעות".
-String _count(int n, {required String one, required String two, required String many}) =>
+///
+/// Every place in the app that counts something in Hebrew needs this, and every
+/// place that did it by hand got it wrong the same way — "1 שעות", "2 שבועות",
+/// "1 ימים". A ternary can only tell one from many, and Hebrew has a dual.
+String hebrewCount(int n,
+        {required String one, required String two, required String many}) =>
     switch (n) {
       1 => one,
       2 => two,

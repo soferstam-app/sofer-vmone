@@ -14,6 +14,8 @@ import 'theme/app_theme.dart';
 import 'widgets/sofer_widgets.dart';
 import 'widgets/feedback.dart';
 import 'format.dart';
+import 'logic/client_update.dart';
+import 'project/progress_grids.dart';
 
 class ProjectSummaryScreen extends StatefulWidget {
   final List<Project> projects;
@@ -58,60 +60,6 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
     _storage.loadExpenses().then((v) {
       if (mounted) setState(() => _expenses = v);
     });
-  }
-
-  /// Builds the client progress update.
-  ///
-  /// Written as something a sofer could send as-is: what was written, how far
-  /// along it is, and when it is expected to be finished — the last being what
-  /// a client actually wants to know. Figures the screen cannot compute for a
-  /// given project type are simply left out rather than shown empty.
-  String _buildClientEmailBody({
-    required Project project,
-    required String totalWrittenStr,
-    required String estimatedEndStr,
-    required int totalLinesWritten,
-  }) {
-    final today = formatDisplayDate(DateTime.now(), _useGregorianDates);
-    final lines = <String>[
-      'בס"ד',
-      '',
-      'שלום וברכה,',
-      '',
-      'להלן עדכון על התקדמות העבודה בפרויקט "${project.name}", נכון לתאריך $today:',
-      '',
-    ];
-
-    if (project.type == ProjectType.sefer && project.totalPages != null) {
-      final linesPerPage = ProductionCalculator.linesPerPageOf(project);
-      final totalLines = project.totalPages! * linesPerPage;
-      lines.add('• נכתב עד כה: $totalWrittenStr'
-          ' (מתוך ${project.totalPages} עמודים)');
-      if (totalLines > 0) {
-        final percent = (totalLinesWritten / totalLines * 100).clamp(0, 100);
-        lines.add('• התקדמות: ${percent.toStringAsFixed(0)}%');
-      }
-    } else {
-      lines.add('• נכתב עד כה: $totalWrittenStr');
-    }
-
-    if (estimatedEndStr.isNotEmpty) {
-      lines.add('• צפי סיום משוער: $estimatedEndStr');
-    }
-    if (project.targetCompletionDate != null) {
-      lines.add('• תאריך יעד מוסכם: '
-          '${formatDisplayDate(project.targetCompletionDate!, _useGregorianDates)}');
-    }
-
-    lines.addAll([
-      '',
-      'אשמח לעמוד לרשותכם בכל שאלה.',
-      '',
-      'בברכה,',
-    ]);
-    if (_soferName.isNotEmpty) lines.add(_soferName);
-
-    return lines.join('\n');
   }
 
   @override
@@ -253,11 +201,15 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: () async {
-                    final body = _buildClientEmailBody(
+                    final body = ClientUpdate.compose(
                       project: project,
-                      totalWrittenStr: totalWrittenStr,
-                      estimatedEndStr: estimatedEndStr,
-                      totalLinesWritten: totalLinesWritten,
+                      totalWritten: totalWrittenStr,
+                      estimatedEnd: estimatedEndStr,
+                      linesWritten: totalLinesWritten,
+                      soferName: _soferName,
+                      today: DateTime.now(),
+                      formatDate: (d) =>
+                          formatDisplayDate(d, _useGregorianDates),
                     );
                     final uri = Uri(
                       scheme: 'mailto',
@@ -325,9 +277,9 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
           // figures, so it is not also laid out down the screen.
           if (SoferTokens.of(context).isCards) ...[
             if (project.type == ProjectType.sefer)
-              _buildSeferGrid(project, sessions),
+              seferProgressGrid(context, project, sessions),
             if (project.type == ProjectType.tefillin)
-              _buildTefillinGrid(project, sessions),
+              tefillinProgressGrid(context, project, sessions),
           ],
         ],
       ),
@@ -394,10 +346,21 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
           // the line rather than worked out from two dates.
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 22, 20, 4),
-            child: CommissionTimeline(
-              elapsed: _elapsedFraction(project, estimate, started),
-              marks: _timelineMarks(project, estimate, started),
-            ),
+            child: Builder(builder: (context) {
+              final run = TimelineRun.of(
+                started: started,
+                estimatedEnd: estimate.plan.completionDate,
+                target: project.targetCompletionDate,
+              );
+              return CommissionTimeline(
+                elapsed: run.elapsed,
+                marks: run.marks(
+                  estimatedEnd: estimate.plan.completionDate,
+                  target: project.targetCompletionDate,
+                  formatDate: (d) => formatDisplayDate(d, _useGregorianDates),
+                ),
+              );
+            }),
           ),
           // How much is written is a different question from how much of the run
           // has gone by, and it gets its own row rather than being drawn on the
@@ -436,7 +399,10 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
             child: Text.rich(
               TextSpan(children: [
-                if (_deadlineVerdict(project, estimate) case final verdict?)
+                if (deadlineVerdict(
+                        target: project.targetCompletionDate,
+                        estimatedEnd: estimate.plan.completionDate)
+                    case final verdict?)
                   TextSpan(
                     text: "${verdict.text}. ",
                     style: TextStyle(
@@ -582,81 +548,6 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
       if (first == null || s.startTime.isBefore(first)) first = s.startTime;
     }
     return first;
-  }
-
-  /// The stretch of time the timeline is drawn on: from the day the work began
-  /// to the day it ends — whichever of the estimate and the agreed deadline is
-  /// later, so that both fit on the line.
-  ({DateTime from, DateTime end}) _timelineRun(
-      Project project, CompletionEstimate estimate, DateTime? started) {
-    final from = started ?? DateTime.now();
-    var end = estimate.plan.completionDate;
-    final target = project.targetCompletionDate;
-    if (target != null && target.isAfter(end)) end = target;
-    return (from: from, end: end);
-  }
-
-  double _atOnRun(DateTime when, ({DateTime from, DateTime end}) run) {
-    final span = run.end.difference(run.from).inDays;
-    if (span <= 0) return 1;
-    return (when.difference(run.from).inDays / span).clamp(0.0, 1.0);
-  }
-
-  /// How much of the run has already gone by. This, and not how much has been
-  /// written, is what the line is a measure of.
-  double _elapsedFraction(
-          Project project, CompletionEstimate estimate, DateTime? started) =>
-      _atOnRun(
-          DateTime.now(), _timelineRun(project, estimate, started));
-
-  /// Start, today, the estimate and — when there is one — the agreed deadline.
-  ///
-  /// Today carries no date of its own: the caption says which day it is, and
-  /// printing it again only crowds the line.
-  List<TimelineMark> _timelineMarks(
-      Project project, CompletionEstimate estimate, DateTime? started) {
-    final run = _timelineRun(project, estimate, started);
-    final target = project.targetCompletionDate;
-
-    return [
-      TimelineMark(
-          caption: "התחלה",
-          value: formatDisplayDate(run.from, _useGregorianDates),
-          at: 0),
-      TimelineMark(
-          caption: "היום", at: _atOnRun(DateTime.now(), run), current: true),
-      TimelineMark(
-          caption: "צפי סיום",
-          value: formatDisplayDate(
-              estimate.plan.completionDate, _useGregorianDates),
-          at: _atOnRun(estimate.plan.completionDate, run)),
-      if (target != null)
-        TimelineMark(
-            caption: "תאריך יעד",
-            value: formatDisplayDate(target, _useGregorianDates),
-            at: _atOnRun(target, run),
-            quiet: true),
-    ];
-  }
-
-  /// Whether the agreed deadline will be met, and by how much.
-  ({String text, bool late})? _deadlineVerdict(
-      Project project, CompletionEstimate estimate) {
-    final target = project.targetCompletionDate;
-    if (target == null) return null;
-
-    final days =
-        target.difference(estimate.plan.completionDate).inDays;
-    if (days.abs() < 3) {
-      return (text: "צפוי להסתיים בדיוק בתאריך היעד", late: false);
-    }
-    final weeks = (days.abs() / 7).floor();
-    final amount = weeks >= 1
-        ? "$weeks ${weeks == 1 ? 'שבוע' : 'שבועות'}"
-        : "${days.abs()} ימים";
-    return days > 0
-        ? (text: "אתה מקדים את תאריך היעד ב-$amount", late: false)
-        : (text: "אתה מאחר מתאריך היעד ב-$amount", late: true);
   }
 
   /// Opens the map of the whole commission, in whatever unit it is counted in.
@@ -857,242 +748,4 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
     );
   }
 
-  Widget _buildSeferGrid(Project project, List<WorkSession> sessions) {
-    int totalPages = project.totalPages ?? 245;
-    final int linesPerPage = ProductionCalculator.linesPerPageOf(project);
-
-    Map<int, Set<int>> pageContent = {};
-    for (var s in sessions) {
-      if (s.amount > 0) {
-        pageContent.putIfAbsent(s.amount, () => {});
-        for (int i = s.startLine; i <= s.endLine; i++) {
-          pageContent[s.amount]!.add(i);
-        }
-      }
-    }
-
-    final t = SoferTokens.of(context);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 2),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text("מפת העמודים",
-                    style: TextStyle(
-                      fontFamily: t.labelFamily,
-                      fontSize: 12,
-                      letterSpacing: t.isRules ? 1.5 : 0,
-                      fontWeight: t.isCards ? FontWeight.bold : FontWeight.normal,
-                      color: t.isCards ? t.accent : t.inkMuted,
-                    )),
-              ),
-              Text("$totalPages עמודים · לחיצה לפרטים",
-                  style: TextStyle(
-                      fontFamily: t.labelFamily,
-                      fontSize: 11,
-                      color: t.inkFaint)),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-          // A page-per-cell map of the whole scroll. Sized by a maximum cell
-          // extent rather than a fixed column count: at six across, 245 pages
-          // came to nearly six thousand pixels of grid and pushed everything
-          // below it off the screen.
-          child: GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 30,
-              childAspectRatio: 1 / 1.35,
-              crossAxisSpacing: 3,
-              mainAxisSpacing: 3,
-            ),
-            itemCount: totalPages,
-            itemBuilder: (context, index) {
-              int pageNum = index + 1;
-              Set<int> lines = pageContent[pageNum] ?? {};
-              double progress = lines.length / linesPerPage;
-              if (progress > 1.0) progress = 1.0;
-
-              return InkWell(
-                onTap: () =>
-                    _showSeferPageDetails(pageNum, lines, linesPerPage),
-                child: Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: SoferTokens.of(context).rule),
-                // How far into the page the writing got, filled from the top.
-                // The accent marks what is done, here as everywhere.
-                gradient: progress > 0
-                    ? LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          SoferTokens.of(context).accent,
-                          SoferTokens.of(context).accent,
-                          SoferTokens.of(context).paper,
-                          SoferTokens.of(context).paper,
-                        ],
-                        stops: [0.0, progress, progress, 1.0],
-                      )
-                    : null,
-                    color:
-                        progress == 0 ? SoferTokens.of(context).paper : null,
-                  ),
-                  alignment: Alignment.center,
-                  // At this size only the shortest numerals fit, and the map is
-                  // read as a shape rather than page by page — the number is in
-                  // the tap.
-                  child: progress > 0
-                      ? null
-                      : Text(
-                          formatHebrewNumber(pageNum),
-                          style: TextStyle(
-                            fontSize: 9,
-                            color: SoferTokens.of(context).inkFaint,
-                          ),
-                          overflow: TextOverflow.clip,
-                          maxLines: 1,
-                        ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  void _showSeferPageDetails(int page, Set<int> lines, int maxLines) {
-    String msg;
-    if (lines.length >= maxLines) {
-      msg = "מושלם, זיכית יהודים בעוד מוצר סת\"ם כשר ומהודר";
-    } else if (lines.isEmpty) {
-      msg = "טרם נכתב";
-    } else {
-      List<int> sorted = lines.toList()..sort();
-      List<String> ranges = [];
-      if (sorted.isNotEmpty) {
-        int start = sorted.first;
-        int end = start;
-        for (int i = 1; i < sorted.length; i++) {
-          if (sorted[i] == end + 1) {
-            end = sorted[i];
-          } else {
-            ranges.add(start == end ? "$start" : "$start-$end");
-            start = sorted[i];
-            end = start;
-          }
-        }
-        ranges.add(start == end ? "$start" : "$start-$end");
-      }
-      msg = "שורות שנכתבו: ${ranges.join(', ')}";
-    }
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text("עמוד ${formatHebrewNumber(page)}"),
-        content: Text(msg),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text("סגור"))
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTefillinGrid(Project project, List<WorkSession> sessions) {
-    List<int> counts = List.filled(8, 0);
-
-    for (var s in sessions) {
-      if (s.tefillinType == null && s.parshiya == null) {
-        for (int i = 0; i < 8; i++) {
-          counts[i] += s.amount;
-        }
-      } else if (s.tefillinType == 'head' && s.parshiya == null) {
-        for (int i = 0; i < 4; i++) {
-          counts[i] += s.amount;
-        }
-      } else if (s.tefillinType == 'hand' && s.parshiya == null) {
-        for (int i = 4; i < 8; i++) {
-          counts[i] += s.amount;
-        }
-      } else if (s.tefillinType != null && s.parshiya != null) {
-        int max = s.tefillinType == 'head' ? 4 : 7;
-        if (s.endLine == 0 || s.endLine >= max) {
-          int base = s.tefillinType == 'head' ? 0 : 4;
-          int idx = base + (s.parshiya! - 1);
-          if (idx >= 0 && idx < 8) counts[idx] += s.amount;
-        }
-      }
-    }
-
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        children: [
-          const Text("תפילין של ראש",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children:
-                List.generate(4, (i) => _buildTefillinBox(i, counts[i], true)),
-          ),
-          const SizedBox(height: 24),
-          const Text("תפילין של יד",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: List.generate(
-                4, (i) => _buildTefillinBox(i, counts[i + 4], false)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTefillinBox(int index, int count, bool isHead) {
-    List<String> names = ["קדש", "והיה כי יביאך", "שמע", "והיה אם שמוע"];
-    String name = names[index];
-
-    return InkWell(
-      onTap: () {
-        showDialog(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: Text("פרשיית $name (${isHead ? 'ראש' : 'יד'})"),
-            content: Text("נכתבו בשלמות: $count"),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text("סגור"))
-            ],
-          ),
-        );
-      },
-      child: Container(
-        width: 70,
-        height: 70,
-        decoration: BoxDecoration(
-          color: count > 0 ? SoferTokens.of(context).paper : SoferTokens.of(context).rule,
-          border: Border.all(color: SoferTokens.of(context).accent),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          name,
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-        ),
-      ),
-    );
-  }
 }
