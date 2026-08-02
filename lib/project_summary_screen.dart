@@ -12,6 +12,8 @@ import 'project/scroll_map.dart';
 import 'storage_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/sofer_widgets.dart';
+import 'widgets/feedback.dart';
+import 'format.dart';
 
 class ProjectSummaryScreen extends StatefulWidget {
   final List<Project> projects;
@@ -263,21 +265,14 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                       query:
                           'subject=${Uri.encodeComponent('עדכון התקדמות – ${project.name}')}&body=${Uri.encodeComponent(body)}',
                     );
-                    final messenger = ScaffoldMessenger.of(context);
                     final opened = await canLaunchUrl(uri)
                         ? await launchUrl(uri)
                         : false;
                     if (!opened && mounted) {
                       // Previously this failed silently, so a user without a
                       // mail app configured saw nothing happen at all.
-                      messenger.showSnackBar(
-                        SnackBar(
-                          content: Text(
-                              "לא נמצאה תוכנת מייל במכשיר. ניתן להעתיק את פרטי ההתקדמות ידנית."),
-                          backgroundColor: SoferTokens.of(context).danger,
-                          duration: Duration(seconds: 5),
-                        ),
-                      );
+                      showAppError(context,
+                          "לא נמצאה תוכנת מייל במכשיר. ניתן להעתיק את פרטי ההתקדמות ידנית.");
                     }
                   },
                   icon: const Icon(Icons.email),
@@ -306,16 +301,16 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                   children: [
                     _statRow("סך הכל נכתב:", totalWrittenStr),
                     _statRow(
-                        "סך הכל רווח:", "₪${totalProfit.toStringAsFixed(2)}"),
+                        "סך הכל רווח:", formatMoneyExact(totalProfit)),
                     if (projectExpenses > 0) ...[
                       _statRow("הוצאות משויכות:",
-                          "₪${projectExpenses.toStringAsFixed(2)}"),
+                          formatMoneyExact(projectExpenses)),
                       _statRow("נטו (לאחר הוצאות):",
-                          "₪${(totalProfit - projectExpenses).toStringAsFixed(2)}"),
+                          formatMoneyExact((totalProfit - projectExpenses))),
                     ],
                     if (hourlyRate != null)
                       _statRow("שכר לשעה:",
-                          "₪${hourlyRate.toStringAsFixed(0)} לשעה"),
+                          "${formatMoney(hourlyRate)} לשעה"),
                     if (avgTimeStr.isNotEmpty) _statRow("ממוצע:", avgTimeStr),
                   ],
                 ),
@@ -492,18 +487,18 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                 const SoferSectionTitle("הכסף", padding: EdgeInsets.zero),
                 const SizedBox(height: 6),
                 if (projectExpenses > 0) ...[
-                  SoferStatRow("רווח", "₪${totalProfit.toStringAsFixed(0)}"),
+                  SoferStatRow("רווח", formatMoney(totalProfit)),
                   SoferStatRow("הוצאות משויכות",
-                      "₪${projectExpenses.toStringAsFixed(0)}"),
+                      formatMoney(projectExpenses)),
                 ],
                 SoferStatRow(
                     projectExpenses > 0 ? "נטו" : "רווח",
-                    "₪${net.toStringAsFixed(0)}"),
+                    formatMoney(net)),
                 SoferStatRow(
                     "לשעה",
                     hourlyRate == null
                         ? "—"
-                        : "₪${hourlyRate.toStringAsFixed(0)}",
+                        : formatMoney(hourlyRate),
                     emphasise: hourlyRate != null,
                     last: true),
               ],

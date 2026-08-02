@@ -25,6 +25,7 @@ import 'logic/hebrew_work_calendar.dart';
 import 'logic/profit_calculator.dart';
 import 'theme/app_theme.dart';
 import 'widgets/feedback.dart';
+import 'widgets/confirm.dart';
 
 class SoferHome extends StatefulWidget {
   const SoferHome({super.key, this.windowsFloatingMode});
@@ -240,7 +241,7 @@ class _SoferHomeState extends State<SoferHome>
 
       final rate =
           ProfitCalculator.profitPerHour(project, todaySessions, worked);
-      if (rate != null) hourlyRate = "₪${rate.toStringAsFixed(0)}";
+      if (rate != null) hourlyRate = formatMoney(rate);
 
       final estimate = CompletionEstimator.estimate(
         project: project,
@@ -494,14 +495,8 @@ class _SoferHomeState extends State<SoferHome>
   void _recordLap() {
     final lapDuration = _clock.recordLap();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("סיימתי שורה! זמן שורה: ${formatClock(lapDuration)}"),
-        duration: const Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: SoferTokens.of(context).inkMuted,
-      ),
-    );
+    showAppNote(
+        context, "סיימתי שורה! זמן שורה: ${formatClock(lapDuration)}");
   }
 
   Future<void> _initSmartSession() async {
@@ -715,27 +710,8 @@ class _SoferHomeState extends State<SoferHome>
   /// Smart mode used to write straight to history without ever looking, so
   /// jumping back with "ערוך מיקום" and rewriting a stretch produced a silent
   /// double entry.
-  Future<bool> _confirmSmartOverlap(List<int> pages) async =>
-      await showDialog<bool>(
-        context: context,
-        builder: (c) => AlertDialog(
-          title: const Text("שים לב: כפילות"),
-          content: Text("חלק מהשורות בעמוד "
-              "${pages.map(formatHebrewNumber).join(', ')} כבר נכתבו בעבר. "
-              "האם לשמור בכל זאת?"),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(c, false),
-              child: const Text("ביטול"),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(c, true),
-              child: const Text("שמור בכל זאת"),
-            ),
-          ],
-        ),
-      ) ??
-      false;
+  Future<bool> _confirmSmartOverlap(List<int> pages) =>
+      confirmOverlap(context, pages: pages);
 
   /// Opens the form that records work.
   ///

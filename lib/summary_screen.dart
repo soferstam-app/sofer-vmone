@@ -13,6 +13,9 @@ import 'hebrew_utils.dart';
 import 'storage_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/sofer_widgets.dart';
+import 'format.dart';
+import 'widgets/feedback.dart';
+import 'widgets/confirm.dart';
 
 class SummaryScreen extends StatefulWidget {
   final List<Project> projects;
@@ -265,9 +268,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
           const SizedBox(height: 12),
           SoferStatRow("זמן עבודה", _workedLabel(worked, someWithoutTime)),
           if (avgTimeText.isNotEmpty) SoferStatRow("ממוצע", avgTimeText),
-          SoferStatRow("רווח נקי", "₪${profit.toStringAsFixed(2)}"),
+          SoferStatRow("רווח נקי", formatMoneyExact(profit)),
           if (hourlyRate != null)
-            SoferStatRow("שכר לשעה", "₪${hourlyRate.toStringAsFixed(0)}",
+            SoferStatRow("שכר לשעה", formatMoney(hourlyRate),
                 emphasise: true, last: !hasTarget),
           if (hasTarget) ...[
             const SizedBox(height: 14),
@@ -444,10 +447,10 @@ class _SummaryScreenState extends State<SummaryScreen> {
             if (avgTimeText.isNotEmpty)
               _buildInfoRow(Icons.speed, "ממוצע:", avgTimeText),
             _buildInfoRow(Icons.monetization_on, "רווח נקי:",
-                "₪${profit.toStringAsFixed(2)}"),
+                formatMoneyExact(profit)),
             if (hourlyRate != null)
               _buildInfoRow(Icons.trending_up, "שכר לשעה:",
-                  "₪${hourlyRate.toStringAsFixed(0)} לשעה"),
+                  "${formatMoney(hourlyRate)} לשעה"),
             const SizedBox(height: 10),
             const Text("עמידה ביעד יומי:",
                 style: TextStyle(fontWeight: FontWeight.bold)),
@@ -767,24 +770,20 @@ class _SummaryScreenState extends State<SummaryScreen> {
   /// A record with no time used to print as 00:00, which reads as "wrote for no
   /// time at all" rather than "did not say".
   String _sessionTime(WorkSession s) =>
-      s.timeRecorded ? _formatDuration(s.duration) : "ללא זמן";
+      s.timeRecorded ? formatClock(s.duration, seconds: false) : "ללא זמן";
 
   /// A total, said to be partial when part of the work carries no time.
   ///
   /// Without the qualifier the figure is simply an undercount, and there is no
   /// way to tell it from a short day.
   String _workedLabel(Duration worked, bool someWithoutTime) {
-    final total = _formatDuration(worked);
+    final total = formatClock(worked, seconds: false);
     if (!someWithoutTime) return total;
     return worked == Duration.zero
         ? "לא נרשם זמן"
         : "$total · חלק ללא זמן";
   }
 
-  String _formatDuration(Duration d) {
-    String twoDigits(int n) => n.toString().padLeft(2, "0");
-    return "${twoDigits(d.inHours)}:${twoDigits(d.inMinutes.remainder(60))}";
-  }
 
   /// Working days in the Hebrew month containing [date].
   ///
@@ -817,9 +816,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
         .toList();
 
     if (monthSessions.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("אין נתונים לחודש זה")),
-      );
+      showAppError(context, "אין נתונים לחודש זה");
       return;
     }
 
@@ -996,21 +993,21 @@ class _SummaryScreenState extends State<SummaryScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text("סה\"כ זמן: ${_formatDuration(totalMonthTime)}",
+              Text("סה\"כ זמן: ${formatClock(totalMonthTime, seconds: false)}",
                   style: const TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
               Text(
-                  "הכנסות כתיבה (חודש): ₪${totalMonthlyProfit.toStringAsFixed(2)}",
+                  "הכנסות כתיבה (חודש): ${formatMoneyExact(totalMonthlyProfit)}",
                   style: const TextStyle(fontWeight: FontWeight.bold)),
               if (totalMonthTime.inSeconds > 0)
                 Text(
-                    "שכר לשעה (חודש): ₪${(totalMonthlyProfit / (totalMonthTime.inSeconds / 3600)).toStringAsFixed(0)}",
+                    "שכר לשעה (חודש): ${formatMoney((totalMonthlyProfit / (totalMonthTime.inSeconds / 3600)))}",
                     style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: SoferTokens.of(context).accent)),
-              Text("הוצאות (חודש): ₪${monthlyExpenses.toStringAsFixed(2)}",
+              Text("הוצאות (חודש): ${formatMoneyExact(monthlyExpenses)}",
                   style: const TextStyle(fontWeight: FontWeight.bold)),
-              Text("נטו (לאחר הוצאות): ₪${netAfterExpenses.toStringAsFixed(2)}",
+              Text("נטו (לאחר הוצאות): ${formatMoneyExact(netAfterExpenses)}",
                   style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color:
@@ -1428,9 +1425,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
         linesPerPage: ProductionCalculator.linesPerPageOf(project),
       );
       if (lineError != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(lineError), backgroundColor: SoferTokens.of(context).danger),
-        );
+        showAppError(context, lineError);
         return;
       }
 
@@ -1445,23 +1440,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
         excludeSessionId: s.id,
       );
       if (overlaps) {
-        final confirm = await showDialog<bool>(
-              context: context,
-              builder: (c) => AlertDialog(
-                title: const Text("שים לב: כפילות"),
-                content: const Text(
-                    "חלק מהשורות בעמוד זה כבר נכתבו ברשומה אחרת. לשמור בכל זאת?"),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(c, false),
-                      child: const Text("ביטול")),
-                  TextButton(
-                      onPressed: () => Navigator.pop(c, true),
-                      child: const Text("שמור בכל זאת")),
-                ],
-              ),
-            ) ??
-            false;
+        final confirm = await confirmOverlap(context, pages: [amount]);
         if (!confirm || !mounted) return;
       }
     }

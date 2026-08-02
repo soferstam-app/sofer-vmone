@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'models.dart';
 import 'storage_service.dart';
 import 'theme/app_theme.dart';
+import 'widgets/feedback.dart';
+import 'widgets/confirm.dart';
 
 class RecycleBinScreen extends StatefulWidget {
   const RecycleBinScreen({super.key});
@@ -56,9 +58,7 @@ class _RecycleBinScreenState extends State<RecycleBinScreen> {
       await _loadDeletedItems();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("הפרויקט '${project.name}' שוחזר בהצלחה")),
-        );
+        showAppSuccess(context, "הפרויקט '${project.name}' שוחזר בהצלחה");
       }
     }
   }
@@ -71,27 +71,16 @@ class _RecycleBinScreenState extends State<RecycleBinScreen> {
   /// against a device still holding a live copy; that is what the tombstone
   /// registers do now, and they cannot be beaten by an edit at all.
   Future<void> _deleteRecords(Project project) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("מחיקת הרשומות"),
-        content: const Text(
-            "רשומות העבודה של הפרויקט יימחקו גם הן. הפרויקט עצמו כבר בסל, "
-            "ויוסתר ממנו מעצמו."),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text("ביטול")),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: SoferTokens.of(context).danger),
-            child: const Text("מחק"),
-          ),
-        ],
-      ),
+    final confirm = await confirmAction(
+      context,
+      title: "מחיקת הרשומות",
+      message: "רשומות העבודה של הפרויקט יימחקו גם הן. הפרויקט עצמו כבר בסל, "
+          "ויוסתר ממנו מעצמו.",
+      confirmLabel: "מחק",
+      danger: true,
     );
 
-    if (confirm != true) return;
+    if (!confirm) return;
 
     // Sessions belonging to the project were previously left behind,
     // referencing a project that no longer exists.

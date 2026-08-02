@@ -13,6 +13,7 @@ import '../storage_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/feedback.dart';
 import '../widgets/sofer_widgets.dart';
+import '../widgets/confirm.dart';
 
 /// What one save from the entry form produced.
 ///
@@ -243,31 +244,18 @@ class _EntrySheetState extends State<_EntrySheet> {
     // would only be in the way.
     if (widget.isManual && !touched) return true;
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("לבטל את ההזנה?"),
-        content: Text(
-          widget.isManual
-              ? "מה שהוזן כאן לא יישמר."
-              : "זמן העבודה שנמדד — ${formatClock(widget.measuredTime)} — "
-                  "לא יישמר, ואי אפשר לשחזר אותו.",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text("המשך בהזנה"),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-                backgroundColor: SoferTokens.of(ctx).danger),
-            child: const Text("בטל את ההזנה"),
-          ),
-        ],
-      ),
+    final confirmed = await confirmAction(
+      context,
+      title: "לבטל את ההזנה?",
+      message: widget.isManual
+          ? "מה שהוזן כאן לא יישמר."
+          : "זמן העבודה שנמדד — ${formatClock(widget.measuredTime)} — "
+              "לא יישמר, ואי אפשר לשחזר אותו.",
+      cancelLabel: "המשך בהזנה",
+      confirmLabel: "בטל את ההזנה",
+      danger: true,
     );
-    return confirmed ?? false;
+    return confirmed;
   }
 
   Future<void> _close() async {
@@ -381,29 +369,8 @@ class _EntrySheetState extends State<_EntrySheet> {
     }
   }
 
-  /// Writing over lines already recorded is a correction, not a mistake, so it
-  /// is a question rather than a refusal.
-  Future<bool> _confirmOverlap(bool isRange) async =>
-      await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text("שים לב: כפילות"),
-          content: Text(isRange
-              ? "חלק מהשורות בטווח העמודים כבר נכתבו בעבר. האם לשמור בכל זאת?"
-              : "חלק מהשורות בעמוד זה כבר נכתבו בעבר. האם לשמור בכל זאת?"),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text("ביטול"),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text("שמור בכל זאת"),
-            ),
-          ],
-        ),
-      ) ??
-      false;
+  Future<bool> _confirmOverlap(bool isRange) =>
+      confirmOverlap(context, range: isRange);
 
   /// Saves and stays, so a day recorded in parts is one sitting at the keyboard
   /// rather than a form opened and closed for every stretch of it.
@@ -441,11 +408,11 @@ class _EntrySheetState extends State<_EntrySheet> {
   Future<void> _saveAndClose() async {
     if (!await _save()) return;
     if (!mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
+    // Said before the route goes, not after: the messenger it reaches is the
+    // app's and outlives this sheet either way, and saying it first means there
+    // is no captured handle to get wrong.
+    showAppSuccess(context, "הנתונים נשמרו בהצלחה!");
     Navigator.pop(context, _project);
-    messenger.showSnackBar(
-      const SnackBar(content: Text("הנתונים נשמרו בהצלחה!")),
-    );
   }
 
   // --- The form -------------------------------------------------------------
@@ -713,8 +680,7 @@ class _EntrySheetState extends State<_EntrySheet> {
         endMinute: _endTime.minute,
       );
       final d = range.end.difference(range.start);
-      durationText =
-          "סה\"כ זמן מחושב: ${d.inHours} שעות ו-${d.inMinutes % 60} דקות";
+      durationText = "סה\"כ זמן מחושב: ${formatSpanLong(d)}";
     }
 
     return Column(

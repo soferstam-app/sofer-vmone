@@ -10,6 +10,7 @@ import 'recycle_bin_screen.dart';
 import 'hebrew_utils.dart';
 import 'theme/app_theme.dart';
 import 'widgets/sofer_widgets.dart';
+import 'widgets/confirm.dart';
 
 class ProjectsScreen extends StatefulWidget {
   final List<Project> projects;
@@ -880,29 +881,17 @@ class _ProjectDialogState extends State<ProjectDialog> {
         newPages != null && newPages != (existing.totalPages ?? newPages);
     if (!linesChanged && !pagesChanged) return true;
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("שינוי הגדרות הספר"),
-        content: Text(
-          linesChanged
-              ? "שינית את מספר השורות לעמוד מ-${existing.linesPerPage} ל-$newLines.\n\n"
-                  "רשומות שנכתבו מכאן ואילך יחושבו לפי הערך החדש. רשומות ישנות שנשמרו לפני עדכון זה עשויות להיות מחושבות מחדש – מה שישנה את ההספק והרווח המוצגים עבורן.\n\n"
-                  "להמשיך?"
-              : "שינית את מספר העמודים בספר מ-${existing.totalPages} ל-$newPages.\n\n"
-                  "שינוי זה משפיע על אחוזי ההתקדמות ועל צפי הסיום.\n\nלהמשיך?",
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text("ביטול")),
-          ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text("המשך")),
-        ],
-      ),
+    return confirmAction(
+      context,
+      title: "שינוי הגדרות הספר",
+      message: linesChanged
+          ? "שינית את מספר השורות לעמוד מ-${existing.linesPerPage} ל-$newLines.\n\n"
+              "רשומות שנכתבו מכאן ואילך יחושבו לפי הערך החדש. רשומות ישנות שנשמרו לפני עדכון זה עשויות להיות מחושבות מחדש – מה שישנה את ההספק והרווח המוצגים עבורן.\n\n"
+              "להמשיך?"
+          : "שינית את מספר העמודים בספר מ-${existing.totalPages} ל-$newPages.\n\n"
+              "שינוי זה משפיע על אחוזי ההתקדמות ועל צפי הסיום.\n\nלהמשיך?",
+      confirmLabel: "המשך",
     );
-    return confirmed ?? false;
   }
 
   Future<void> _submit() async {

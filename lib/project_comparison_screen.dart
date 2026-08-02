@@ -4,6 +4,7 @@ import 'logic/project_analytics.dart';
 import 'models.dart';
 import 'theme/app_theme.dart';
 import 'widgets/sofer_widgets.dart';
+import 'format.dart';
 
 /// Ranks projects by what they actually pay per hour.
 ///
@@ -18,14 +19,6 @@ class ProjectComparisonScreen extends StatelessWidget {
     required this.projects,
     required this.history,
   });
-
-  String _formatDuration(Duration d) {
-    if (d.inHours > 0) {
-      final m = d.inMinutes.remainder(60);
-      return m > 0 ? "${d.inHours} שע' $m דק'" : "${d.inHours} שע'";
-    }
-    return "${d.inMinutes} דק'";
-  }
 
   /// A results table rather than a stack of cards.
   ///
@@ -54,7 +47,7 @@ class ProjectComparisonScreen extends StatelessWidget {
                     text: best.project.name,
                     style: TextStyle(color: t.accent)),
                 TextSpan(
-                    text: " — ₪${best.profitPerHour!.toStringAsFixed(0)} לשעה, "
+                    text: " — ${formatMoney(best.profitPerHour!)} לשעה, "
                         "פי ${(best.profitPerHour! / (worst.profitPerHour == 0 ? 1 : worst.profitPerHour!)).toStringAsFixed(1)} "
                         "מ${worst.project.name}."),
               ]),
@@ -116,7 +109,7 @@ class ProjectComparisonScreen extends StatelessWidget {
                         color: t.ink)),
               ),
               Text(
-                rate == null ? "—" : "₪${rate.toStringAsFixed(0)}",
+                rate == null ? "—" : formatMoney(rate),
                 style: TextStyle(
                     fontFamily: t.numeralFamily,
                     fontSize: 23,
@@ -141,9 +134,9 @@ class ProjectComparisonScreen extends StatelessWidget {
               padding: const EdgeInsetsDirectional.only(start: 26),
               child: Text(
                 "${p.units.toStringAsFixed(1)} ${p.unitNamePlural} · "
-                "${_formatDuration(p.timeWorked)} · "
-                "₪${p.profit.toStringAsFixed(0)}"
-                "${p.timePerUnit == null ? '' : ' · ${_formatDuration(p.timePerUnit!)} ל${p.unitName}'}",
+                "${formatSpan(p.timeWorked)} · "
+                "${formatMoney(p.profit)}"
+                "${p.timePerUnit == null ? '' : ' · ${formatSpan(p.timePerUnit!)} ל${p.unitName}'}",
                 style: TextStyle(
                     fontFamily: t.labelFamily, fontSize: 12, color: t.inkMuted),
               ),
@@ -202,8 +195,8 @@ class ProjectComparisonScreen extends StatelessWidget {
                           const SizedBox(height: 10),
                           Text(
                             "${best.project.name} מכניס לך "
-                            "₪${best.profitPerHour!.toStringAsFixed(0)} לשעה, "
-                            "מול ₪${worst.profitPerHour!.toStringAsFixed(0)} "
+                            "${formatMoney(best.profitPerHour!)} לשעה, "
+                            "מול ${formatMoney(worst.profitPerHour!)} "
                             "ב${worst.project.name}.",
                             style: const TextStyle(fontSize: 15, height: 1.4),
                           ),
@@ -269,7 +262,7 @@ class ProjectComparisonScreen extends StatelessWidget {
                           fontWeight: FontWeight.bold, fontSize: 16)),
                 ),
                 Text(
-                  "₪${p.profitPerHour!.toStringAsFixed(0)}/שעה",
+                  "${formatMoney(p.profitPerHour!)}/שעה",
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 17,
@@ -283,10 +276,10 @@ class ProjectComparisonScreen extends StatelessWidget {
             const Divider(),
             _row(context, "הופק:",
                 "${p.units.toStringAsFixed(1)} ${p.unitNamePlural}"),
-            _row(context, "זמן עבודה:", _formatDuration(p.timeWorked)),
+            _row(context, "זמן עבודה:", formatSpan(p.timeWorked)),
             if (p.timePerUnit != null)
-              _row(context, "זמן ל${p.unitName}:", _formatDuration(p.timePerUnit!)),
-            _row(context, "רווח:", "₪${p.profit.toStringAsFixed(2)}"),
+              _row(context, "זמן ל${p.unitName}:", formatSpan(p.timePerUnit!)),
+            _row(context, "רווח:", formatMoneyExact(p.profit)),
           ],
         ),
       ),

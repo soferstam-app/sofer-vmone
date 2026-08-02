@@ -7,6 +7,7 @@ import 'models.dart';
 import 'storage_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/sofer_widgets.dart';
+import 'format.dart';
 
 class ExpensesScreen extends StatefulWidget {
   /// Needed so an expense can be charged to the work it belongs to.
@@ -65,7 +66,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
       case ExpenseAllocation.project:
         if (e.projectIds.isEmpty) return '⚠ לא שויך לפרויקט';
         if (e.projectIds.length == 1) return _projectName(e.projectIds.first);
-        return '${e.projectIds.length} פרויקטים (₪${e.amountPerProject.toStringAsFixed(0)} כל אחד)';
+        return '${e.projectIds.length} פרויקטים (${formatMoney(e.amountPerProject)} כל אחד)';
       case ExpenseAllocation.period:
         final s = e.periodStart, en = e.periodEnd;
         if (s == null || en == null) return 'תקופה לא הוגדרה';
@@ -119,7 +120,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text("מחיקת הוצאה"),
         content:
-            Text("למחוק \"${e.product}\" (₪${e.amount.toStringAsFixed(2)})?"),
+            Text("למחוק \"${e.product}\" (${formatMoneyExact(e.amount)})?"),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx), child: const Text("ביטול")),
@@ -185,7 +186,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                         letterSpacing: 1.5,
                         color: t.inkMuted)),
               ),
-              Text("₪${_totalExpenses.toStringAsFixed(0)}",
+              Text(formatMoney(_totalExpenses),
                   style: TextStyle(
                       fontFamily: t.numeralFamily,
                       fontSize: 34,
@@ -236,7 +237,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                             fontSize: 18,
                             color: t.ink)),
                   ),
-                  Text("₪${sum(of(group.kind)).toStringAsFixed(0)}",
+                  Text(formatMoney(sum(of(group.kind))),
                       style: TextStyle(
                           fontFamily: t.numeralFamily,
                           fontSize: 18,
@@ -291,7 +292,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                 ],
               ),
             ),
-            Text("₪${e.amount.toStringAsFixed(0)}",
+            Text(formatMoney(e.amount),
                 style: TextStyle(
                     fontFamily: t.numeralFamily, fontSize: 19, color: t.ink)),
           ],
@@ -341,7 +342,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                     const Text("סה\"כ הוצאות",
                         style: TextStyle(
                             fontSize: 20, fontWeight: FontWeight.bold)),
-                    Text("₪${_totalExpenses.toStringAsFixed(2)}",
+                    Text(formatMoneyExact(_totalExpenses),
                         style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
@@ -408,7 +409,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text("₪${e.amount.toStringAsFixed(2)}",
+                              Text(formatMoneyExact(e.amount),
                                   style: const TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 16)),

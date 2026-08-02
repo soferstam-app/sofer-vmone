@@ -13,6 +13,7 @@ import 'work_calendar_settings_screen.dart';
 import 'package:auto_updater/auto_updater.dart';
 import 'dart:io';
 import 'theme/app_theme.dart';
+import 'widgets/feedback.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -237,11 +238,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         BackupReadError.tooNew =>
           "הקובץ נוצר בגרסה חדשה יותר של האפליקציה. יש לעדכן את האפליקציה כדי לשחזר אותו.",
       };
-      if (message != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message), backgroundColor: SoferTokens.of(context).danger),
-        );
-      }
+      if (message != null) showAppError(context, message);
       return;
     }
 
@@ -299,13 +296,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             "עודכנו: ${outcome.projectStats.updated + outcome.historyStats.updated + outcome.expenseStats.updated} פריטים."
         : "כל הנתונים בקובץ כבר קיימים במכשיר – לא בוצע שינוי.";
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(summary),
-        backgroundColor: SoferTokens.of(context).positive,
-        duration: const Duration(seconds: 8),
-      ),
-    );
+    showAppSuccess(context, summary);
   }
 
   /// Lets the user choose between writing the backup to a location they pick
@@ -370,26 +361,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     switch (result.outcome) {
       case BackupOutcome.success:
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(choice == 'save' && result.path != null
+        showAppSuccess(
+            context,
+            choice == 'save' && result.path != null
                 ? "הגיבוי נשמר:\n${result.path}"
-                : "הגיבוי נוצר בהצלחה"),
-            backgroundColor: SoferTokens.of(context).positive,
-            duration: const Duration(seconds: 6),
-          ),
-        );
+                : "הגיבוי נוצר בהצלחה");
       case BackupOutcome.cancelled:
         break;
       case BackupOutcome.failed:
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content:
-                Text("הגיבוי נכשל: ${result.error ?? 'שגיאה לא ידועה'}"),
-            backgroundColor: SoferTokens.of(context).danger,
-            duration: const Duration(seconds: 6),
-          ),
-        );
+        showAppError(
+            context, "הגיבוי נכשל: ${result.error ?? 'שגיאה לא ידועה'}");
     }
   }
 
