@@ -5,6 +5,7 @@ import 'project_comparison_screen.dart';
 import 'quote_screen.dart';
 import 'theme/app_theme.dart';
 import 'widgets/sofer_widgets.dart';
+import 'plan/monthly_plan_screen.dart';
 
 /// Hub for the analysis tools.
 ///
@@ -39,6 +40,14 @@ class FeaturesScreen extends StatelessWidget {
                 "איזה סוג עבודה משתלם לך יותר, לפי מה שהרווחת בפועל לשעה",
             screen: ProjectComparisonScreen(
                 projects: projects, history: history),
+          ),
+          _tile(
+            context,
+            icon: Icons.calendar_month,
+            title: "לוח חודשי",
+            subtitle:
+                "לאיזה עמוד להגיע בכל יום של החודש, ומה להשלים בסוף השבוע",
+            screen: MonthlyPlanScreen(projects: projects, history: history),
           ),
           _tile(
             context,
