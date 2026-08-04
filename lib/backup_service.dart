@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import 'logic/legacy_import.dart';
 import 'logic/merge_service.dart';
 import 'models.dart';
 import 'platform_support.dart';
@@ -221,10 +222,19 @@ class BackupService {
         return const BackupReadResult.failed(BackupReadError.unreadable);
       }
 
-      final decoded = jsonDecode(utf8.decode(bytes));
-      if (decoded is! Map<String, dynamic>) {
+      final raw = jsonDecode(utf8.decode(bytes));
+      if (raw is! Map<String, dynamic>) {
         return const BackupReadResult.failed(BackupReadError.notOurFormat);
       }
+
+      // A file an older version left on disk rather than a backup it wrote.
+      // Versions up to 0.3.1 had no backup screen, so this is the only thing
+      // those writers can bring with them — see LegacyImport.
+      final decoded = LegacyImport.looksLikeStore(raw)
+          ? LegacyImport.toBackup(raw,
+              appId: appId, formatVersion: formatVersion)
+          : raw;
+
       if (decoded['app'] != appId) {
         return const BackupReadResult.failed(BackupReadError.notOurFormat);
       }

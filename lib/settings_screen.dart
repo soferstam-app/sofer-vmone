@@ -465,6 +465,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   /// Lets the user choose between writing the backup to a location they pick
   /// and handing it to the OS share sheet. Both produce the same file.
+  /// Says where the old version keeps its file, then opens the same picker.
+  ///
+  /// The file is not called anything a writer would guess, and on Windows it
+  /// lives under a folder named after a package rather than after the app. It
+  /// is no use telling him he can import it without telling him what to look
+  /// for — so the path is on the screen and can be copied.
+  Future<void> _explainLegacyImport() async {
+    const windowsPath =
+        r'%APPDATA%\com.example\stamsofer\shared_preferences.json';
+
+    final go = await confirmAction(
+      context,
+      title: "ייבוא מהתקנה קודמת",
+      message: Platform.isWindows
+          ? "גרסאות עד 0.3.1 לא כללו מסך גיבוי, אבל הנתונים שמורים בקובץ "
+              "רגיל על המחשב:\n\n$windowsPath\n\n"
+              "אפשר להעתיק אותו מהמחשב הישן ולבחור אותו כאן. הנתונים "
+              "יתווספו לקיימים ושום דבר לא יימחק."
+          : "אם יש לך קובץ נתונים מגרסה ישנה — גם כזה שאינו קובץ גיבוי — "
+              "אפשר לבחור אותו כאן. הנתונים יתווספו לקיימים ושום דבר לא "
+              "יימחק.",
+      confirmLabel: "בחר קובץ",
+    );
+    if (!go || !mounted) return;
+    await _importBackup();
+  }
+
   Future<void> _showBackupOptions() async {
     final choice = await showModalBottomSheet<String>(
       context: context,
@@ -503,6 +530,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   "הנתונים מהקובץ יתווספו לקיימים – שום דבר לא נמחק"),
               onTap: () => Navigator.pop(ctx, 'import'),
             ),
+            // The same picker. Versions up to 0.3.1 had no backup screen, so
+            // for those writers the app's own store file is the only thing
+            // there is — and nothing told them it could be used.
+            ListTile(
+              leading: Icon(Icons.drive_file_move_outline,
+                  color: SoferTokens.of(context).accent),
+              title: const Text("ייבוא מהתקנה קודמת"),
+              subtitle: const Text(
+                  "מגרסה שלא היה בה מסך גיבוי – ישירות מקובץ הנתונים שלה"),
+              onTap: () => Navigator.pop(ctx, 'legacy'),
+            ),
             const SizedBox(height: 8),
           ],
         ),
@@ -510,6 +548,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
 
     if (choice == null || !mounted) return;
+
+    if (choice == 'legacy') {
+      await _explainLegacyImport();
+      return;
+    }
 
     if (choice == 'import') {
       await _importBackup();
