@@ -5,6 +5,7 @@ import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'storage_service.dart';
 import 'logic/reminder_schedule.dart';
+import 'logic/reminder_plan.dart';
 
 class NotificationService {
   static NotificationService? _instance;
@@ -59,21 +60,60 @@ class NotificationService {
     if (!await _storage.getNotificationEnabled()) return;
 
     final TimeOfDay time = await _storage.getNotificationTime();
+    final smart = await _storage.getSmartReminder();
+    final dayStart = await _storage.getDayStart();
+
+    // Everything the reminder knows, it knows now. Nothing runs when it fires.
+    final history =
+        (await _storage.loadHistory()).where((s) => !s.isDeleted).toList();
+    final projects = await _storage.loadProjects();
+    final project = ReminderPlan.mostRecent(projects, history);
+    final today = ReminderPlan.workingDay(DateTime.now(), dayStart);
+
+    final hour = ReminderPlan.hourFor(
+      smart: smart,
+      chosenHour: time.hour,
+      history: history,
+      dayStart: dayStart,
+    );
+
     final when = ReminderSchedule.upcoming(
       from: DateTime.now(),
-      hour: time.hour,
-      minute: time.minute,
+      hour: hour,
+      minute: smart ? 0 : time.minute,
     );
 
     for (final moment in when) {
+      // The first booking is the only one that can be about today, and so the
+      // only one that can say anything specific. The rest land on days nothing
+      // is known about yet, and a guess made now would be stale on arrival.
+      final isToday = ReminderPlan.workingDay(moment, dayStart) == today ||
+          moment == when.first;
+      final body = isToday
+          ? ReminderPlan.todaysMessage(
+              project: project,
+              history: history,
+              day: ReminderPlan.workingDay(moment, dayStart),
+              dayStart: dayStart,
+            )
+          : ReminderPlan.generalMessage;
+
+      // Nothing to remind him of tonight if he has already done it.
+      if (isToday &&
+          !ReminderPlan.isWorthSending(
+            project: project,
+            history: history,
+            day: today,
+            dayStart: dayStart,
+          )) {
+        continue;
+      }
+
       try {
         await flutterLocalNotificationsPlugin.zonedSchedule(
           ReminderSchedule.idFor(moment),
           'סופר ומונה',
-          // Says nothing about whether the day went well. The old text asked
-          // "did you meet your daily target?" of writers who had met it hours
-          // earlier, and of writers who had never set one.
-          'סוף היום — רוצה לרשום מה כתבת?',
+          body,
           tz.TZDateTime.from(moment, tz.local),
           const NotificationDetails(
             android: AndroidNotificationDetails(

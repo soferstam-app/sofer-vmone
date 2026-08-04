@@ -29,6 +29,11 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _notificationsEnabled = true;
+
+  /// Whether the reminder follows the writer's own habits rather than the hour
+  /// he named. Off until he asks — a reminder that moves on its own is a
+  /// surprise, and a surprise from a reminder is never a good one.
+  bool _smartReminder = false;
   TimeOfDay _notificationTime = const TimeOfDay(hour: 20, minute: 0);
   DayStart _dayStart = DayStart.midnight;
   bool _useGregorianDates = false;
@@ -64,6 +69,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadNotificationSettings() async {
     final enabled = await _storage.getNotificationEnabled();
     final time = await _storage.getNotificationTime();
+    final smartReminder = await _storage.getSmartReminder();
     final dayStart = await _storage.getDayStart();
     final useGregorian = await _storage.getUseGregorianDates();
     final soferName = await _storage.getSoferName();
@@ -75,6 +81,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       setState(() {
         _notificationsEnabled = enabled;
         _notificationTime = time;
+        _smartReminder = smartReminder;
         _dayStart = dayStart;
         _useGregorianDates = useGregorian;
         _soferName = soferName;
@@ -276,6 +283,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       setState(() => _notificationsEnabled = enabled);
     }
     await _storage.setNotificationEnabled(enabled);
+    await NotificationService().scheduleDailyReminder();
+  }
+
+  Future<void> _setSmartReminder(bool value) async {
+    await _storage.setSmartReminder(value);
+    if (mounted) setState(() => _smartReminder = value);
+    // Re-books the week at once, so the change is real before he closes the
+    // screen rather than at some point he cannot observe.
     await NotificationService().scheduleDailyReminder();
   }
 
@@ -650,9 +665,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _notificationsEnabled,
             _updateNotificationSettings,
           ),
-          if (_notificationsEnabled)
-            _entry("שעת תזכורת", _notificationTime.format(context),
-                onTap: _pickNotificationTime),
+          if (_notificationsEnabled) ...[
+            _toggle(
+              "תזכורת לפי ההרגלים שלי",
+              "לפי השעה שבה אתה בדרך כלל מתחיל, במקום שעה קבועה",
+              _smartReminder,
+              _setSmartReminder,
+            ),
+            if (!_smartReminder)
+              _entry("שעת תזכורת", _notificationTime.format(context),
+                  onTap: _pickNotificationTime),
+          ],
           const SoferRule(strong: true),
         ],
 
@@ -842,14 +865,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         secondary: Icon(Icons.notifications_active,
                             color: SoferTokens.of(context).accent),
                       ),
-                      if (_notificationsEnabled)
-                        ListTile(
-                          title: const Text("שעת תזכורת"),
-                          subtitle: Text(_notificationTime.format(context)),
-                          leading: Icon(Icons.access_time,
+                      if (_notificationsEnabled) ...[
+                        SwitchListTile(
+                          title: const Text("תזכורת לפי ההרגלים שלי"),
+                          subtitle: const Text(
+                              "לפי השעה שבה אתה בדרך כלל מתחיל"),
+                          value: _smartReminder,
+                          onChanged: _setSmartReminder,
+                          secondary: Icon(Icons.auto_awesome,
                               color: SoferTokens.of(context).accent),
-                          onTap: _pickNotificationTime,
                         ),
+                        if (!_smartReminder)
+                          ListTile(
+                            title: const Text("שעת תזכורת"),
+                            subtitle: Text(_notificationTime.format(context)),
+                            leading: Icon(Icons.access_time,
+                                color: SoferTokens.of(context).accent),
+                            onTap: _pickNotificationTime,
+                          ),
+                      ],
                       const Divider(),
                     ],
                     SwitchListTile(

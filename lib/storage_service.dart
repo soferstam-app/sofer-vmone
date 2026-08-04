@@ -26,6 +26,7 @@ class StorageService {
   static const String _keyAutoNightTheme = 'auto_night_theme';
   static const String _keyCurrency = 'currency';
   static const String _keyAutoBackupFolder = 'auto_backup_folder';
+  static const String _keySmartReminder = 'smart_reminder';
 
   Future<void> saveProjects(List<Project> projects) =>
       _saveList(_keyProjects, projects.map((p) => p.toJson()).toList());
@@ -214,6 +215,7 @@ class StorageService {
         // Deliberately *not* restored on another device — see BackupService.
         // A path from one machine means nothing on another.
         _keyAutoBackupFolder: prefs.getString(_keyAutoBackupFolder),
+        _keySmartReminder: prefs.getBool(_keySmartReminder),
       },
     };
   }
@@ -423,6 +425,19 @@ class StorageService {
     } else {
       await prefs.setString(_keyAutoBackupFolder, path);
     }
+  }
+
+  /// Whether the reminder should follow the writer's own habits rather than
+  /// the hour he named. Off until he asks: a reminder that moves on its own is
+  /// a surprise, and a surprise from a reminder is not a good one.
+  Future<bool> getSmartReminder() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keySmartReminder) ?? false;
+  }
+
+  Future<void> setSmartReminder(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keySmartReminder, value);
   }
 
   Future<bool> getUseGregorianDates() async {
