@@ -6,6 +6,7 @@ import 'quote_screen.dart';
 import 'theme/app_theme.dart';
 import 'widgets/sofer_widgets.dart';
 import 'plan/production_plan_screen.dart';
+import 'reports/annual_report_screen.dart';
 
 /// Hub for the analysis tools.
 ///
@@ -48,6 +49,15 @@ class FeaturesScreen extends StatelessWidget {
             subtitle:
                 "לאיזה עמוד להגיע בכל יום של החודש, ומה להשלים בסוף השבוע",
             screen: ProductionPlanScreen(projects: projects, history: history),
+          ),
+          _tile(
+            context,
+            icon: Icons.receipt_long,
+            title: "דוח שנתי",
+            subtitle:
+                "הכנסות והוצאות לפי חודש, לשנת מס — לועזי, כמו שמבקשים",
+            screen:
+                AnnualReportScreen(projects: projects, history: history),
           ),
           _tile(
             context,
