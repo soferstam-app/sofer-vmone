@@ -596,7 +596,7 @@ Singleton מעל `flutter_local_notifications`. אזור זמן קבוע: `Asia/
 
 ### ⚠️ הגדרות סביבה נדרשות לבניית אנדרואיד (מכונה זו)
 
-ארבע מכשלות נפרדות התגלו בהעלאת בניית האנדרואיד. אם היא נשברת שוב – זה הסדר לבדוק בו:
+חמש מכשלות נפרדות התגלו בהעלאת בניית האנדרואיד. אם היא נשברת שוב – זה הסדר לבדוק בו:
 
 **1. Flutter הצביע ל-SDK הלא נכון.** הוא השתמש ב-PlatformTools מינימלי של WinGet במקום ב-SDK המלא של Android Studio:
 ```
@@ -622,6 +622,21 @@ systemProp.javax.net.ssl.trustStorePassword=changeit
 setx PUB_CACHE "C:\pub-cache"
 ```
 בנוסף, ה-Kotlin daemon נכשל על המכונה (`Daemon compilation failed: null`); `android/gradle.properties` מגדיר לכן `kotlin.compiler.execution.strategy=in-process`.
+
+**5. יש לבנות מ-PowerShell, לא מ-Git Bash.** בנייה מ-Git Bash נופלת מיד עם
+```
+java.io.IOException: Unable to establish loopback connection
+```
+ההודעה מפנה לרשת, וזו הפניה מטעה: הרשת תקינה, `localhost` נפתר, ואין מיצוי פורטים. השגיאה מגיעה מ-`sun.nio.ch.PipeImpl` – `Selector.open()` בווינדוס פותח pipe פנימי מעל **Unix-domain socket**, ו-`UnixDomainSockets.connect0` מחזיר `Invalid argument: connect`.
+
+**זה לא Gradle ולא Flutter אלא ה-JVM.** תוכנית Java בת ארבע שורות שכל מה שהיא עושה הוא `Selector.open()` נכשלת באותה צורה ב-JDK 17 וב-JDK 25, עקבית לחלוטין מ-Git Bash – ועוברת מ-PowerShell באותה מכונה, באותו JDK ובאותו `TEMP`. משהו בסביבת MSYS שובר את זה, ודריסת `jdk.nio.channels.unixdomain.tmpdir` אינה עוזרת.
+
+לכן:
+```powershell
+$env:PUB_CACHE = "C:\pub-cache"
+& E:\Android\flutter\bin\flutter.bat build apk --release
+```
+זו כנראה גם הסיבה האמיתית לכישלון ה-Kotlin daemon בסעיף 4 – אותה תקלה בדיוק, שנעקפה אז ב-`in-process` בלי שזוהתה.
 
 ---
 
