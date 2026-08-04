@@ -1,5 +1,6 @@
 import '../hebrew_utils.dart';
 import '../models.dart';
+import 'export_table.dart';
 import 'production_plan.dart';
 
 /// The plan as rows and columns, before anything decides how to draw it.
@@ -95,29 +96,28 @@ class PlanTable {
     );
   }
 
-  /// The table as comma-separated text.
+  /// The same table, flattened for anything that leaves the app.
   ///
-  /// Kept beside the spreadsheet rather than instead of it: a writer who only
-  /// wants the numbers somewhere else is served by this, and it is the one
-  /// format that cannot fail to open.
-  String toCsv() {
-    String cell(String v) =>
-        v.contains(',') || v.contains('"') || v.contains('\n')
-            ? '"${v.replaceAll('"', '""')}"'
-            : v;
+  /// The rich rows above are for the grid on screen, which colours a day off
+  /// differently from a day fallen short of. A file keeps that distinction as a
+  /// flag rather than a colour, so a spreadsheet can ignore it and a printed
+  /// page can draw it.
+  ExportTable toExportTable() => ExportTable(
+        title: title,
+        summary: summary,
+        headings: headings,
+        note: 'עמודת "בפועל" ריקה בימים שטרם הגיעו — למילוי ביד.',
+        rows: [
+          for (final r in rows)
+            ExportRow(
+              [r.day, r.weekday, r.target, r.actual],
+              muted: !r.isWorkingDay,
+              warn: r.isBehind,
+            ),
+        ],
+      );
 
-    final lines = <String>[
-      cell(title),
-      headings.map(cell).join(','),
-      for (final r in rows)
-        [r.day, r.weekday, r.target, r.actual].map(cell).join(','),
-      '',
-      cell(summary),
-    ];
-    // A byte order mark, or Excel opens Hebrew as mojibake — which is what
-    // every "the export is broken" report about a CSV turns out to be.
-    return '﻿${lines.join('\r\n')}\r\n';
-  }
+  String toCsv() => toExportTable().toCsv();
 }
 
 /// One day, as a row.

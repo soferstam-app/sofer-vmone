@@ -166,9 +166,10 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
   Future<void> _print(Project project, ProductionPlan plan) async {
     final table = _table(project, plan);
     try {
+      final out = table.toExportTable();
       await Printing.layoutPdf(
-        name: PlanExport.fileName(table, 'pdf'),
-        onLayout: (_) => PlanExport.toPdf(table),
+        name: PlanExport.fileName(out, 'pdf'),
+        onLayout: (_) => PlanExport.toPdf(out),
       );
     } catch (e) {
       if (mounted) showAppError(context, 'ההדפסה נכשלה: $e');
@@ -180,11 +181,12 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
   Future<void> _exportXlsx(Project project, ProductionPlan plan) async {
     final table = _table(project, plan);
     try {
-      final bytes = await PlanExport.toXlsx(table);
+      final out = table.toExportTable();
+      final bytes = await PlanExport.toXlsx(out);
       if (!mounted) return;
       final path = await FilePicker.platform.saveFile(
         dialogTitle: 'שמירת טבלת הספקים',
-        fileName: PlanExport.fileName(table, 'xlsx'),
+        fileName: PlanExport.fileName(out, 'xlsx'),
         bytes: bytes,
       );
       if (!mounted || path == null) return;

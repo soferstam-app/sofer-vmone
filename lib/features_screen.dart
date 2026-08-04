@@ -7,6 +7,7 @@ import 'theme/app_theme.dart';
 import 'widgets/sofer_widgets.dart';
 import 'plan/production_plan_screen.dart';
 import 'reports/annual_report_screen.dart';
+import 'reports/monthly_report_screen.dart';
 
 /// Hub for the analysis tools.
 ///
@@ -49,6 +50,15 @@ class FeaturesScreen extends StatelessWidget {
             subtitle:
                 "לאיזה עמוד להגיע בכל יום — שבוע או חודש, להדפסה ולאקסל",
             screen: ProductionPlanScreen(projects: projects, history: history),
+          ),
+          _tile(
+            context,
+            icon: Icons.description,
+            title: "דוח חודשי",
+            subtitle:
+                "כל יום בחודש: כמה נכתב, כמה זמן, דקות לשורה ורווח — להדפסה",
+            screen:
+                MonthlyReportScreen(projects: projects, history: history),
           ),
           _tile(
             context,

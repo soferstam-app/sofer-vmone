@@ -5,13 +5,14 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
-import '../logic/plan_table.dart';
+import '../logic/export_table.dart';
 
-/// Turning the plan table into something that leaves the app.
+/// Turning a table into something that leaves the app.
 ///
-/// Three renderings of one [PlanTable], so they cannot say different things.
-/// What each cell contains was settled before any of this ran and is tested
-/// there; here is only how it is drawn.
+/// Three renderings of one [ExportTable], so a plan and a monthly report cannot
+/// come out looking like they were made by different programs. What each cell
+/// contains is settled before any of this runs and tested there; here is only
+/// how it is drawn.
 class PlanExport {
   const PlanExport._();
 
@@ -30,7 +31,7 @@ class PlanExport {
   }
 
   /// The table as a page to print or keep.
-  static Future<Uint8List> toPdf(PlanTable table) async {
+  static Future<Uint8List> toPdf(ExportTable table) async {
     await _loadFonts();
     final serif = _serif!;
     final sans = _sans!;
@@ -92,30 +93,25 @@ class PlanExport {
             // A day off is greyed rather than left to look like an oversight,
             // and a day already fallen short of is shaded so the eye finds it.
             rowDecoration: const pw.BoxDecoration(),
-            data: [
-              for (final row in table.rows)
-                [row.day, row.weekday, row.target, row.actual],
-            ],
+            data: [for (final row in table.rows) row.cells],
             cellDecoration: (index, data, row) {
               if (row == 0 || row > table.rows.length) {
                 return const pw.BoxDecoration();
               }
               final r = table.rows[row - 1];
-              if (!r.isWorkingDay) {
+              if (r.muted) {
                 return const pw.BoxDecoration(color: PdfColors.grey100);
               }
-              if (r.isBehind) {
-                return const pw.BoxDecoration(color: PdfColors.red50);
+              if (r.warn) return const pw.BoxDecoration(color: PdfColors.red50);
+              if (r.strong) {
+                return const pw.BoxDecoration(color: PdfColors.grey200);
               }
               return const pw.BoxDecoration();
             },
           ),
           pw.SizedBox(height: 10),
-          cell(
-            'עמודה "בפועל" ריקה בימים שטרם הגיעו — למילוי ביד.',
-            heading: true,
-            muted: true,
-          ),
+          if (table.note != null)
+            cell(table.note!, heading: true, muted: true),
         ],
       ),
     );
@@ -128,7 +124,7 @@ class PlanExport {
   /// A real workbook rather than a CSV renamed, so it opens with its columns
   /// already the right way round and its Hebrew intact — no import dialog, no
   /// encoding to choose.
-  static Future<Uint8List> toXlsx(PlanTable table) async {
+  static Future<Uint8List> toXlsx(ExportTable table) async {
     final book = xl.Excel.createExcel();
     final sheet = book[book.getDefaultSheet() ?? 'Sheet1'];
 
@@ -140,15 +136,9 @@ class PlanExport {
 
     for (final row in table.rows) {
       sheet.appendRow([
-        xl.TextCellValue(row.day),
-        xl.TextCellValue(row.weekday),
-        xl.TextCellValue(row.target),
-        // Empty rather than a blank string, so the cell is genuinely empty for
-        // whoever fills the column in or sums beside it.
-        if (row.actual.isEmpty)
-          null
-        else
-          xl.TextCellValue(row.actual),
+        // An empty cell rather than a blank string, so it is genuinely empty
+        // for whoever fills the column in or sums beside it.
+        for (final c in row.cells) c.isEmpty ? null : xl.TextCellValue(c),
       ]);
     }
 
@@ -160,7 +150,7 @@ class PlanExport {
   }
 
   /// A file name that says what the file is without being opened.
-  static String fileName(PlanTable table, String extension) {
+  static String fileName(ExportTable table, String extension) {
     final safe = table.title
         .replaceAll(RegExp(r'[\\/:*?"<>|]'), '-')
         .replaceAll(RegExp(r'\s+'), ' ')

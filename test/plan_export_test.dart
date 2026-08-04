@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 import 'package:sofer_vmone/logic/hebrew_clock.dart';
 import 'package:sofer_vmone/logic/hebrew_work_calendar.dart';
+import 'package:sofer_vmone/logic/export_table.dart';
 import 'package:sofer_vmone/logic/plan_table.dart';
 import 'package:sofer_vmone/logic/production_plan.dart';
 import 'package:sofer_vmone/models.dart';
@@ -29,7 +30,7 @@ void main() {
     linesPerPage: 10,
   );
 
-  PlanTable table() {
+  ExportTable table() {
     final first = JewishDate.initDate(
             jewishYear: 5786, jewishMonth: JewishDate.IYAR, jewishDayOfMonth: 1)
         .getGregorianCalendar();
@@ -45,7 +46,7 @@ void main() {
       ),
       periodLabel: 'אייר תשפ״ו',
       useGregorianDates: false,
-    );
+    ).toExportTable();
   }
 
   group('as a PDF', () {
@@ -90,20 +91,10 @@ void main() {
     });
 
     test('carries nothing a filesystem will refuse', () {
-      final awkward = Project(
-        id: 'p',
-        name: 'ספר: א/ב "מיוחד"',
-        type: ProjectType.sefer,
-        price: 1,
-        expenses: 0,
-        targetDaily: 1,
-        targetMonthly: 1,
-        linesPerPage: 10,
-      );
-      final t = PlanTable(
-        title: awkward.name,
-        headings: const [],
-        rows: const [],
+      const t = ExportTable(
+        title: 'ספר: א/ב "מיוחד"',
+        headings: [],
+        rows: [],
         summary: '',
       );
       final name = PlanExport.fileName(t, 'xlsx');

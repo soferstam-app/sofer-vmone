@@ -139,10 +139,13 @@ void main() {
 
     test('has a heading row and one line per day', () {
       final lines = table().toCsv().split('\r\n');
-      expect(lines[1], contains('תאריך'));
-      expect(lines[1], contains('להגיע עד'));
-      // title, headings, 29 days, a blank, the summary
-      expect(lines.where((l) => l.isNotEmpty), hasLength(32));
+      // Found rather than indexed, so the test is about the table having a
+      // heading row and a day per line, not about where the title sits.
+      final headings = lines.firstWhere((l) => l.contains('תאריך'));
+      expect(headings, contains('להגיע עד'));
+
+      final after = lines.sublist(lines.indexOf(headings) + 1);
+      expect(after.where((l) => l.isNotEmpty), hasLength(29));
     });
 
     test('quotes a cell that contains a comma', () {
