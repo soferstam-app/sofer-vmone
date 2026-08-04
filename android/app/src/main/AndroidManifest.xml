@@ -1,4 +1,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The one request this app makes: asking GitHub whether a newer release
+         exists, and only when the writer presses the button. Flutter declares
+         INTERNET in the debug and profile manifests for its own tooling, so the
+         check worked every time it was tried during development and could not
+         work in a single release build ever shipped. It fails as a SocketException,
+         UpdateService catches everything, and the writer is told "לא הצלחתי לבדוק
+         עדכונים כרגע" — which is exactly what a blocked network looks like, and
+         this audience is often behind content filtering. So the one failure
+         nobody would think to investigate was the one that was always going to
+         happen. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
