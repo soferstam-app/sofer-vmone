@@ -20,7 +20,15 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
   final StorageService _storage = StorageService();
 
+  /// Whether this platform has reminders at all.
+  ///
+  /// Only Android. Windows has no notification plugin here and never had one,
+  /// and a desktop writer has the app open in front of him — so rather than
+  /// showing a setting that quietly does nothing, there is no setting.
+  static bool get isSupported => Platform.isAndroid;
+
   Future<void> init() async {
+    if (!isSupported) return;
     tz.initializeTimeZones();
     try {
       tz.setLocalLocation(tz.getLocation('Asia/Jerusalem'));
@@ -43,7 +51,7 @@ class NotificationService {
   /// full. Booking rather than repeating is what lets a single day be dropped;
   /// see [ReminderSchedule].
   Future<void> scheduleDailyReminder() async {
-    if (!Platform.isAndroid) return;
+    if (!isSupported) return;
 
     // Clears the ring before refilling it, so a changed hour does not leave
     // yesterday's booking standing at the old time.
@@ -92,7 +100,7 @@ class NotificationService {
   /// For when the day's target has already been met: there is nothing to remind
   /// anyone of tonight, and there is everything to remind them of tomorrow.
   Future<void> cancelTodaysReminder() async {
-    if (!Platform.isAndroid) return;
+    if (!isSupported) return;
     await flutterLocalNotificationsPlugin
         .cancel(ReminderSchedule.idFor(DateTime.now()));
   }
@@ -100,7 +108,7 @@ class NotificationService {
   /// Clears the whole queue — for the setting being turned off, and before it
   /// is refilled.
   Future<void> cancelDailyReminder() async {
-    if (!Platform.isAndroid) return;
+    if (!isSupported) return;
 
     for (final id in ReminderSchedule.allIds) {
       await flutterLocalNotificationsPlugin.cancel(id);
@@ -114,7 +122,7 @@ class NotificationService {
   /// Schedules a one-time notification "סיום הפסקה – חזור לכתיבה" after [minutes].
   /// Uses notification id 1 (daily reminder uses 0).
   Future<void> scheduleBreakReminder(int minutes) async {
-    if (!Platform.isAndroid || minutes < 1) return;
+    if (!isSupported || minutes < 1) return;
     cancelBreakReminder();
     try {
       final tz.TZDateTime when = tz.TZDateTime.now(tz.local).add(
@@ -144,7 +152,7 @@ class NotificationService {
   }
 
   Future<void> cancelBreakReminder() async {
-    if (!Platform.isAndroid) return;
+    if (!isSupported) return;
     await flutterLocalNotificationsPlugin.cancel(1);
   }
 }

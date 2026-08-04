@@ -14,7 +14,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 import 'package:sofer_vmone/logic/hebrew_clock.dart';
 import 'package:sofer_vmone/logic/hebrew_work_calendar.dart';
-import 'package:sofer_vmone/logic/monthly_plan.dart';
+import 'package:sofer_vmone/logic/production_plan.dart';
 import 'package:sofer_vmone/models.dart';
 
 void main() {
@@ -57,18 +57,20 @@ void main() {
         linesPerPageAtEntry: 10,
       );
 
-  MonthlyPlan plan({
+  ProductionPlan plan({
     Project? p,
     List<WorkSession> history = const [],
     DateTime? now,
     WorkCalendarRules? rules,
+    Map<DateTime, double> overrides = const {},
   }) =>
-      MonthlyPlan.forMonth(
+      ProductionPlan.forMonth(
         project: p ?? project(),
         history: history,
         anyDayInMonth: firstOfIyar,
         rules: rules ?? WorkCalendarRules.standard,
         dayStart: dayStart,
+        overrides: overrides,
         now: now ?? hebrew(1),
       );
 
@@ -124,7 +126,7 @@ void main() {
     test('a goal set in lines is stated in pages, which is what he writes on',
         () {
       // Fifteen lines a day on a ten-line page is a page and a half.
-      expect(MonthlyPlan.dailyUnits(project(targetDaily: 15, inLines: true)),
+      expect(ProductionPlan.dailyUnits(project(targetDaily: 15, inLines: true)),
           closeTo(1.5, 0.001));
     });
   });
@@ -179,7 +181,7 @@ void main() {
       // Each future working day's own step is larger than a plain daily
       // target, because the shortfall has been shared out across them.
       expect(ahead[1].adjustedTarget - ahead[0].adjustedTarget,
-          greaterThan(MonthlyPlan.dailyUnits(project())));
+          greaterThan(ProductionPlan.dailyUnits(project())));
     });
 
     test('and the month still ends where it always meant to', () {
@@ -207,7 +209,7 @@ void main() {
       final future = p.days.where((d) => d.isFuture && d.isWorkingDay).toList();
 
       final step = future[1].adjustedTarget - future[0].adjustedTarget;
-      expect(step, lessThan(MonthlyPlan.dailyUnits(project())));
+      expect(step, lessThan(ProductionPlan.dailyUnits(project())));
     });
 
     test('and never asks for less than what is already written', () {
@@ -229,6 +231,112 @@ void main() {
       final p = plan(p: project(targetDaily: 0));
       expect(p.closingTarget, p.openingUnits);
       expect(p.behindBy, isNull, reason: 'nothing to fall short of');
+    });
+  });
+
+  group('a week is the same question over fewer days', () {
+    test('runs Sunday to Shabbat, whichever day it is asked about', () {
+      // The Hebrew week begins on Sunday, and a week beginning on Monday would
+      // cut in half exactly the weekend this writer catches up on.
+      for (var offset = 0; offset < 7; offset++) {
+        final asked = hebrew(8).add(Duration(days: offset));
+        final week = ProductionPlan.forWeek(
+          project: project(),
+          history: const [],
+          anyDayInWeek: asked,
+          rules: WorkCalendarRules.standard,
+          dayStart: dayStart,
+          now: hebrew(1),
+        );
+        expect(week.days, hasLength(7));
+        expect(week.from.weekday % 7, 0, reason: 'Sunday');
+        expect(week.to.weekday, DateTime.saturday);
+      }
+    });
+
+    test('opens from where the writer already was', () {
+      // Twelve pages written before the week began: the week plans from twelve,
+      // not from zero.
+      final history = [for (var i = 1; i <= 12; i++) page(i, hebrew(1))];
+      final week = ProductionPlan.forWeek(
+        project: project(),
+        history: history,
+        anyDayInWeek: hebrew(15),
+        rules: WorkCalendarRules.standard,
+        dayStart: dayStart,
+        now: hebrew(15),
+      );
+      expect(week.openingUnits, 12);
+      expect(week.closingTarget, greaterThan(12));
+    });
+
+    test('and asks for the same daily step a month does', () {
+      final week = ProductionPlan.forWeek(
+        project: project(),
+        history: const [],
+        anyDayInWeek: hebrew(8),
+        rules: WorkCalendarRules.standard,
+        dayStart: dayStart,
+        now: hebrew(1),
+      );
+      final working = week.workingDays.toList();
+      for (var i = 1; i < working.length; i++) {
+        expect(working[i].plannedTarget - working[i - 1].plannedTarget,
+            closeTo(1, 0.001));
+      }
+    });
+  });
+
+  group('the writer overrules the calendar', () {
+    // "If I decide I am not writing on a given day, the whole table should
+    // shift." The rules know about Shabbat; they do not know about a wedding.
+    DateTime workingDay(ProductionPlan p) =>
+        p.days.firstWhere((d) => d.isWorkingDay && d.hebrewDay > 3).date;
+
+    test('taking a day off moves everything after it', () {
+      final before = plan();
+      final off = workingDay(before);
+      final after = plan(overrides: {off: 0});
+
+      final beforeEnd = before.days.last.plannedTarget;
+      final afterEnd = after.days.last.plannedTarget;
+      expect(afterEnd, closeTo(beforeEnd - 1, 0.001),
+          reason: 'one working day less is one page less over the stretch');
+
+      final dayAfter = after.days.firstWhere((d) => d.date.isAfter(off) && d.isWorkingDay);
+      final sameBefore =
+          before.days.firstWhere((d) => d.date == dayAfter.date);
+      expect(dayAfter.plannedTarget, lessThan(sameBefore.plannedTarget));
+    });
+
+    test('and the day itself asks for nothing', () {
+      final off = workingDay(plan());
+      final p = plan(overrides: {off: 0});
+      final day = p.days.firstWhere((d) => d.date == off);
+      expect(day.isWorkingDay, isFalse);
+      expect(day.isOverridden, isTrue);
+    });
+
+    test('working a day the calendar closed is allowed too', () {
+      // A sofer who writes on a fast day the rules treat as closed.
+      final closed = plan().days.firstWhere((d) => !d.isWorkingDay);
+      final p = plan(overrides: {closed.date: 1});
+      final day = p.days.firstWhere((d) => d.date == closed.date);
+      expect(day.isWorkingDay, isTrue);
+      expect(day.isOverridden, isTrue);
+    });
+
+    test('an override that agrees with the calendar is not a change', () {
+      final open = plan().days.firstWhere((d) => d.weight == 1);
+      final p = plan(overrides: {open.date: 1});
+      expect(p.days.firstWhere((d) => d.date == open.date).isOverridden, isFalse);
+    });
+
+    test('a half day can be set by hand', () {
+      final open = plan().days.firstWhere((d) => d.weight == 1 && d.hebrewDay > 3);
+      final p = plan(overrides: {open.date: 0.5});
+      final day = p.days.firstWhere((d) => d.date == open.date);
+      expect(day.isHalfDay, isTrue);
     });
   });
 }

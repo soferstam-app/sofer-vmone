@@ -5,7 +5,7 @@ import 'project_comparison_screen.dart';
 import 'quote_screen.dart';
 import 'theme/app_theme.dart';
 import 'widgets/sofer_widgets.dart';
-import 'plan/monthly_plan_screen.dart';
+import 'plan/production_plan_screen.dart';
 
 /// Hub for the analysis tools.
 ///
@@ -47,7 +47,7 @@ class FeaturesScreen extends StatelessWidget {
             title: "לוח חודשי",
             subtitle:
                 "לאיזה עמוד להגיע בכל יום של החודש, ומה להשלים בסוף השבוע",
-            screen: MonthlyPlanScreen(projects: projects, history: history),
+            screen: ProductionPlanScreen(projects: projects, history: history),
           ),
           _tile(
             context,

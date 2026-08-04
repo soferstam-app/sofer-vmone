@@ -4,7 +4,7 @@ import 'package:kosher_dart/kosher_dart.dart';
 import '../hebrew_utils.dart';
 import '../logic/hebrew_clock.dart';
 import '../logic/hebrew_work_calendar.dart';
-import '../logic/monthly_plan.dart';
+import '../logic/production_plan.dart';
 import '../models.dart';
 import '../storage_service.dart';
 import '../theme/app_theme.dart';
@@ -21,12 +21,12 @@ import '../widgets/sofer_widgets.dart';
 /// be added up in the writer's head, on exactly the day he is already behind;
 /// "be at page fourteen" is the answer to both questions at once, and the
 /// catching up is the gap between it and where he is.
-class MonthlyPlanScreen extends StatefulWidget {
+class ProductionPlanScreen extends StatefulWidget {
   final List<Project> projects;
   final List<WorkSession> history;
   final Project? initialProject;
 
-  const MonthlyPlanScreen({
+  const ProductionPlanScreen({
     super.key,
     required this.projects,
     required this.history,
@@ -34,10 +34,10 @@ class MonthlyPlanScreen extends StatefulWidget {
   });
 
   @override
-  State<MonthlyPlanScreen> createState() => _MonthlyPlanScreenState();
+  State<ProductionPlanScreen> createState() => _ProductionPlanScreenState();
 }
 
-class _MonthlyPlanScreenState extends State<MonthlyPlanScreen> {
+class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
   final StorageService _storage = StorageService();
 
   Project? _project;
@@ -110,7 +110,7 @@ class _MonthlyPlanScreenState extends State<MonthlyPlanScreen> {
     };
   }
 
-  Widget _summary(BuildContext context, MonthlyPlan plan, Project project) {
+  Widget _summary(BuildContext context, ProductionPlan plan, Project project) {
     final t = SoferTokens.of(context);
     final behind = plan.behindBy;
 
@@ -226,7 +226,7 @@ class _MonthlyPlanScreenState extends State<MonthlyPlanScreen> {
   }
 
   /// The month as weeks, Sunday first, with the leading blanks a calendar needs.
-  Widget _grid(BuildContext context, MonthlyPlan plan, Project project) {
+  Widget _grid(BuildContext context, ProductionPlan plan, Project project) {
     final t = SoferTokens.of(context);
     const names = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
 
@@ -343,7 +343,7 @@ class _MonthlyPlanScreenState extends State<MonthlyPlanScreen> {
                           );
                         }
 
-                        final plan = MonthlyPlan.forMonth(
+                        final plan = ProductionPlan.forMonth(
                           project: project,
                           history: widget.history,
                           anyDayInMonth: _month,

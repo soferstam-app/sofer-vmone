@@ -776,7 +776,7 @@ class _SoferHomeState extends State<SoferHome>
     );
     // Today's only. Cancelling the whole queue is what the old code did, and it
     // silenced the reminder for every day after as well.
-    if (Platform.isAndroid && metToday) {
+    if (NotificationService.isSupported && metToday) {
       NotificationService().cancelTodaysReminder();
     } else {
       // Tops the week up, so the queue never runs dry for anyone recording work.

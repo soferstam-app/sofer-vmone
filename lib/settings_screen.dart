@@ -594,17 +594,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _ruledSettings() {
     return ListView(
       children: [
-        const SoferSectionTitle("תזכורות"),
-        _toggle(
-          "התראות יומיות",
-          "תזכורת לעמידה ביעד הכתיבה",
-          _notificationsEnabled,
-          _updateNotificationSettings,
-        ),
-        if (_notificationsEnabled)
-          _entry("שעת תזכורת", _notificationTime.format(context),
-              onTap: _pickNotificationTime),
-        const SoferRule(strong: true),
+        // Android only, and hidden rather than shown disabled. A setting that
+        // cannot do anything on the platform it is displayed on is worse than
+        // an absent one: the writer sets it, and nothing ever happens.
+        if (NotificationService.isSupported) ...[
+          const SoferSectionTitle("תזכורות"),
+          _toggle(
+            "התראות יומיות",
+            "תזכורת יומית לרישום העבודה",
+            _notificationsEnabled,
+            _updateNotificationSettings,
+          ),
+          if (_notificationsEnabled)
+            _entry("שעת תזכורת", _notificationTime.format(context),
+                onTap: _pickNotificationTime),
+          const SoferRule(strong: true),
+        ],
 
         const SoferSectionTitle("לוח ותאריכים"),
         _entry("עיצוב", themeController.choice.label,
@@ -773,23 +778,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 elevation: 2,
                 child: Column(
                   children: [
-                    SwitchListTile(
-                      title: const Text("התראות יומיות"),
-                      subtitle: const Text("תזכורת יומית לעמידה ביעדי הכתיבה"),
-                      value: _notificationsEnabled,
-                      onChanged: _updateNotificationSettings,
-                      secondary: Icon(Icons.notifications_active,
-                          color: SoferTokens.of(context).accent),
-                    ),
-                    if (_notificationsEnabled)
-                      ListTile(
-                        title: const Text("שעת תזכורת"),
-                        subtitle: Text(_notificationTime.format(context)),
-                        leading: Icon(Icons.access_time,
+                    // See the ruled layout: hidden where it cannot work.
+                    if (NotificationService.isSupported) ...[
+                      SwitchListTile(
+                        title: const Text("התראות יומיות"),
+                        subtitle:
+                            const Text("תזכורת יומית לרישום העבודה"),
+                        value: _notificationsEnabled,
+                        onChanged: _updateNotificationSettings,
+                        secondary: Icon(Icons.notifications_active,
                             color: SoferTokens.of(context).accent),
-                        onTap: _pickNotificationTime,
                       ),
-                    const Divider(),
+                      if (_notificationsEnabled)
+                        ListTile(
+                          title: const Text("שעת תזכורת"),
+                          subtitle: Text(_notificationTime.format(context)),
+                          leading: Icon(Icons.access_time,
+                              color: SoferTokens.of(context).accent),
+                          onTap: _pickNotificationTime,
+                        ),
+                      const Divider(),
+                    ],
                     SwitchListTile(
                       title: const Text("תאריכים לועזיים"),
                       subtitle: const Text(
