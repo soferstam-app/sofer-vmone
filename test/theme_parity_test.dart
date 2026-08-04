@@ -223,8 +223,13 @@ void main() {
       (tester, theme) async {
         // Every entry, in both arrangements. A setting that exists in one look
         // and not in another is the failure this is here to catch.
+        //
+        // Reminders are deliberately absent: they are Android-only, and these
+        // tests run on the host. Asserting them here would be asserting that a
+        // setting appears on a platform where it can do nothing — see
+        // NotificationService.isSupported.
         for (final entry in [
-          'התראות יומיות',
+          'מטבע',
           'תאריכים לועזיים',
           'עיצוב',
           'ימי עבודה',
