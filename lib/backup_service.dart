@@ -121,6 +121,49 @@ class BackupService {
     return 'sofer-vmone-backup-$stamp.json';
   }
 
+  /// The name of the day's automatic copy.
+  ///
+  /// One file per day rather than one per sitting: a writer who records six
+  /// times a day does not want six files, and a writer who records once a week
+  /// does not want the only copy overwritten by the next one.
+  String autoBackupFileName(DateTime day) {
+    String two(int n) => n.toString().padLeft(2, '0');
+    return 'sofer-vmone-${day.year}-${two(day.month)}-${two(day.day)}.json';
+  }
+
+  /// Writes a copy of everything into the folder the writer chose, if any.
+  ///
+  /// The whole of "automatic backup": he names a folder he already syncs —
+  /// Dropbox, OneDrive — and the app leaves a file in it. No sync engine, no
+  /// account, no server, and nothing that can be lost by this app failing.
+  ///
+  /// Nothing is ever deleted from that folder. A day's file is a few hundred
+  /// kilobytes and the writer's own filing is not this app's to tidy; deleting
+  /// something it did not have to delete is the one failure a backup feature
+  /// cannot afford.
+  ///
+  /// Returns quietly on any failure. The folder may have been moved, unmounted
+  /// or renamed since it was chosen, and none of that is a reason to interrupt
+  /// someone who has just finished writing.
+  Future<bool> writeAutoBackup({DateTime? now}) async {
+    final folder = await _storage.getAutoBackupFolder();
+    if (folder == null) return false;
+
+    try {
+      final dir = Directory(folder);
+      if (!await dir.exists()) return false;
+
+      final content = await buildBackupJson();
+      final file = File('${dir.path}${Platform.pathSeparator}'
+          '${autoBackupFileName(now ?? DateTime.now())}');
+      await file.writeAsString(content, flush: true);
+      return true;
+    } catch (e) {
+      debugPrint('Auto backup failed: $e');
+      return false;
+    }
+  }
+
   /// Lets the user pick a location and writes the backup there.
   ///
   /// Desktop shows the native save dialog. Android opens the system document

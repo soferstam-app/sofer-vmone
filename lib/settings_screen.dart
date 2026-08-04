@@ -18,6 +18,7 @@ import 'version.dart';
 import 'update_service.dart';
 import 'logic/version_check.dart';
 import 'widgets/confirm.dart';
+import 'package:file_picker/file_picker.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -42,6 +43,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Set<Currency> _inUse = const {};
   bool _isExporting = false;
   bool _checkingUpdate = false;
+
+  /// Where a copy is left after every sitting, or null when the writer has not
+  /// asked for one.
+  String? _autoBackupFolder;
   String _soferName = '';
 
   /// Stored records this build cannot read. They are kept untouched and take no
@@ -65,6 +70,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final unreadable = await _storage.unreadableRecordCount();
     final currency = await _storage.getCurrency();
     final inUse = await _storage.currenciesInUse();
+    final autoFolder = await _storage.getAutoBackupFolder();
     if (mounted) {
       setState(() {
         _notificationsEnabled = enabled;
@@ -75,6 +81,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _unreadable = unreadable;
         _currency = currency;
         _inUse = inUse;
+        _autoBackupFolder = autoFolder;
       });
     }
   }
@@ -224,6 +231,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (others.isEmpty) return "";
     return "יש רשומות גם ב-${others.map((c) => c.name).join(', ')}. "
         "סכומים ממטבעות שונים אינם מחוברים זה לזה.";
+  }
+
+  /// Chooses the folder a copy is left in after every sitting.
+  ///
+  /// The point is a folder the writer already syncs. He gets automatic backup
+  /// without this app ever holding an account, a server, or a copy of his work
+  /// anywhere he cannot see.
+  Future<void> _pickAutoBackupFolder() async {
+    if (_autoBackupFolder != null) {
+      final off = await confirmAction(
+        context,
+        title: "גיבוי אוטומטי",
+        message: "התיקייה הנוכחית:\n$_autoBackupFolder\n\n"
+            "לכבות את הגיבוי האוטומטי? הקבצים שכבר נכתבו יישארו במקומם.",
+        confirmLabel: "כבה",
+        danger: true,
+      );
+      if (!off || !mounted) return;
+      await _storage.setAutoBackupFolder(null);
+      if (mounted) setState(() => _autoBackupFolder = null);
+      return;
+    }
+
+    final picked = await FilePicker.platform.getDirectoryPath(
+      dialogTitle: 'בחר תיקייה לגיבוי אוטומטי',
+    );
+    if (picked == null || !mounted) return;
+
+    await _storage.setAutoBackupFolder(picked);
+    if (!mounted) return;
+    setState(() => _autoBackupFolder = picked);
+    // Written at once rather than waiting for the next sitting, so the writer
+    // can go and look at the file instead of taking it on trust.
+    final ok = await BackupService.instance.writeAutoBackup();
+    if (!mounted) return;
+    ok
+        ? showAppSuccess(context, "גיבוי אוטומטי הופעל, ונכתב קובץ ראשון")
+        : showAppError(context, "לא הצלחתי לכתוב לתיקייה שנבחרה");
   }
 
   Future<void> _updateNotificationSettings(bool enabled) async {
@@ -610,6 +655,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onTap: _pickNotificationTime),
           const SoferRule(strong: true),
         ],
+
+        _entry(
+            "גיבוי אוטומטי",
+            _autoBackupFolder == null ? "כבוי" : "פעיל",
+            note: _autoBackupFolder ??
+                "בחר תיקייה שאתה מסנכרן ממילא — עותק ייכתב אחרי כל ישיבה",
+            onTap: _pickAutoBackupFolder),
+        const SoferRule(strong: true),
 
         const SoferSectionTitle("לוח ותאריכים"),
         _entry("עיצוב", themeController.choice.label,

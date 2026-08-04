@@ -25,6 +25,7 @@ class StorageService {
   static const String _keyAppTheme = 'app_theme';
   static const String _keyAutoNightTheme = 'auto_night_theme';
   static const String _keyCurrency = 'currency';
+  static const String _keyAutoBackupFolder = 'auto_backup_folder';
 
   Future<void> saveProjects(List<Project> projects) =>
       _saveList(_keyProjects, projects.map((p) => p.toJson()).toList());
@@ -210,6 +211,9 @@ class StorageService {
         _keyAppTheme: prefs.getString(_keyAppTheme),
         _keyAutoNightTheme: prefs.getBool(_keyAutoNightTheme),
         _keyCurrency: prefs.getString(_keyCurrency),
+        // Deliberately *not* restored on another device — see BackupService.
+        // A path from one machine means nothing on another.
+        _keyAutoBackupFolder: prefs.getString(_keyAutoBackupFolder),
       },
     };
   }
@@ -399,6 +403,26 @@ class StorageService {
       for (final e in expenses)
         if (!e.isDeleted) e.currency,
     };
+  }
+
+  /// Where a copy of everything is written after each sitting, or null when
+  /// the writer has not asked for one.
+  ///
+  /// A folder he already syncs — Dropbox, OneDrive — which is what makes this
+  /// "automatic backup" without the app growing a sync engine of its own.
+  Future<String?> getAutoBackupFolder() async {
+    final prefs = await SharedPreferences.getInstance();
+    final path = prefs.getString(_keyAutoBackupFolder);
+    return path == null || path.isEmpty ? null : path;
+  }
+
+  Future<void> setAutoBackupFolder(String? path) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (path == null || path.isEmpty) {
+      await prefs.remove(_keyAutoBackupFolder);
+    } else {
+      await prefs.setString(_keyAutoBackupFolder, path);
+    }
   }
 
   Future<bool> getUseGregorianDates() async {

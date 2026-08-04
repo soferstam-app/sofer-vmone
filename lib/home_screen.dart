@@ -28,6 +28,7 @@ import 'widgets/confirm.dart';
 import 'logic/daily_goal.dart';
 import 'home/floating_window.dart';
 import 'home/cards_smart_body.dart';
+import 'backup_service.dart';
 
 class SoferHome extends StatefulWidget {
   const SoferHome({super.key, this.windowsFloatingMode});
@@ -774,6 +775,11 @@ class _SoferHomeState extends State<SoferHome>
       day: DateTime.now(),
       dayStart: _dayStart,
     );
+    // A copy into the folder the writer chose, if he chose one. Fire and
+    // forget: a backup that cannot be written is not a reason to interrupt
+    // someone who has just finished writing, and the next sitting tries again.
+    BackupService.instance.writeAutoBackup();
+
     // Today's only. Cancelling the whole queue is what the old code did, and it
     // silenced the reminder for every day after as well.
     if (NotificationService.isSupported && metToday) {
