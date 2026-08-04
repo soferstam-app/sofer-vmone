@@ -41,7 +41,12 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
   final StorageService _storage = StorageService();
 
   Project? _project;
-  DateTime _month = DateTime.now();
+  DateTime _anchor = DateTime.now();
+
+  /// A week or a month. The same engine answers both — they are one question
+  /// over a different number of days — and a writer planning a weekend wants
+  /// the short view without the other three weeks around it.
+  bool _weekly = false;
   WorkCalendarRules _rules = WorkCalendarRules.standard;
   DayStart _dayStart = DayStart.midnight;
   bool _loaded = false;
@@ -65,10 +70,16 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
     });
   }
 
-  /// One Hebrew month back or forward. Walked through the Hebrew calendar
-  /// rather than by adding thirty days, which drifts.
-  void _shiftMonth(int by) {
-    final jd = JewishDate.fromDateTime(_month);
+  /// A week or a Hebrew month back or forward.
+  ///
+  /// A month is walked through the Hebrew calendar rather than by adding thirty
+  /// days, which drifts; a week is exactly seven days and needs no such care.
+  void _shift(int by) {
+    if (_weekly) {
+      setState(() => _anchor = _anchor.add(Duration(days: 7 * by)));
+      return;
+    }
+    final jd = JewishDate.fromDateTime(_anchor);
     var year = jd.getJewishYear();
     var month = jd.getJewishMonth();
     final monthsInYear = jd.isJewishLeapYear() ? 13 : 12;
@@ -90,11 +101,18 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
         }
       }
     }
-    setState(() => _month = JewishDate.initDate(
+    setState(() => _anchor = JewishDate.initDate(
           jewishYear: year,
           jewishMonth: month,
           jewishDayOfMonth: 1,
         ).getGregorianCalendar());
+  }
+
+  /// What the stretch is called at the top of the screen.
+  String _periodLabel(ProductionPlan plan) {
+    if (!_weekly) return formatDisplayDateMonth(_anchor, false);
+    return 'שבוע: ${formatDisplayDate(plan.from, false)} – '
+        '${formatDisplayDate(plan.to, false)}';
   }
 
   /// A position as a sofer says it — "עמוד יד", "מזוזה 3".
@@ -124,7 +142,7 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
                 ? 'אתה בקצב. עד סוף החודש: ${_position(project, plan.closingTarget)}.'
                 : 'אתה מפגר ב-${behind.ceil()} '
                     '${project.type == ProjectType.sefer ? "עמודים" : "יחידות"}. '
-                    'עד סוף החודש: ${_position(project, plan.closingTarget)}.',
+                    'עד הסוף: ${_position(project, plan.closingTarget)}.',
             style: TextStyle(
               fontFamily: t.labelFamily,
               fontSize: 15,
@@ -301,30 +319,15 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
                           ),
                         ),
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-                        child: Row(
-                          children: [
-                            IconButton(
-                              onPressed: () => _shiftMonth(-1),
-                              icon: const Icon(Icons.chevron_right),
-                              tooltip: 'חודש קודם',
-                            ),
-                            Expanded(
-                              child: Text(
-                                formatDisplayDateMonth(_month, false),
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                    fontFamily: t.numeralFamily,
-                                    fontSize: 19,
-                                    color: t.ink),
-                              ),
-                            ),
-                            IconButton(
-                              onPressed: () => _shiftMonth(1),
-                              icon: const Icon(Icons.chevron_left),
-                              tooltip: 'חודש הבא',
-                            ),
+                        padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                        child: SegmentedButton<bool>(
+                          segments: const [
+                            ButtonSegment(value: false, label: Text('חודש')),
+                            ButtonSegment(value: true, label: Text('שבוע')),
                           ],
+                          selected: {_weekly},
+                          onSelectionChanged: (v) =>
+                              setState(() => _weekly = v.first),
                         ),
                       ),
                       Builder(builder: (context) {
@@ -343,15 +346,52 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
                           );
                         }
 
-                        final plan = ProductionPlan.forMonth(
-                          project: project,
-                          history: widget.history,
-                          anyDayInMonth: _month,
-                          rules: _rules,
-                          dayStart: _dayStart,
-                        );
+                        final plan = _weekly
+                            ? ProductionPlan.forWeek(
+                                project: project,
+                                history: widget.history,
+                                anyDayInWeek: _anchor,
+                                rules: _rules,
+                                dayStart: _dayStart,
+                              )
+                            : ProductionPlan.forMonth(
+                                project: project,
+                                history: widget.history,
+                                anyDayInMonth: _anchor,
+                                rules: _rules,
+                                dayStart: _dayStart,
+                              );
                         return Column(
                           children: [
+                            Padding(
+                              padding:
+                                  const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                              child: Row(
+                                children: [
+                                  IconButton(
+                                    onPressed: () => _shift(-1),
+                                    icon: const Icon(Icons.chevron_right),
+                                    tooltip:
+                                        _weekly ? 'שבוע קודם' : 'חודש קודם',
+                                  ),
+                                  Expanded(
+                                    child: Text(
+                                      _periodLabel(plan),
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                          fontFamily: t.numeralFamily,
+                                          fontSize: 17,
+                                          color: t.ink),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    onPressed: () => _shift(1),
+                                    icon: const Icon(Icons.chevron_left),
+                                    tooltip: _weekly ? 'שבוע הבא' : 'חודש הבא',
+                                  ),
+                                ],
+                              ),
+                            ),
                             _summary(context, plan, project),
                             const SoferRule(),
                             Padding(
