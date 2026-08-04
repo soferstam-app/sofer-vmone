@@ -27,6 +27,7 @@ class StorageService {
   static const String _keyCurrency = 'currency';
   static const String _keyAutoBackupFolder = 'auto_backup_folder';
   static const String _keySmartReminder = 'smart_reminder';
+  static const String _keyLastProject = 'last_project';
 
   Future<void> saveProjects(List<Project> projects) =>
       _saveList(_keyProjects, projects.map((p) => p.toJson()).toList());
@@ -216,6 +217,7 @@ class StorageService {
         // A path from one machine means nothing on another.
         _keyAutoBackupFolder: prefs.getString(_keyAutoBackupFolder),
         _keySmartReminder: prefs.getBool(_keySmartReminder),
+        _keyLastProject: prefs.getString(_keyLastProject),
       },
     };
   }
@@ -438,6 +440,22 @@ class StorageService {
   Future<void> setSmartReminder(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keySmartReminder, value);
+  }
+
+  /// The commission the entry form was last used on.
+  ///
+  /// Offered as the default next time, because a sofer works on one job for
+  /// weeks and being asked to pick it out of a list every single time is asking
+  /// him to answer a question the app already knows the answer to.
+  Future<String?> getLastProjectId() async {
+    final prefs = await SharedPreferences.getInstance();
+    final id = prefs.getString(_keyLastProject);
+    return id == null || id.isEmpty ? null : id;
+  }
+
+  Future<void> setLastProjectId(String id) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyLastProject, id);
   }
 
   Future<bool> getUseGregorianDates() async {

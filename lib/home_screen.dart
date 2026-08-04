@@ -129,8 +129,12 @@ class _SoferHomeState extends State<SoferHome>
   ///
   /// The day the rule produces is written alongside it, for an older build that
   /// looks for the day and knows nothing about rules.
+  ///
+  /// A record that already carries a day is left alone: the writer stated it
+  /// himself, and a rule for interpreting measurements has no business
+  /// overruling an assertion.
   List<WorkSession> _stampWorkingDay(List<WorkSession> sessions) => sessions
-      .map((s) => s.dayRule != null
+      .map((s) => s.dayRule != null || s.workingDateAtEntry != null
           ? s
           : s.copyWith(
               dayRule: _dayStart,

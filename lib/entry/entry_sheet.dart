@@ -158,9 +158,12 @@ class _EntrySheetState extends State<_EntrySheet> {
   void initState() {
     super.initState();
     _project = widget.initialProject;
-    _date = widget.isManual
-        ? null
-        : DateLogic.effectiveDate(DateTime.now(), widget.dayStart);
+    if (_project == null) _restoreLastProject();
+    // Today, for both paths. It used to open blank for a manual entry, so
+    // every single record began by asking a writer what day it was — and the
+    // overwhelmingly common answer is the one the device already knows. The
+    // date row still opens a picker, and "no date" is still in it for backlog.
+    _date = DateLogic.effectiveDate(DateTime.now(), widget.dayStart);
     final project = _project;
     if (project != null) _prefillPositionFrom(project);
   }
@@ -206,6 +209,22 @@ class _EntrySheetState extends State<_EntrySheet> {
       _pageCtrl.text = _prefilledPage;
       _lineFromCtrl.text = _prefilledLine;
     });
+  }
+
+  /// Falls back to the commission this form was last used on.
+  ///
+  /// Only when the screen behind did not already have one in hand. A sofer
+  /// works on one job for weeks, and being asked to pick it out of a list every
+  /// time is being asked something the app already knows.
+  Future<void> _restoreLastProject() async {
+    final id = await _storage.getLastProjectId();
+    if (id == null || !mounted) return;
+    for (final p in widget.projects) {
+      if (p.id != id) continue;
+      setState(() => _project = p);
+      _prefillPositionFrom(p);
+      return;
+    }
   }
 
   /// Opens a new commission without leaving the form.
@@ -322,6 +341,9 @@ class _EntrySheetState extends State<_EntrySheet> {
         project: project,
         start: times.start,
         end: times.end,
+        // Only when he said it. The timer's own records carry no stated date
+        // and are filed by the boundary rule, as they should be.
+        statedDate: widget.isManual ? _date : null,
         isManual: widget.isManual,
         backlogOnly: backlogOnly,
         // Stated, not inferred later from start == end. A writer who chose not
@@ -365,6 +387,8 @@ class _EntrySheetState extends State<_EntrySheet> {
           reachedLine: reachedLine,
           backlogOnly: backlogOnly,
         ));
+        // Remembered for the next entry, so the list is not asked again.
+        await _storage.setLastProjectId(project.id);
         return true;
     }
   }

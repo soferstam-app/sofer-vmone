@@ -17,6 +17,16 @@ class EntryInput {
   final DateTime start;
   final DateTime end;
 
+  /// The day the writer said this work was done on, when he said it.
+  ///
+  /// Null for anything the app timed itself. The difference decides which day
+  /// the record is filed under, and it is a real one: the day-boundary rule
+  /// exists to interpret a *measurement* — a moment the app captured and has to
+  /// decide the meaning of. A date a person typed is not a measurement, it is
+  /// an assertion, and re-deriving it from the hour beside it told writers who
+  /// entered Tuesday 00:30 that they had worked on Monday.
+  final DateTime? statedDate;
+
   final bool isManual;
   final bool backlogOnly;
   final bool timeRecorded;
@@ -43,6 +53,7 @@ class EntryInput {
     required this.project,
     required this.start,
     required this.end,
+    this.statedDate,
     required this.isManual,
     this.backlogOnly = false,
     this.timeRecorded = true,
@@ -327,10 +338,11 @@ class EntryBuilder {
 
   /// The fields every record of an entry shares.
   ///
-  /// `workingDateAtEntry` is deliberately left unset. Which day a session is
-  /// filed under depends on the writer's day-boundary setting, which is not
-  /// this file's business — the caller stamps every record it saves through one
-  /// place, so the two paths cannot answer it differently.
+  /// `workingDateAtEntry` is set only when the writer stated a date. Where he
+  /// did not, it is deliberately left unset: which day a timed session belongs
+  /// to depends on his day-boundary setting, which is not this file's business,
+  /// and the caller stamps every such record through one place so the two paths
+  /// cannot answer it differently.
   static WorkSession _session(
     EntryInput input, {
     required String id,
@@ -361,5 +373,6 @@ class EntryBuilder {
         timeRecorded: input.timeRecorded,
         linesPerPageAtEntry: linesPerPageAtEntry,
         entryId: entryId,
+        workingDateAtEntry: input.statedDate,
       );
 }
