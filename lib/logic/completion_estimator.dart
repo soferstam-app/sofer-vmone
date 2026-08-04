@@ -1,4 +1,6 @@
 import '../models.dart';
+import 'date_logic.dart';
+import 'hebrew_clock.dart';
 import 'hebrew_work_calendar.dart';
 import 'production_calculator.dart';
 import 'profit_calculator.dart';
@@ -53,18 +55,30 @@ class CompletionEstimator {
     return ProfitCalculator.billableUnits(project, sessions);
   }
 
-  /// Units produced per working day, measured from the writer's own history.
+  /// What the writer gets done on a day he actually writes.
   ///
-  /// The denominator is working days between the first and last session — not
-  /// elapsed days — so a project written over a Pesach is not judged to be slow
-  /// because of the fortnight nobody was writing.
+  /// The denominator is **days he wrote on**, counted from the records
+  /// themselves. It used to be every working day between his first session and
+  /// his last, which is a different quantity and a far smaller one: a sofer who
+  /// opened a commission in Tishrei, wrote one page, and started in earnest in
+  /// Shevat had four idle months in the divisor. His pace came out at a
+  /// fraction of the truth and the delivery date years away, which is exactly
+  /// what writers reported — "I do not understand what these figures are."
   ///
-  /// Returns null when there is nothing timed to measure.
+  /// Days he did not write are not slow days. They are days that say nothing
+  /// about how fast he writes, and a forecast built on them is a forecast about
+  /// his calendar rather than about his hand.
+  ///
+  /// The rules are still needed downstream, to turn a number of writing days
+  /// into a date on a calendar that has Shabbatot and festivals in it.
+  ///
+  /// Returns null when there is nothing to measure.
   static double? measuredPace(
     Project project,
     Iterable<WorkSession> history,
-    WorkCalendarRules rules,
-  ) {
+    WorkCalendarRules rules, {
+    DayStart dayStart = DayStart.midnight,
+  }) {
     final sessions = history
         .where((s) =>
             s.projectId == project.id && !s.isDeleted && !s.backlogOnly)
@@ -74,16 +88,17 @@ class CompletionEstimator {
     final units = ProfitCalculator.billableUnits(project, sessions);
     if (units <= 0) return null;
 
-    var first = sessions.first.startTime;
-    var last = sessions.first.endTime;
+    // The working day each session was filed under, so two sittings either side
+    // of midnight are one day and not two — which would halve the pace of
+    // anyone who writes late.
+    final daysWritten = <DateTime>{};
     for (final s in sessions) {
-      if (s.startTime.isBefore(first)) first = s.startTime;
-      if (s.endTime.isAfter(last)) last = s.endTime;
+      final filed = DateLogic.workingDateOf(s, dayStart);
+      daysWritten.add(DateTime(filed.year, filed.month, filed.day));
     }
+    if (daysWritten.isEmpty) return null;
 
-    final workDays = HebrewWorkCalendar.countWorkDays(first, last, rules);
-    if (workDays <= 0) return null;
-    return units / workDays;
+    return units / daysWritten.length;
   }
 
   /// The daily target from the project settings, expressed in billable units.

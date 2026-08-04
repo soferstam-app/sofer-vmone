@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'logic/completion_estimator.dart';
 import 'logic/expense_logic.dart';
 import 'logic/hebrew_work_calendar.dart';
@@ -12,12 +11,12 @@ import 'project/scroll_map.dart';
 import 'storage_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/sofer_widgets.dart';
-import 'widgets/feedback.dart';
 import 'format.dart';
 import 'logic/client_update.dart';
 import 'project/progress_grids.dart';
 import 'project/rhythm_panel.dart';
 import 'logic/hebrew_clock.dart';
+import 'project/client_update_sheet.dart';
 
 class ProjectSummaryScreen extends StatefulWidget {
   final List<Project> projects;
@@ -226,21 +225,16 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                       formatDate: (d) =>
                           formatDisplayDate(d, _useGregorianDates),
                     );
-                    final uri = Uri(
-                      scheme: 'mailto',
-                      path: project.clientEmail,
-                      query:
-                          'subject=${Uri.encodeComponent('עדכון התקדמות – ${project.name}')}&body=${Uri.encodeComponent(body)}',
+                    if (!mounted) return;
+                    // Shown before it is sent. Going straight to a mailto link
+                    // failed in two ways nobody could tell from the app being
+                    // broken — see showClientUpdate.
+                    await showClientUpdate(
+                      context: context,
+                      body: body,
+                      subject: 'עדכון התקדמות – ${project.name}',
+                      to: project.clientEmail,
                     );
-                    final opened = await canLaunchUrl(uri)
-                        ? await launchUrl(uri)
-                        : false;
-                    if (!opened && mounted) {
-                      // Previously this failed silently, so a user without a
-                      // mail app configured saw nothing happen at all.
-                      showAppError(context,
-                          "לא נמצאה תוכנת מייל במכשיר. ניתן להעתיק את פרטי ההתקדמות ידנית.");
-                    }
                   },
                   icon: const Icon(Icons.email),
                   label: const Text("שלח עדכון ללקוח"),
