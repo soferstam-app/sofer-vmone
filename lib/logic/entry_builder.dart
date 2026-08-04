@@ -31,6 +31,10 @@ class EntryInput {
   final bool backlogOnly;
   final bool timeRecorded;
 
+  /// Whether the hour on [start] is a fact about when the writing happened, or
+  /// only where a length had to be anchored. See [WorkSession.timeOfDayKnown].
+  final bool timeOfDayKnown;
+
   final String pageFrom;
   final String pageTo;
   final String lineFrom;
@@ -57,6 +61,7 @@ class EntryInput {
     required this.isManual,
     this.backlogOnly = false,
     this.timeRecorded = true,
+    this.timeOfDayKnown = true,
     this.pageFrom = '',
     this.pageTo = '',
     this.lineFrom = '',
@@ -371,6 +376,7 @@ class EntryBuilder {
         isManual: input.isManual,
         backlogOnly: input.backlogOnly,
         timeRecorded: input.timeRecorded,
+        timeOfDayKnown: input.timeOfDayKnown,
         linesPerPageAtEntry: linesPerPageAtEntry,
         entryId: entryId,
         workingDateAtEntry: input.statedDate,

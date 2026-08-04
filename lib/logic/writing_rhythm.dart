@@ -63,6 +63,10 @@ class WritingRhythm {
       // A record with no time cannot speak about pace at all. It is not a zero
       // and must not be averaged as one.
       if (!s.timeRecorded || s.duration < _tooShortToJudge) continue;
+      // Nor can one that only ever gave a length. Its hour is where the app
+      // had to anchor a duration, not where the writer was sitting — and
+      // counting it made "your best hour" a fact about a default.
+      if (!s.timeOfDayKnown) continue;
 
       final written = project.type == ProjectType.sefer
           ? ProductionCalculator.seferLinesInSession(s)

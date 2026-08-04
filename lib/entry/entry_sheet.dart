@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart' show CupertinoTimerPicker, CupertinoTimerPickerMode;
 import 'package:flutter/material.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 
@@ -134,6 +135,22 @@ class _EntrySheetState extends State<_EntrySheet> {
   TimeOfDay _startTime = const TimeOfDay(hour: 9, minute: 0);
   TimeOfDay _endTime = const TimeOfDay(hour: 10, minute: 0);
   bool _includeTime = true;
+
+  /// How long he wrote, when he says it that way.
+  ///
+  /// The form used to ask only "from what hour to what hour", which is two
+  /// pickers and a subtraction to answer a question a sofer already knows the
+  /// answer to. He knows he wrote for two hours; he does not necessarily
+  /// remember that it was 21:10 to 23:10.
+  Duration _worked = const Duration(hours: 1);
+
+  /// Whether he is giving a length or a stretch of the clock.
+  ///
+  /// A length is the default because it is what he has in his head. The clock
+  /// is still there for anyone who wants it — and it is the only one of the two
+  /// that says *when* he was writing, which is why the record keeps the
+  /// difference rather than guessing.
+  bool _byDuration = true;
 
   String _tefillinMode = 'set';
   String _tefillinPart = 'head';
@@ -313,6 +330,13 @@ class _EntrySheetState extends State<_EntrySheet> {
       final noon = DateTime(date.year, date.month, date.day, 12, 0);
       return (start: noon, end: noon);
     }
+    if (_byDuration) {
+      // Anchored at midday and run backwards, because a length has to be
+      // stored as a pair of timestamps and something has to hold it. The hour
+      // means nothing, and `timeOfDayKnown: false` says so — see WorkSession.
+      final noon = DateTime(date.year, date.month, date.day, 12, 0);
+      return (start: noon.subtract(_worked), end: noon);
+    }
     final range = SessionLogic.buildTimeRange(
       date: date,
       startHour: _startTime.hour,
@@ -352,6 +376,9 @@ class _EntrySheetState extends State<_EntrySheet> {
         timeRecorded: widget.isManual
             ? (_date != null && _includeTime)
             : !_sittingTimeUsed,
+        // Whether the hour on the record is a fact or an anchor. The timer
+        // always knows; a hand-entered length never does.
+        timeOfDayKnown: widget.isManual ? !_byDuration : true,
         pageFrom: _pageCtrl.text,
         pageTo: _pageToCtrl.text,
         lineFrom: _lineFromCtrl.text,
@@ -696,15 +723,19 @@ class _EntrySheetState extends State<_EntrySheet> {
 
     String durationText = "";
     if (hasDate && _includeTime) {
-      final range = SessionLogic.buildTimeRange(
-        date: _date!,
-        startHour: _startTime.hour,
-        startMinute: _startTime.minute,
-        endHour: _endTime.hour,
-        endMinute: _endTime.minute,
-      );
-      final d = range.end.difference(range.start);
-      durationText = "סה\"כ זמן מחושב: ${formatSpanLong(d)}";
+      if (_byDuration) {
+        durationText = "זמן כתיבה: ${formatSpanLong(_worked)}";
+      } else {
+        final range = SessionLogic.buildTimeRange(
+          date: _date!,
+          startHour: _startTime.hour,
+          startMinute: _startTime.minute,
+          endHour: _endTime.hour,
+          endMinute: _endTime.minute,
+        );
+        durationText =
+            "סה\"כ זמן מחושב: ${formatSpanLong(range.end.difference(range.start))}";
+      }
     }
 
     return Column(
@@ -733,30 +764,56 @@ class _EntrySheetState extends State<_EntrySheet> {
             child: Text("שעות כתיבה זמינות רק לאחר בחירת תאריך.",
                 style: TextStyle(fontSize: 12, color: t.caution)),
           ),
-        if (hasDate && _includeTime)
-          Row(
-            children: [
-              const Text("התחלה: "),
-              TextButton(
-                onPressed: () async {
-                  final picked = await showTimePicker(
-                      context: context, initialTime: _startTime);
-                  if (picked != null) setInner(() => _startTime = picked);
-                },
-                child: Text(_startTime.format(context)),
-              ),
-              const Spacer(),
-              const Text("סיום: "),
-              TextButton(
-                onPressed: () async {
-                  final picked = await showTimePicker(
-                      context: context, initialTime: _endTime);
-                  if (picked != null) setInner(() => _endTime = picked);
-                },
-                child: Text(_endTime.format(context)),
-              ),
+        if (hasDate && _includeTime) ...[
+          // A length or a stretch of the clock. Two answers to one question,
+          // and only the second knows *when* — see `timeOfDayKnown`.
+          SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment(value: true, label: Text("משך")),
+              ButtonSegment(value: false, label: Text("משעה עד שעה")),
             ],
+            selected: {_byDuration},
+            onSelectionChanged: (v) => setInner(() => _byDuration = v.first),
           ),
+          const SizedBox(height: 6),
+          if (_byDuration)
+            SizedBox(
+              height: 132,
+              child: CupertinoTimerPicker(
+                mode: CupertinoTimerPickerMode.hm,
+                initialTimerDuration: _worked,
+                // Five-minute steps. A sofer reporting his own morning is not
+                // accurate to the minute, and offering sixty of them to scroll
+                // through is offering precision nobody has.
+                minuteInterval: 5,
+                onTimerDurationChanged: (d) => setInner(() => _worked = d),
+              ),
+            )
+          else
+            Row(
+              children: [
+                const Text("התחלה: "),
+                TextButton(
+                  onPressed: () async {
+                    final picked = await showTimePicker(
+                        context: context, initialTime: _startTime);
+                    if (picked != null) setInner(() => _startTime = picked);
+                  },
+                  child: Text(_startTime.format(context)),
+                ),
+                const Spacer(),
+                const Text("סיום: "),
+                TextButton(
+                  onPressed: () async {
+                    final picked = await showTimePicker(
+                        context: context, initialTime: _endTime);
+                    if (picked != null) setInner(() => _endTime = picked);
+                  },
+                  child: Text(_endTime.format(context)),
+                ),
+              ],
+            ),
+        ],
         Text(durationText,
             style: TextStyle(
                 fontSize: 12, color: t.accent, fontWeight: FontWeight.bold)),

@@ -341,6 +341,22 @@ class WorkSession implements Mergeable<WorkSession> {
   /// nothing, because it is the only thing the older writer could have meant.
   final bool timeRecorded;
 
+  /// Whether the hour on [startTime] is a fact about when the writing happened.
+  ///
+  /// False when the writer gave only a length — "two hours" — and the app had
+  /// to anchor it somewhere to store a pair of timestamps. The duration is
+  /// real; the position on the clock is not, and anything that asks *when* a
+  /// sofer writes has to know the difference.
+  ///
+  /// This was already wrong before anyone could say so: the entry form opened
+  /// at 09:00 by default, so every manual record left untouched swore the
+  /// writer had begun at nine. His "best hour" was an artefact of a default.
+  ///
+  /// Absent on records written before the field existed, which read as true —
+  /// the same reading the old code gave them, and the only one available for a
+  /// record that never stated otherwise.
+  final bool timeOfDayKnown;
+
   /// Lines per page as configured when this session was recorded (sefer only).
   ///
   /// Production and profit are derived from lines divided by page size, so
@@ -449,6 +465,7 @@ class WorkSession implements Mergeable<WorkSession> {
     'isManual',
     'backlogOnly',
     'timeRecorded',
+    'timeOfDayKnown',
     'linesPerPageAtEntry',
     'entryId',
     'dayRule',
@@ -473,6 +490,7 @@ class WorkSession implements Mergeable<WorkSession> {
     required this.isManual,
     this.backlogOnly = false,
     bool? timeRecorded,
+    this.timeOfDayKnown = true,
     this.linesPerPageAtEntry,
     this.entryId,
     this.dayRule,
@@ -520,6 +538,7 @@ class WorkSession implements Mergeable<WorkSession> {
       'isManual': isManual,
       'backlogOnly': backlogOnly,
       'timeRecorded': timeRecorded,
+      'timeOfDayKnown': timeOfDayKnown,
       'linesPerPageAtEntry': linesPerPageAtEntry,
       'entryId': entryId,
       'dayRule': dayRule?.toJson(),
@@ -563,6 +582,7 @@ class WorkSession implements Mergeable<WorkSession> {
       // times is exactly what the old writer meant by them.
       timeRecorded:
           JsonCompat.boolean(json['timeRecorded'], end.isAfter(start)),
+      timeOfDayKnown: JsonCompat.boolean(json['timeOfDayKnown'], true),
       linesPerPageAtEntry: JsonCompat.intOrNull(json['linesPerPageAtEntry']),
       // Empty is absent: a record that names no entry belongs to no group, and
       // an empty string would gather every such record into one.
@@ -597,6 +617,7 @@ class WorkSession implements Mergeable<WorkSession> {
         isManual: isManual,
         backlogOnly: backlogOnly,
         timeRecorded: timeRecorded,
+        timeOfDayKnown: timeOfDayKnown,
         linesPerPageAtEntry: linesPerPageAtEntry,
         entryId: entryId,
         dayRule: dayRule,
@@ -616,6 +637,7 @@ class WorkSession implements Mergeable<WorkSession> {
     String? description,
     bool? backlogOnly,
     bool? timeRecorded,
+    bool? timeOfDayKnown,
     bool? isDeleted,
     DayStart? dayRule,
     DateTime? workingDateAtEntry,
@@ -637,6 +659,7 @@ class WorkSession implements Mergeable<WorkSession> {
       // a session that never had a time into one that did, or the other way
       // round.
       timeRecorded: timeRecorded ?? this.timeRecorded,
+      timeOfDayKnown: timeOfDayKnown ?? this.timeOfDayKnown,
       linesPerPageAtEntry: linesPerPageAtEntry,
       // Kept through an edit. A corrected record is still one of the records
       // that save produced, and losing the mark would strand the rest of the

@@ -39,6 +39,9 @@ class ReminderPlan {
     final counts = <int, int>{};
     for (final s in sessions) {
       if (s.isDeleted || s.backlogOnly || !s.timeRecorded) continue;
+      // Only where the hour means something. A record that gave a length and
+      // no clock time says nothing about when he sits down.
+      if (!s.timeOfDayKnown) continue;
       if (s.duration < _tooShort) continue;
       final hour = s.startTime.hour;
       counts[hour] = (counts[hour] ?? 0) + 1;
@@ -79,9 +82,10 @@ class ReminderPlan {
     // this is the belt to that pair of braces.
     if (left <= 0) return generalMessage;
 
-    final unit = project.type == ProjectType.sefer
-        ? (project.dailyGoalInLines ? 'שורות' : 'שורות')
-        : 'יחידות';
+    // Lines for a sefer whichever way its goal was set, because that is what
+    // DailyGoal counts in: a target given in pages is multiplied out to lines
+    // before anything is compared, so the remainder is lines too.
+    final unit = project.type == ProjectType.sefer ? 'שורות' : 'יחידות';
 
     // Nothing at all written today reads differently from nearly finished, and
     // saying "3 left" to someone who has not started is simply wrong-footed.

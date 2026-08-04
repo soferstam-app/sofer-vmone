@@ -116,6 +116,53 @@ void main() {
     });
   });
 
+  group('an hour that is only an anchor', () {
+    test('says nothing about when he writes', () {
+      // A record entered as "two hours" has to be stored as a pair of
+      // timestamps, and something has to hold them. Counting that hour made
+      // "your best hour" a fact about where the form happened to anchor it —
+      // and the form used to open at 09:00, so it was a fact about a default.
+      final anchored = [
+        for (var i = 0; i < 5; i++)
+          WorkSession(
+            id: 'a$i',
+            projectId: 'p',
+            startTime: DateTime(2026, 7, 20, 11),
+            endTime: DateTime(2026, 7, 20, 12),
+            amount: 1,
+            startLine: 1,
+            endLine: 30,
+            description: '',
+            isManual: true,
+            timeOfDayKnown: false,
+            linesPerPageAtEntry: 42,
+          ),
+      ];
+      expect(byHour(anchored), isEmpty);
+    });
+
+    test('while a measured one still does', () {
+      expect(byHour([sitting(hour: 6, lines: 12)]), hasLength(1));
+    });
+
+    test('a record from before the field existed counts, as it always did', () {
+      final old = WorkSession.fromJson({
+        'id': 'old',
+        'projectId': 'p',
+        'startTime': DateTime(2026, 7, 20, 6).toIso8601String(),
+        'endTime': DateTime(2026, 7, 20, 7).toIso8601String(),
+        'amount': 1,
+        'startLine': 1,
+        'endLine': 12,
+        'description': '',
+        'isManual': true,
+        'linesPerPageAtEntry': 42,
+      });
+      expect(old.timeOfDayKnown, isTrue);
+      expect(byHour([old]), hasLength(1));
+    });
+  });
+
   group('the best hour', () {
     test('is the fastest one measured often enough', () {
       final slots = byHour([
