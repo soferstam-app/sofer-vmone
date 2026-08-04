@@ -456,14 +456,14 @@ class _Actions extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: SoferSecondaryButton("עצור וסיים",
+            child: SoferSecondaryButton("סיים",
                 icon: Icons.stop, expand: true, onPressed: actions.onStop),
           ),
         ]),
       ] else ...[
         // Plain mode has no line to mark, and a paused sitting has nothing to
         // mark yet — so stopping is the leading action again.
-        SoferPrimaryButton("עצור וסיים",
+        SoferPrimaryButton("סיים",
             icon: Icons.stop, expand: true, onPressed: actions.onStop),
         const SizedBox(height: 8),
         SoferSecondaryButton(

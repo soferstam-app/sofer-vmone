@@ -1203,7 +1203,7 @@ class _SoferHomeState extends State<SoferHome>
                                 OutlinedButton.icon(
                                   onPressed: _stopTimer,
                                   icon: const Icon(Icons.stop),
-                                  label: const Text("סיום ושמירה"),
+                                  label: const Text("סיים"),
                                   style: OutlinedButton.styleFrom(
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 20, vertical: 15),

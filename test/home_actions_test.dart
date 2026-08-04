@@ -93,10 +93,10 @@ void main() {
     testWidgets('stopping and breaking step back', (tester) async {
       await pump(tester, snapshot: snap(running: true), isSmart: true);
 
-      expect(find.widgetWithText(SoferSecondaryButton, 'עצור וסיים'),
+      expect(find.widgetWithText(SoferSecondaryButton, 'סיים'),
           findsOneWidget);
       expect(find.widgetWithText(SoferSecondaryButton, 'הפסקה'), findsOneWidget);
-      expect(find.widgetWithText(SoferPrimaryButton, 'עצור וסיים'), findsNothing);
+      expect(find.widgetWithText(SoferPrimaryButton, 'סיים'), findsNothing);
     });
   });
 
@@ -105,7 +105,7 @@ void main() {
       // Nothing is tracking the position, so there is nothing to mark.
       await pump(tester, snapshot: snap(running: true), isSmart: false);
 
-      expect(find.widgetWithText(SoferPrimaryButton, 'עצור וסיים'),
+      expect(find.widgetWithText(SoferPrimaryButton, 'סיים'),
           findsOneWidget);
       expect(find.text('סיימתי שורה'), findsNothing);
     });
@@ -114,7 +114,7 @@ void main() {
       await pump(tester,
           snapshot: snap(running: true, paused: true), isSmart: true);
 
-      expect(find.widgetWithText(SoferPrimaryButton, 'עצור וסיים'),
+      expect(find.widgetWithText(SoferPrimaryButton, 'סיים'),
           findsOneWidget);
       expect(find.widgetWithText(SoferSecondaryButton, 'המשך'), findsOneWidget);
     });
