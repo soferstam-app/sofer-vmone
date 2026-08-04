@@ -120,6 +120,14 @@ class _SoferHomeState extends State<SoferHome>
   DateTime _effectiveDate(DateTime now) =>
       DateLogic.effectiveDate(now, _dayStart);
 
+  /// Records filed under today's working day — the writer's own day, so a
+  /// sitting at half past midnight still counts under the day he was working.
+  int get _recordsToday => history
+      .where((s) =>
+          !s.isDeleted &&
+          DateLogic.sessionIsOnDay(s, DateTime.now(), _dayStart))
+      .length;
+
   /// Freezes onto each session the day-boundary rule it is being filed under.
   ///
   /// Every path that records work goes through here. The rule is settled once,
@@ -324,12 +332,19 @@ class _SoferHomeState extends State<SoferHome>
       title: const Text('סופר ומונה'),
       centerTitle: t.isCards,
       actions: [
-        IconButton(
-          icon: Icon(_isSmartWorkflow ? Icons.my_location : Icons.timer_outlined),
-          tooltip: _isSmartWorkflow
-              ? "מצב חכם — עובד לפי המיקום. לחץ למצב רגיל"
-              : "מצב רגיל — טיימר והזנה בסוף. לחץ למצב חכם",
-          color: _isSmartWorkflow ? t.accent : null,
+        // Named, not only drawn. This one control changes how the whole app
+        // behaves, and it used to say so in a tooltip alone — which on a phone
+        // opens on a long press, so in practice it said nothing. Someone tapped
+        // it by accident, the app started behaving differently, and there was
+        // no way to tell what had been pressed or how to undo it.
+        TextButton.icon(
+          icon: Icon(
+              _isSmartWorkflow ? Icons.my_location : Icons.timer_outlined,
+              size: 20),
+          label: Text(_isSmartWorkflow ? "מצב חכם" : "מצב רגיל"),
+          style: TextButton.styleFrom(
+            foregroundColor: _isSmartWorkflow ? t.accent : null,
+          ),
           // Left enabled while the timer runs: it explains why it will not
           // switch, which a greyed-out button cannot do.
           onPressed: _toggleWorkflowMode,
@@ -987,6 +1002,18 @@ class _SoferHomeState extends State<SoferHome>
       appBar: _homeAppBar(),
       body: LayoutBuilder(
         builder: (context, constraints) {
+          // A first launch has no commissions, and this layout used to answer
+          // that with a running timer and no hint that anything was missing.
+          // The writer pressed start, wrote, pressed stop — and only then was
+          // told there was nothing to file it against. The ruled layouts have
+          // always said so first; this one is the default, so it is the one
+          // almost everybody met.
+          if (projects.isEmpty) {
+            return _ModernEmptyState(
+              hebrewDate: _getDisplayDate(_effectiveDate(DateTime.now())),
+              onCreateProject: _navigateToProjects,
+            );
+          }
           return SingleChildScrollView(
             child: ConstrainedBox(
               constraints: BoxConstraints(minHeight: constraints.maxHeight),
@@ -1011,6 +1038,40 @@ class _SoferHomeState extends State<SoferHome>
                             ),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 16),
+                      // Which commission this sitting belongs to, on the screen
+                      // rather than at the end of it. The ruled layouts have
+                      // always asked here; this one asked only once the writer
+                      // had already stopped the clock, which is the wrong end of
+                      // the job to be choosing at.
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 28),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 420),
+                          child: _clock.isRunning || _clock.isPaused
+                              ? Text(
+                                  _selectedProject?.name ?? '',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w500),
+                                )
+                              : DropdownButtonFormField<Project>(
+                                  initialValue: _selectedProject,
+                                  isExpanded: true,
+                                  decoration: const InputDecoration(
+                                    border: UnderlineInputBorder(),
+                                    hintText: "בחר פרויקט",
+                                  ),
+                                  items: [
+                                    for (final p in projects)
+                                      DropdownMenuItem(
+                                          value: p, child: Text(p.name)),
+                                  ],
+                                  onChanged: _selectProject,
+                                ),
+                        ),
                       ),
                       const SizedBox(height: 16),
                       Padding(
@@ -1085,7 +1146,10 @@ class _SoferHomeState extends State<SoferHome>
                             );
                           },
                           child: ElevatedButton.icon(
-                            onPressed: _startTimer,
+                            // Nothing to start until there is a commission to
+                            // start it against.
+                            onPressed:
+                                _selectedProject == null ? null : _startTimer,
                             icon: const Icon(Icons.play_arrow, size: 28),
                             label: const Text("תחילת כתיבה"),
                             style: ElevatedButton.styleFrom(
@@ -1098,47 +1162,55 @@ class _SoferHomeState extends State<SoferHome>
                           ),
                         )
                       else
+                        // Ordered by how often a writer reaches for them.
+                        // Finishing a line happens dozens of times in a sitting;
+                        // breaking and stopping happen once each. The big button
+                        // used to be the one pressed last.
                         Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
+                            if (!_clock.isPaused) ...[
+                              ElevatedButton.icon(
+                                onPressed: _recordLap,
+                                icon: const Icon(Icons.flag, size: 28),
+                                label: const Text("סיימתי שורה"),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.green[400],
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 50, vertical: 25),
+                                  textStyle: const TextStyle(fontSize: 20),
+                                ),
+                              ),
+                              const SizedBox(height: 18),
+                            ],
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                ElevatedButton.icon(
+                                OutlinedButton.icon(
                                   onPressed:
                                       _clock.isPaused ? _startTimer : _pauseTimer,
                                   icon: Icon(_clock.isPaused
                                       ? Icons.play_arrow
                                       : Icons.coffee),
                                   label: Text(_clock.isPaused ? "המשך" : "הפסקת קפה"),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.orange[300],
-                                    foregroundColor: Colors.white,
+                                  style: OutlinedButton.styleFrom(
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 20, vertical: 15),
                                   ),
                                 ),
                                 const SizedBox(width: 15),
-                                ElevatedButton.icon(
+                                OutlinedButton.icon(
                                   onPressed: _stopTimer,
                                   icon: const Icon(Icons.stop),
                                   label: const Text("סיום ושמירה"),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.red[400],
-                                    foregroundColor: Colors.white,
+                                  style: OutlinedButton.styleFrom(
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 20, vertical: 15),
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 15),
-                            if (!_clock.isPaused)
-                              OutlinedButton.icon(
-                                onPressed: _recordLap,
-                                icon: const Icon(Icons.flag),
-                                label: const Text("סיימתי שורה (Lap)"),
-                              ),
                           ],
                         ),
                       const SizedBox(height: 20),
@@ -1149,17 +1221,24 @@ class _SoferHomeState extends State<SoferHome>
                           label: const Text("הוספת כתיבה ידנית (ללא טיימר)"),
                         ),
                       const SizedBox(height: 12),
-                      if (history.isNotEmpty)
+                      // Today's work, not "this session". The old line counted
+                      // records since the app was opened — a number that reset
+                      // itself on every launch and told the writer nothing about
+                      // his day. "סשן" was not a Hebrew word either.
+                      if (_recordsToday > 0)
                         Text(
-                          "נשמרו ${history.length} רשומות בסשן זה",
+                          "נשמרו היום $_recordsToday רשומות",
                           style: const TextStyle(color: Colors.grey),
                         ),
-                      IconButton(
-                        icon: const Icon(Icons.coffee),
-                        tooltip: "תרום לפיתוח האפליקציה",
+                      // Not a coffee cup: while the timer runs, "הפסקת קפה" is
+                      // on the same screen, and the two meant different things
+                      // under the same picture.
+                      TextButton.icon(
+                        icon: const Icon(Icons.volunteer_activism, size: 20),
+                        label: const Text("תרומה לפיתוח"),
                         onPressed: () => launchUrl(
                             Uri.parse('https://buymeacoffee.com/soferstam')),
-                        style: IconButton.styleFrom(
+                        style: TextButton.styleFrom(
                           foregroundColor: Colors.brown.shade700,
                         ),
                       ),
@@ -1179,4 +1258,56 @@ class _SoferHomeState extends State<SoferHome>
     );
   }
 
+}
+
+/// No commissions yet, in the cards layout — an invitation rather than a timer
+/// with nothing behind it.
+///
+/// Says the same thing the ruled layouts say, and offers the way out of it,
+/// because "open a project first" is only useful next to the door.
+class _ModernEmptyState extends StatelessWidget {
+  final String hebrewDate;
+  final VoidCallback onCreateProject;
+
+  const _ModernEmptyState({
+    required this.hebrewDate,
+    required this.onCreateProject,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(hebrewDate,
+                style: TextStyle(fontSize: 15, color: Colors.grey.shade600)),
+            const SizedBox(height: 22),
+            Text("אין עוד פרויקטים",
+                style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: 10),
+            Text(
+              "פתח פרויקט ראשון כדי להתחיל למדוד כתיבה, רווח וצפי סיום.",
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 15, height: 1.6, color: Colors.grey.shade700),
+            ),
+            const SizedBox(height: 26),
+            ElevatedButton.icon(
+              onPressed: onCreateProject,
+              icon: const Icon(Icons.add),
+              label: const Text("פתיחת פרויקט ראשון"),
+              style: ElevatedButton.styleFrom(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 32, vertical: 18),
+                textStyle: const TextStyle(fontSize: 17),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

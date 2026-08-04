@@ -1,0 +1,143 @@
+// Which button is the big one.
+//
+// During a sitting a writer marks a finished line dozens of times; he breaks
+// once and stops once, at the end. The screen had it the other way round — the
+// filled, full-width button was "stop and finish", and marking a line was a
+// small outlined one beneath it. So the action under the thumb all evening was
+// the one pressed last, and the one pressed last was easiest to hit by mistake.
+//
+// This is a layout decision that no compiler protects and that a later tidy-up
+// would quietly undo, which is why it is written down here.
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:sofer_vmone/home/ruled_home_body.dart';
+import 'package:sofer_vmone/models.dart';
+import 'package:sofer_vmone/theme/app_theme.dart';
+import 'package:sofer_vmone/widgets/sofer_widgets.dart';
+
+void main() {
+  final project = Project(
+    id: 'p1',
+    name: 'ספר תורה לבית הכנסת',
+    type: ProjectType.sefer,
+    price: 40000,
+    expenses: 0,
+    targetDaily: 1,
+    targetMonthly: 20,
+    linesPerPage: 42,
+    totalPages: 245,
+  );
+
+  HomeSnapshot snap({
+    bool running = false,
+    bool paused = false,
+    List<Project>? projects,
+  }) =>
+      HomeSnapshot(
+        project: projects != null && projects.isEmpty ? null : project,
+        projects: projects ?? [project],
+        hebrewDate: 'כ״ג באב תשפ״ו',
+        isRunning: running,
+        isPaused: paused,
+        elapsed: '01:24:07',
+        currentLine: 12,
+        pageLabel: 'עמוד ק״מ',
+        positionUnit: 'שורה',
+        todayOutput: '31 שורות',
+      );
+
+  final actions = HomeActions(
+    onStart: () {},
+    onStop: () {},
+    onBreak: () {},
+    onManualEntry: () {},
+    onNextLine: () {},
+    onEditPosition: () {},
+    onProjectChanged: (_) {},
+    onResume: () {},
+  );
+
+  Future<void> pump(
+    WidgetTester tester, {
+    required HomeSnapshot snapshot,
+    required bool isSmart,
+  }) async {
+    tester.view.physicalSize = const Size(800, 1720);
+    tester.view.devicePixelRatio = 2.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(MaterialApp(
+      theme: AppThemeBuilder.build(AppTheme.klaf),
+      home: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          body: RuledHomeBody(
+              snapshot: snapshot, actions: actions, isSmart: isSmart),
+        ),
+      ),
+    ));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(tester.takeException(), isNull);
+  }
+
+  group('mid-sitting, tracking the position', () {
+    testWidgets('marking a line is the leading action', (tester) async {
+      await pump(tester,
+          snapshot: snap(running: true), isSmart: true);
+
+      expect(find.widgetWithText(SoferPrimaryButton, 'סיימתי שורה'),
+          findsOneWidget);
+    });
+
+    testWidgets('stopping and breaking step back', (tester) async {
+      await pump(tester, snapshot: snap(running: true), isSmart: true);
+
+      expect(find.widgetWithText(SoferSecondaryButton, 'עצור וסיים'),
+          findsOneWidget);
+      expect(find.widgetWithText(SoferSecondaryButton, 'הפסקה'), findsOneWidget);
+      expect(find.widgetWithText(SoferPrimaryButton, 'עצור וסיים'), findsNothing);
+    });
+  });
+
+  group('where there is no line to mark', () {
+    testWidgets('a plain sitting leads with stopping', (tester) async {
+      // Nothing is tracking the position, so there is nothing to mark.
+      await pump(tester, snapshot: snap(running: true), isSmart: false);
+
+      expect(find.widgetWithText(SoferPrimaryButton, 'עצור וסיים'),
+          findsOneWidget);
+      expect(find.text('סיימתי שורה'), findsNothing);
+    });
+
+    testWidgets('a paused sitting does too', (tester) async {
+      await pump(tester,
+          snapshot: snap(running: true, paused: true), isSmart: true);
+
+      expect(find.widgetWithText(SoferPrimaryButton, 'עצור וסיים'),
+          findsOneWidget);
+      expect(find.widgetWithText(SoferSecondaryButton, 'המשך'), findsOneWidget);
+    });
+  });
+
+  group('before anything has started', () {
+    testWidgets('starting is the leading action', (tester) async {
+      await pump(tester, snapshot: snap(), isSmart: false);
+
+      expect(find.widgetWithText(SoferPrimaryButton, 'תחילת כתיבה'),
+          findsOneWidget);
+      expect(find.widgetWithText(SoferSecondaryButton, 'הזנה ידנית'),
+          findsOneWidget);
+    });
+
+    testWidgets('with no commissions, the screen says so and offers no timer',
+        (tester) async {
+      // A first launch. A running clock with nothing to file the sitting
+      // against is not a start screen, it is a trap.
+      await pump(tester, snapshot: snap(projects: []), isSmart: false);
+
+      expect(find.text('אין עוד פרויקטים'), findsOneWidget);
+      expect(find.text('תחילת כתיבה'), findsNothing);
+    });
+  });
+}

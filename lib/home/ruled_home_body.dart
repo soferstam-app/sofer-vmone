@@ -440,27 +440,39 @@ class _Actions extends StatelessWidget {
       ]);
     }
 
+    // Ordered by how often a writer reaches for them. Finishing a line happens
+    // dozens of times in a sitting; breaking and stopping happen once each, at
+    // the end. The button under the thumb should be the one being pressed all
+    // the way through, not the one pressed last.
     return Column(children: [
-      SoferPrimaryButton("עצור וסיים",
-          icon: Icons.stop, expand: true, onPressed: actions.onStop),
-      const SizedBox(height: 8),
-      Row(children: [
-        Expanded(
-          child: SoferSecondaryButton(
-            s.isPaused ? "המשך" : "הפסקה",
-            icon: s.isPaused ? Icons.play_arrow : Icons.coffee,
-            expand: true,
-            onPressed: actions.onBreak,
+      if (isSmart && !s.isPaused) ...[
+        SoferPrimaryButton("סיימתי שורה",
+            icon: Icons.flag, expand: true, onPressed: actions.onNextLine),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(
+            child: SoferSecondaryButton("הפסקה",
+                icon: Icons.coffee, expand: true, onPressed: actions.onBreak),
           ),
-        ),
-        if (isSmart) ...[
           const SizedBox(width: 8),
           Expanded(
-            child: SoferSecondaryButton("סיימתי שורה",
-                icon: Icons.flag, expand: true, onPressed: actions.onNextLine),
+            child: SoferSecondaryButton("עצור וסיים",
+                icon: Icons.stop, expand: true, onPressed: actions.onStop),
           ),
-        ],
-      ]),
+        ]),
+      ] else ...[
+        // Plain mode has no line to mark, and a paused sitting has nothing to
+        // mark yet — so stopping is the leading action again.
+        SoferPrimaryButton("עצור וסיים",
+            icon: Icons.stop, expand: true, onPressed: actions.onStop),
+        const SizedBox(height: 8),
+        SoferSecondaryButton(
+          s.isPaused ? "המשך" : "הפסקה",
+          icon: s.isPaused ? Icons.play_arrow : Icons.coffee,
+          expand: true,
+          onPressed: actions.onBreak,
+        ),
+      ],
     ]);
   }
 }
