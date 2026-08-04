@@ -48,6 +48,11 @@ dependencies:
   # גיבוי וייצוא: שמירה מקומית (כל הפלטפורמות) ושיתוף דרך מערכת ההפעלה
   file_picker: ^8.1.7
   share_plus: ^10.1.4
+  # Printing and PDF for the production table. `printing` brings its own copy
+  # of `pdf`, and gives preview, print and save-as-PDF through one mechanism.
+  pdf: ^3.11.0
+  printing: ^5.13.0
+  excel: ^4.0.6
 
 dev_dependencies:
   flutter_test:
