@@ -1,18 +1,31 @@
 # Template. Copy to android/key.properties and fill in — that file is
 # git-ignored and must never be committed.
 #
-# Create the keystore first (choose your own password when prompted; nothing
-# here should be a password you use anywhere else):
+# Read docs/SIGNING.md first. This app has already shipped, signed with the
+# machine's debug key, so moving to a real one is a key *rotation* and not a
+# swap: an APK signed with a new certificate and no proof of rotation cannot be
+# installed over an existing copy, and the only way through is uninstalling,
+# which deletes the writer's work.
 #
-#   keytool -genkeypair -v -keystore C:\keys\sofer-upload.jks -storetype JKS \
-#           -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+# Create the keystore (choose a password used nowhere else):
 #
-# Then back the .jks file up in more than one place. It is the app's identity:
-# without it no future version can be installed over an existing one, and every
-# user would have to uninstall — losing their projects — to move to a new key.
-# Keep it outside the repository.
+#   keytool -genkeypair -v -keystore C:\keys\sofer-release.jks -storetype JKS \
+#           -keyalg RSA -keysize 4096 -validity 10000 -alias sofer
+#
+# Then back up THREE files, in at least two places that are not this machine:
+#
+#   C:\keys\sofer-release.jks       the new key
+#   ~/.android/debug.keystore       the old one — still the trust anchor on
+#                                   Android 7 and 8, and not reproducible
+#   C:\keys\lineage.bin             the proof of rotation
+#
+# Losing the first means no user can ever be updated again. Losing the second
+# strands everyone on an older Android.
+#
+# Gradle cannot attach the lineage, so tool/sign_release.ps1 signs the built
+# APK afterwards and refuses to pass anything without it.
 
-storeFile=C:/keys/sofer-upload.jks
+storeFile=C:/keys/sofer-release.jks
 storePassword=
-keyAlias=upload
+keyAlias=sofer
 keyPassword=
