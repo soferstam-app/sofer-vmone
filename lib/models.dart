@@ -62,6 +62,17 @@ class Project implements Mergeable<Project> {
   final String? clientEmail;
   final DateTime? targetCompletionDate;
 
+  /// Days the writer has decided about himself, against what the calendar says.
+  ///
+  /// Keyed by the day, valued by how much of it he writes: 0 for a day he is
+  /// not working, 0.5 for half, 1 for a full one. The work calendar knows about
+  /// Shabbat and Chanukah; it does not know about the wedding on Tuesday, and a
+  /// plan he cannot correct is a plan he will stop believing.
+  ///
+  /// Stored with the commission because it is a fact about *this* job: a writer
+  /// may take Tuesday off one sefer and spend it on another.
+  final Map<DateTime, double> planOverrides;
+
   /// Fields written by a newer version of the app, carried through untouched.
   ///
   /// Without this, a phone on a newer build exporting to a PC on an older one
@@ -90,6 +101,7 @@ class Project implements Mergeable<Project> {
     'restoredAt',
     'clientEmail',
     'targetCompletionDate',
+    'planOverrides',
   };
 
   /// The size of the job in billable units — pages, mezuzot or sets — however
@@ -117,8 +129,18 @@ class Project implements Mergeable<Project> {
     this.restoredAt,
     this.clientEmail,
     this.targetCompletionDate,
+    this.planOverrides = const {},
     this.extraFields = const {},
   }) : lastUpdated = lastUpdated ?? DateTime.now();
+
+  /// A day as it is keyed. Date only — a plan is about days, not moments, and
+  /// a stray time would make two entries for one Tuesday.
+  static DateTime planDay(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  static String _planKey(DateTime d) {
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${d.year}-${two(d.month)}-${two(d.day)}';
+  }
 
   Map<String, dynamic> toJson() {
     return {
@@ -149,6 +171,9 @@ class Project implements Mergeable<Project> {
       'restoredAt': restoredAt?.toIso8601String(),
       'clientEmail': clientEmail,
       'targetCompletionDate': targetCompletionDate?.toIso8601String(),
+      'planOverrides': {
+        for (final e in planOverrides.entries) _planKey(e.key): e.value,
+      },
     };
   }
 
@@ -181,6 +206,19 @@ class Project implements Mergeable<Project> {
       restoredAt: tombstone.restoredAt,
       clientEmail: json['clientEmail'] as String?,
       targetCompletionDate: JsonCompat.dateOrNull(json['targetCompletionDate']),
+      // A key that is not a date, or a weight that is not a number, is dropped
+      // rather than taken down with the whole commission: one bad entry in a
+      // planning aid must not cost the writer the job it belongs to.
+      planOverrides: switch (json['planOverrides']) {
+        final Map raw => {
+            for (final e in raw.entries)
+              if (DateTime.tryParse('${e.key}') != null &&
+                  JsonCompat.doubleOrNull(e.value) != null)
+                planDay(DateTime.parse('${e.key}')):
+                    JsonCompat.doubleOrNull(e.value)!,
+          },
+        _ => const <DateTime, double>{},
+      },
       extraFields: JsonCompat.unknownKeys(json, _knownKeys),
     );
   }
@@ -199,6 +237,7 @@ class Project implements Mergeable<Project> {
     bool? isDeleted,
     String? clientEmail,
     DateTime? targetCompletionDate,
+    Map<DateTime, double>? planOverrides,
   }) {
     return Project(
       id: id,
@@ -220,6 +259,7 @@ class Project implements Mergeable<Project> {
       restoredAt: isDeleted == false ? DateTime.now() : restoredAt,
       clientEmail: clientEmail ?? this.clientEmail,
       targetCompletionDate: targetCompletionDate ?? this.targetCompletionDate,
+      planOverrides: planOverrides ?? this.planOverrides,
       extraFields: extraFields,
     );
   }
@@ -243,6 +283,7 @@ class Project implements Mergeable<Project> {
         restoredAt: restoredAt,
         clientEmail: clientEmail,
         targetCompletionDate: targetCompletionDate,
+        planOverrides: planOverrides,
         extraFields: extraFields,
       );
 

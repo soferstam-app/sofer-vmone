@@ -26,11 +26,16 @@ class ProductionPlanScreen extends StatefulWidget {
   final List<WorkSession> history;
   final Project? initialProject;
 
+  /// Told when a day is overruled, so the change reaches the rest of the app
+  /// rather than living only on this screen.
+  final void Function(Project updated)? onProjectUpdated;
+
   const ProductionPlanScreen({
     super.key,
     required this.projects,
     required this.history,
     this.initialProject,
+    this.onProjectUpdated,
   });
 
   @override
@@ -115,6 +120,73 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
         '${formatDisplayDate(plan.to, false)}';
   }
 
+  /// Lets the writer overrule the calendar for one day.
+  ///
+  /// The rules know about Shabbat and Chanukah. They do not know that he has a
+  /// wedding on Tuesday, or that he has decided to sit down on a fast day
+  /// after all — and a plan he cannot correct is a plan he will stop believing.
+  ///
+  /// Everything after the day moves, because the plan is a cumulative line and
+  /// not a fixed one. That is the whole reason it was built that way.
+  Future<void> _editDay(Project project, PlannedDay day) async {
+    final chosen = await showDialog<double>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('יום ${formatHebrewNumber(day.hebrewDay)}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'כמה אתה כותב ביום הזה? כל מה שאחריו יזוז בהתאם.',
+              style: TextStyle(fontSize: 13, height: 1.5),
+            ),
+            const SizedBox(height: 12),
+            for (final option in const [
+              (1.0, 'יום מלא'),
+              (0.5, 'חצי יום'),
+              (0.0, 'לא כותב'),
+            ])
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(option.$2),
+                trailing: day.weight == option.$1
+                    ? Icon(Icons.check, color: SoferTokens.of(ctx).accent)
+                    : null,
+                onTap: () => Navigator.pop(ctx, option.$1),
+              ),
+            if (day.isOverridden)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: TextButton.icon(
+                  icon: const Icon(Icons.undo, size: 18),
+                  label: const Text('חזור ללוח'),
+                  onPressed: () => Navigator.pop(ctx, -1.0),
+                ),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('ביטול')),
+        ],
+      ),
+    );
+    if (chosen == null || !mounted) return;
+
+    final key = Project.planDay(day.date);
+    final next = Map<DateTime, double>.from(project.planOverrides);
+    // -1 is "forget my decision", which is not the same as "do not write":
+    // one hands the day back to the calendar, the other overrules it with zero.
+    chosen < 0 ? next.remove(key) : next[key] = chosen;
+
+    final updated = project.copyWith(planOverrides: next);
+    await _storage.saveProjects([updated]);
+    if (!mounted) return;
+    setState(() => _project = updated);
+    widget.onProjectUpdated?.call(updated);
+  }
+
   /// A position as a sofer says it — "עמוד יד", "מזוזה 3".
   String _position(Project project, double units) {
     // Rounded up: reaching a target means finishing the unit it lands in, and
@@ -180,12 +252,16 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
       background = Colors.transparent;
     }
 
-    return Container(
+    return InkWell(
+      onTap: () => _editDay(project, day),
+      child: Container(
       decoration: BoxDecoration(
         color: background,
         border: Border.all(
-            color: day.isToday ? t.accent : t.rule,
-            width: day.isToday ? 1.5 : 0.5),
+            color: day.isOverridden
+                ? t.caution
+                : (day.isToday ? t.accent : t.rule),
+            width: day.isToday || day.isOverridden ? 1.5 : 0.5),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
       child: Column(
@@ -239,6 +315,7 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
               ),
           ],
         ],
+      ),
       ),
     );
   }
@@ -353,6 +430,7 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
                                 anyDayInWeek: _anchor,
                                 rules: _rules,
                                 dayStart: _dayStart,
+                                overrides: project.planOverrides,
                               )
                             : ProductionPlan.forMonth(
                                 project: project,
@@ -360,6 +438,7 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
                                 anyDayInMonth: _anchor,
                                 rules: _rules,
                                 dayStart: _dayStart,
+                                overrides: project.planOverrides,
                               );
                         return Column(
                           children: [

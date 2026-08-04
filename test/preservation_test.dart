@@ -403,6 +403,84 @@ void main() {
     });
   });
 
+  group('a plan a writer corrected by hand', () {
+    // "If I decide I am not writing on a given day, the whole table should
+    // shift." The decision is a fact about the commission and has to survive
+    // being closed, synced and reopened, or the table quietly reverts and the
+    // writer stops believing it.
+    final tuesday = DateTime(2026, 8, 4);
+
+    Project withOverrides(Map<DateTime, double> o) => Project(
+          id: 'p',
+          name: 'ספר',
+          type: ProjectType.sefer,
+          price: 100,
+          expenses: 0,
+          targetDaily: 1,
+          targetMonthly: 20,
+          planOverrides: o,
+        );
+
+    test('survives a save and a load', () {
+      final back = Project.fromJson(
+          jsonDecode(jsonEncode(withOverrides({tuesday: 0}).toJson()))
+              as Map<String, dynamic>);
+      expect(back.planOverrides, {tuesday: 0.0});
+    });
+
+    test('a half day keeps its half', () {
+      final back = Project.fromJson(
+          jsonDecode(jsonEncode(withOverrides({tuesday: 0.5}).toJson()))
+              as Map<String, dynamic>);
+      expect(back.planOverrides[tuesday], 0.5);
+    });
+
+    test('the time of day is not part of the key', () {
+      // A plan is about days. A stray time would make two entries for one
+      // Tuesday, and the second would silently win.
+      final p = withOverrides({Project.planDay(DateTime(2026, 8, 4, 17, 30)): 0});
+      expect(p.planOverrides.keys.single, tuesday);
+    });
+
+    test('survives an edit of something else', () {
+      expect(withOverrides({tuesday: 0}).copyWith(name: 'אחר').planOverrides,
+          {tuesday: 0.0});
+    });
+
+    test('a nonsense entry is dropped without costing the commission', () {
+      // One bad entry in a planning aid must not take the job down with it.
+      final p = Project.fromJson({
+        'id': 'p1',
+        'name': 'ספר',
+        'typeName': 'sefer',
+        'price': 100,
+        'expenses': 0,
+        'targetDaily': 1,
+        'targetMonthly': 20,
+        'planOverrides': {
+          'not-a-date': 0,
+          '2026-08-04': 'not-a-number',
+          '2026-08-05': 0.5,
+        },
+      });
+      expect(p.name, 'ספר');
+      expect(p.planOverrides, {DateTime(2026, 8, 5): 0.5});
+    });
+
+    test('a commission from before this existed simply has none', () {
+      final old = Project.fromJson({
+        'id': 'p1',
+        'name': 'ספר',
+        'typeName': 'sefer',
+        'price': 100,
+        'expenses': 0,
+        'targetDaily': 1,
+        'targetMonthly': 20,
+      });
+      expect(old.planOverrides, isEmpty);
+    });
+  });
+
   group('money comes back to the agora', () {
     // Amounts are held as doubles, which is the thing every guide about money
     // says not to do. It was worth checking rather than assuming: what a sofer
