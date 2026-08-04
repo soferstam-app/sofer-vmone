@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 
 import '../hebrew_utils.dart';
+import '../logic/calendar_days.dart';
 import '../logic/hebrew_clock.dart';
 import '../logic/hebrew_work_calendar.dart';
 import '../logic/production_plan.dart';
@@ -90,10 +91,11 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
   /// A week or a Hebrew month back or forward.
   ///
   /// A month is walked through the Hebrew calendar rather than by adding thirty
-  /// days, which drifts; a week is exactly seven days and needs no such care.
+  /// days, which drifts; a week is exactly seven calendar days — which is not
+  /// the same as 168 hours on the two weekends the clocks change.
   void _shift(int by) {
     if (_weekly) {
-      setState(() => _anchor = _anchor.add(Duration(days: 7 * by)));
+      setState(() => _anchor = CalendarDays.addDays(_anchor, 7 * by));
       return;
     }
     final jd = JewishDate.fromDateTime(_anchor);

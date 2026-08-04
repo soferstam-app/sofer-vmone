@@ -1,4 +1,5 @@
 import '../models.dart';
+import 'calendar_days.dart';
 import 'profit_calculator.dart';
 import 'currency.dart';
 
@@ -125,14 +126,16 @@ class ExpenseLogic {
 
     // A zero or inverted range degenerates to a single day: charge it whole if
     // that day falls in the window.
-    final totalDays = end.difference(start).inDays + 1;
+    // Days counted as a calendar counts them — a range spanning a clock change
+    // came out a day short, which quietly inflated every day's share of it.
+    final totalDays = CalendarDays.inclusiveLength(start, end);
     if (totalDays <= 1) {
       return (!start.isBefore(from) && start.isBefore(to)) ? e.amount : 0;
     }
 
     final overlapStart = start.isAfter(from) ? start : from;
-    final overlapEnd = end.isBefore(to) ? end : to.subtract(const Duration(days: 1));
-    final overlapDays = overlapEnd.difference(overlapStart).inDays + 1;
+    final overlapEnd = end.isBefore(to) ? end : CalendarDays.addDays(to, -1);
+    final overlapDays = CalendarDays.inclusiveLength(overlapStart, overlapEnd);
     if (overlapDays <= 0) return 0;
 
     return e.amount * (overlapDays / totalDays);

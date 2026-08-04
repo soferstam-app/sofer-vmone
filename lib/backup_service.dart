@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 
 import 'logic/legacy_import.dart';
 import 'logic/merge_service.dart';
+import 'logic/smart_session.dart';
 import 'models.dart';
 import 'platform_support.dart';
 import 'storage_service.dart';
@@ -303,7 +304,45 @@ class BackupService {
     await _storage.saveProjects(outcome.projects);
     await _storage.saveHistory(outcome.history);
     await _storage.saveExpenses(outcome.expenses);
+    await _restorePositions(preview.lastPositions);
     return outcome;
+  }
+
+  /// Puts the writer back where he was in each commission.
+  ///
+  /// The position lives beside the records rather than in them, so the merge
+  /// above does not carry it — and it was read out of the file, held on the
+  /// preview, and then dropped. A writer who restored two hundred pages of work
+  /// got all of it back and was returned to page one, line one: the entry form
+  /// suggested it and the smart workflow resumed from it, over work already
+  /// done. It is the one thing a writer coming from a version with no backup
+  /// screen cannot simply retype from his own records.
+  ///
+  /// Only ever forward, which is the rule the rest of the app already follows:
+  /// an older file says nothing about where he has got to since.
+  Future<void> _restorePositions(Map<String, dynamic> incoming) async {
+    for (final entry in incoming.entries) {
+      final value = entry.value;
+      if (value is! Map) continue;
+      // Tested with `is`, not cast: a hand-edited file may hold "twelve" where
+      // a number belongs, and `as num?` on a string throws rather than giving
+      // null. One bad entry must not stop the others coming across.
+      final page = value['page'];
+      final line = value['line'];
+      if (page is! num || line is! num) continue;
+      if (page < 1 || line < 1) continue;
+
+      final stored = await _storage.getLastPosition(entry.key);
+      final storedPage = stored['page'];
+      final storedLine = stored['line'];
+      final here = SmartPosition(
+        storedPage is num ? storedPage.toInt() : 0,
+        storedLine is num ? storedLine.toInt() : 0,
+      );
+      final there = SmartPosition(page.toInt(), line.toInt());
+      if (!there.isAfter(here)) continue;
+      await _storage.saveLastPosition(entry.key, there.page, there.line);
+    }
   }
 
   /// Writes the backup to a temporary file and hands it to the OS share sheet

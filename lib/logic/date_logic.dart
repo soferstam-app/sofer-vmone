@@ -1,6 +1,7 @@
 import 'package:kosher_dart/kosher_dart.dart';
 
 import '../models.dart';
+import 'calendar_days.dart';
 import 'hebrew_clock.dart';
 
 /// Single source of truth for "which day does this belong to".
@@ -36,7 +37,10 @@ class DateLogic {
 
       case DayBoundary.fixedHour:
         if (dayStart.hour > 0 && moment.hour < dayStart.hour) {
-          return date.subtract(const Duration(days: 1));
+          // A calendar day back, not twenty-four hours. Subtracting a Duration
+          // here filed work written at 01:30 on the night the clocks go forward
+          // under the day *before* yesterday — see [CalendarDays].
+          return CalendarDays.addDays(date, -1);
         }
         return date;
 
@@ -49,7 +53,7 @@ class DateLogic {
         if (boundary == null) return date;
         return moment.isBefore(boundary)
             ? date
-            : date.add(const Duration(days: 1));
+            : CalendarDays.addDays(date, 1);
     }
   }
 

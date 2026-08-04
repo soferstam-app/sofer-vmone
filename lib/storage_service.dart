@@ -257,14 +257,26 @@ class StorageService {
     await prefs.setBool(_keySmartWorkflowEnabled, enabled);
   }
 
+  /// Where the writer left off, or empty when nothing usable is stored.
+  ///
+  /// Guarded like [getTimerState] beside it, and for a reason this one has that
+  /// the other does not: the app now accepts a file chosen by the user — a
+  /// backup, or the store an older installation left on disk — and a stored
+  /// position that is not the shape this expects threw on the way to the entry
+  /// form. Not being able to suggest a page is a shrug; not being able to open
+  /// the form is not.
   Future<Map<String, dynamic>> getLastPosition(String projectId) async {
     final prefs = await SharedPreferences.getInstance();
     final String? data = prefs.getString(_keyLastPositions);
     if (data == null) return {};
-    final Map<String, dynamic> allPositions = jsonDecode(data);
-    return allPositions[projectId] != null
-        ? Map<String, dynamic>.from(allPositions[projectId])
-        : {};
+    try {
+      final decoded = jsonDecode(data);
+      if (decoded is! Map) return {};
+      final position = decoded[projectId];
+      return position is Map ? Map<String, dynamic>.from(position) : {};
+    } catch (_) {
+      return {};
+    }
   }
 
   /// Pages and lines are counted from one, so neither is ever stored as zero —
@@ -272,7 +284,18 @@ class StorageService {
   Future<void> saveLastPosition(String projectId, int page, int line) async {
     final prefs = await SharedPreferences.getInstance();
     final String? data = prefs.getString(_keyLastPositions);
-    Map<String, dynamic> allPositions = data != null ? jsonDecode(data) : {};
+    // Unreadable stored positions are replaced rather than thrown on: refusing
+    // to save the writer's place because somebody else's is corrupt would keep
+    // the fault forever.
+    Map<String, dynamic> allPositions = {};
+    if (data != null) {
+      try {
+        final decoded = jsonDecode(data);
+        if (decoded is Map) allPositions = Map<String, dynamic>.from(decoded);
+      } catch (_) {
+        // Start a fresh map.
+      }
+    }
     allPositions[projectId] = {
       'page': page < 1 ? 1 : page,
       'line': line < 1 ? 1 : line,

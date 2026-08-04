@@ -1,4 +1,5 @@
 import '../models.dart';
+import 'calendar_days.dart';
 import 'production_calculator.dart';
 
 /// Rules for building and validating a work session.
@@ -39,7 +40,9 @@ class SessionLogic {
         DateTime(date.year, date.month, date.day, startHour, startMinute);
     var end = DateTime(date.year, date.month, date.day, endHour, endMinute);
     if (end.isBefore(start)) {
-      end = end.add(const Duration(days: 1));
+      // The same clock time on the following day, which on the two nights the
+      // clocks change is not the same as twenty-four hours later.
+      end = CalendarDays.addDaysKeepingTime(end, 1);
     }
     return (start: start, end: end);
   }
@@ -134,8 +137,11 @@ class SessionLogic {
     return null;
   }
 
-  /// Validates a mezuza partial-line value.
+  /// Validates a mezuza partial-line value. Zero means none was given.
   static String? validateMezuzaLine(int line) {
+    // Only the upper bound was checked, so a negative line passed — and a
+    // negative partial subtracts from the lines the session is counted as.
+    if (line < 0) return "מספר שורה אינו יכול להיות שלילי";
     if (line > ProductionCalculator.linesPerMezuza) {
       return "במזוזה יש רק ${ProductionCalculator.linesPerMezuza} שורות";
     }
@@ -147,6 +153,7 @@ class SessionLogic {
     required String tefillinType,
     required int line,
   }) {
+    if (line < 0) return "מספר שורה אינו יכול להיות שלילי";
     final maxLines = tefillinType == 'head'
         ? ProductionCalculator.linesPerHeadParshiya
         : ProductionCalculator.linesPerHandParshiya;

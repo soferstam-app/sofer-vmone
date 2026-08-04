@@ -120,6 +120,9 @@ final class EntryBuilt extends EntryOutcome {
 class EntryBuilder {
   const EntryBuilder._();
 
+  /// Most pages one entry may cover. A sefer is 245; nothing real reaches this.
+  static const int _maxPagesPerEntry = 500;
+
   /// Reads a page written either as a Hebrew numeral or as digits.
   ///
   /// Returns 0 for anything unreadable, which every caller treats as "not
@@ -153,8 +156,11 @@ class EntryBuilder {
     final totalPages = project.totalPages;
     final linesPerPage = ProductionCalculator.linesPerPageOf(project);
 
+    // A negative page number passed this check, and `formatHebrewNumber` has no
+    // numeral for it — so the record was filed with a blank where its page
+    // should be: "עמוד  (1-10)", which the writer cannot identify afterwards.
     final pageFrom = _page(input.pageFrom);
-    if (pageFrom == 0) {
+    if (pageFrom <= 0) {
       return const EntryRejected("יש להזין לפחות עמוד התחלה תקין");
     }
     if (totalPages != null && pageFrom > totalPages) {
@@ -162,12 +168,21 @@ class EntryBuilder {
     }
 
     final pageToParsed = _page(input.pageTo);
-    final pageTo = pageToParsed == 0 ? null : pageToParsed;
+    final pageTo = pageToParsed <= 0 ? null : pageToParsed;
     final isRange = pageTo != null && pageTo >= pageFrom && pageTo != pageFrom;
 
     if (isRange) {
       if (totalPages != null && pageTo > totalPages) {
         return EntryRejected("עמוד הסיום חורג מהגדרת הספר ($totalPages)");
+      }
+      // A commission with no stated page count had no upper bound at all, so a
+      // slip in "up to page" built one record per page of a range that was
+      // never meant: history is saved as a single JSON string, and a few
+      // hundred thousand records of it is a file the app can no longer write.
+      // Far beyond any real entry, and still a number rather than a hang.
+      if (pageTo - pageFrom + 1 > _maxPagesPerEntry) {
+        return EntryRejected(
+            "טווח של יותר מ־$_maxPagesPerEntry עמודים בהזנה אחת — יש לפצל אותו");
       }
 
       var overlaps = false;
@@ -280,8 +295,12 @@ class EntryBuilder {
 
   /// Mezuzot, and tefillin counted as sets or as head/hand units.
   static EntryOutcome _counted(EntryInput input, String entryId) {
+    // Negative as well as absent. A minus typed in front of a quantity used to
+    // be accepted whole: five mezuzot entered as "-5" subtracted five from the
+    // commission and five hundred shekels from its income, and nothing on any
+    // screen said so — the totals simply went down.
     final amount = int.tryParse(input.amount.trim()) ?? 0;
-    if (amount == 0) return const EntryRejected("יש להזין כמות");
+    if (amount <= 0) return const EntryRejected("יש להזין כמות");
 
     var endLine = 0;
     String description;

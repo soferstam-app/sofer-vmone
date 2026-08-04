@@ -39,6 +39,8 @@ library;
 
 import 'package:kosher_dart/kosher_dart.dart';
 
+import 'calendar_days.dart';
+
 /// How much of a day is spent writing.
 enum DayWeight {
   full,
@@ -519,7 +521,10 @@ class HebrewWorkCalendar {
     final end = DateTime(to.year, to.month, to.day);
     if (end.isBefore(start)) return 0;
 
-    final days = end.difference(start).inDays + 1;
+    // Calendar days, not elapsed hours: a range spanning the spring change came
+    // out one day short, so the last day of it went uncounted. See
+    // [CalendarDays].
+    final days = CalendarDays.inclusiveLength(start, end);
     final jc = hebrewDayOf(start, rules);
 
     var total = 0.0;
@@ -594,7 +599,7 @@ class HebrewWorkCalendar {
     final end = DateTime(to.year, to.month, to.day);
     if (end.isBefore(start)) return const [];
 
-    final days = end.difference(start).inDays + 1;
+    final days = CalendarDays.inclusiveLength(start, end);
     final jc = hebrewDayOf(start, rules);
     final result = <({DateTime date, JewishDate hebrew, WorkDay day})>[];
 

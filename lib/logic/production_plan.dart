@@ -1,6 +1,7 @@
 import 'package:kosher_dart/kosher_dart.dart';
 
 import '../models.dart';
+import 'calendar_days.dart';
 import 'date_logic.dart';
 import 'hebrew_clock.dart';
 import 'hebrew_work_calendar.dart';
@@ -119,12 +120,12 @@ class ProductionPlan {
   }) {
     final day = _midnight(anyDayInWeek);
     // Dart counts Monday as 1; the week here starts on Sunday.
-    final sunday = day.subtract(Duration(days: day.weekday % 7));
+    final sunday = CalendarDays.addDays(day, -(day.weekday % 7));
     return forRange(
       project: project,
       history: history,
       from: sunday,
-      to: sunday.add(const Duration(days: 6)),
+      to: CalendarDays.addDays(sunday, 6),
       rules: rules,
       dayStart: dayStart,
       overrides: overrides,
@@ -163,11 +164,16 @@ class ProductionPlan {
     // Pass one: the straight line the stretch was planned on.
     final drafts = <_Draft>[];
     var cumulativeWeight = 0.0;
-    final length = end.difference(start).inDays + 1;
+    // Counted and walked as a calendar counts days. Both of these used to be
+    // absolute-time arithmetic, and both broke twice a year: the length came
+    // out one short every March, and the dates went off by one every October —
+    // duplicating a day, dropping another, and drifting out of step with the
+    // Hebrew walker beside them. See [CalendarDays].
+    final length = CalendarDays.inclusiveLength(start, end);
     final walker = JewishDate.fromDateTime(start);
 
     for (var i = 0; i < length; i++) {
-      final date = start.add(Duration(days: i));
+      final date = CalendarDays.addDays(start, i);
       final calendar = HebrewWorkCalendar.classifyHebrewDate(
         walker.getJewishYear(),
         walker.getJewishMonth(),

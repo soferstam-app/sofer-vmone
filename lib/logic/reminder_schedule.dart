@@ -1,3 +1,5 @@
+import 'calendar_days.dart';
+
 /// When the daily reminder should fire, and under which identifier.
 ///
 /// The reminder used to be one repeating notification. Meeting the day's goal
@@ -33,7 +35,7 @@ class ReminderSchedule {
     int count = days,
   }) {
     var first = DateTime(from.year, from.month, from.day, hour, minute);
-    if (!first.isAfter(from)) first = first.add(const Duration(days: 1));
+    if (!first.isAfter(from)) first = CalendarDays.addDaysKeepingTime(first, 1);
 
     return [
       for (var i = 0; i < count; i++)
@@ -49,8 +51,14 @@ class ReminderSchedule {
   /// today's" can be answered without keeping a record of what was scheduled —
   /// and so that next week's booking of the same slot replaces the stale one
   /// rather than piling up beside it.
-  static int idFor(DateTime day) =>
-      _base + DateTime(day.year, day.month, day.day).difference(_epoch).inDays % days;
+  ///
+  /// The whole ring depends on consecutive days getting consecutive numbers.
+  /// Counted with `difference().inDays` on local time they did not: the week of
+  /// a clock change contains a day of twenty-three hours, the subtraction
+  /// truncates, and two of the seven days came out with the same id — so one
+  /// day's booking overwrote another's and that day silently had no reminder.
+  /// See [CalendarDays.dayNumber].
+  static int idFor(DateTime day) => _base + CalendarDays.dayNumber(day) % days;
 
   /// Every id the ring can hold, for clearing the queue before refilling it.
   static List<int> get allIds =>
@@ -58,5 +66,4 @@ class ReminderSchedule {
 
   /// Above the ids used elsewhere; id 0 was the old repeating reminder.
   static const int _base = 100;
-  static final DateTime _epoch = DateTime(2020);
 }
