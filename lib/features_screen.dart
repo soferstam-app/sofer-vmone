@@ -45,9 +45,9 @@ class FeaturesScreen extends StatelessWidget {
           _tile(
             context,
             icon: Icons.calendar_month,
-            title: "לוח חודשי",
+            title: "לוח הספקים",
             subtitle:
-                "לאיזה עמוד להגיע בכל יום של החודש, ומה להשלים בסוף השבוע",
+                "לאיזה עמוד להגיע בכל יום — שבוע או חודש, להדפסה ולאקסל",
             screen: ProductionPlanScreen(projects: projects, history: history),
           ),
           _tile(

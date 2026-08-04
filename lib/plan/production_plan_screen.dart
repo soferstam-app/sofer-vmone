@@ -9,6 +9,12 @@ import '../models.dart';
 import '../storage_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/sofer_widgets.dart';
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
+import 'package:printing/printing.dart';
+import '../logic/plan_table.dart';
+import '../widgets/feedback.dart';
+import 'plan_export.dart';
 
 /// The month as a calendar, saying which page each day asks for.
 ///
@@ -54,6 +60,10 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
   bool _weekly = false;
   WorkCalendarRules _rules = WorkCalendarRules.standard;
   DayStart _dayStart = DayStart.midnight;
+
+  /// Which calendar leads on the exported sheet. Both are always printed; this
+  /// only says which one the writer reads first.
+  bool _useGregorianDates = false;
   bool _loaded = false;
 
   @override
@@ -67,10 +77,12 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
   Future<void> _load() async {
     final rules = await _storage.getWorkCalendarRules();
     final dayStart = await _storage.getDayStart();
+    final gregorian = await _storage.getUseGregorianDates();
     if (!mounted) return;
     setState(() {
       _rules = rules;
       _dayStart = dayStart;
+      _useGregorianDates = gregorian;
       _loaded = true;
     });
   }
@@ -118,6 +130,74 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
     if (!_weekly) return formatDisplayDateMonth(_anchor, false);
     return 'שבוע: ${formatDisplayDate(plan.from, false)} – '
         '${formatDisplayDate(plan.to, false)}';
+  }
+
+  /// The plan the screen is showing. The grid and the export buttons go
+  /// through here, so a sheet can never be printed from a different month than
+  /// the one on screen.
+  ProductionPlan _currentPlan(Project project) => _weekly
+      ? ProductionPlan.forWeek(
+          project: project,
+          history: widget.history,
+          anyDayInWeek: _anchor,
+          rules: _rules,
+          dayStart: _dayStart,
+          overrides: project.planOverrides,
+        )
+      : ProductionPlan.forMonth(
+          project: project,
+          history: widget.history,
+          anyDayInMonth: _anchor,
+          rules: _rules,
+          dayStart: _dayStart,
+          overrides: project.planOverrides,
+        );
+
+  /// The plan as it stands, ready to be drawn or written out.
+  PlanTable _table(Project project, ProductionPlan plan) => PlanTable.of(
+        project: project,
+        plan: plan,
+        periodLabel: _periodLabel(plan),
+        useGregorianDates: _useGregorianDates,
+      );
+
+  /// Preview, print, or save as PDF — all three are one dialog on every
+  /// platform, which is the reason `printing` is here rather than `pdf` alone.
+  Future<void> _print(Project project, ProductionPlan plan) async {
+    final table = _table(project, plan);
+    try {
+      await Printing.layoutPdf(
+        name: PlanExport.fileName(table, 'pdf'),
+        onLayout: (_) => PlanExport.toPdf(table),
+      );
+    } catch (e) {
+      if (mounted) showAppError(context, 'ההדפסה נכשלה: $e');
+    }
+  }
+
+  /// A real workbook, not a CSV renamed: it opens with its columns the right
+  /// way round and its Hebrew intact, with no import dialog to get wrong.
+  Future<void> _exportXlsx(Project project, ProductionPlan plan) async {
+    final table = _table(project, plan);
+    try {
+      final bytes = await PlanExport.toXlsx(table);
+      if (!mounted) return;
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: 'שמירת טבלת הספקים',
+        fileName: PlanExport.fileName(table, 'xlsx'),
+        bytes: bytes,
+      );
+      if (!mounted || path == null) return;
+
+      // Desktop hands back a path and expects the caller to write; mobile has
+      // already written the bytes itself.
+      if (!Platform.isAndroid && !Platform.isIOS) {
+        await File(path).writeAsBytes(bytes, flush: true);
+      }
+      if (mounted) showAppSuccess(context, 'נשמר: $path');
+    } catch (e) {
+      if (mounted) showAppError(context, 'הייצוא נכשל: $e');
+    }
   }
 
   /// Lets the writer overrule the calendar for one day.
@@ -369,7 +449,23 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
     final project = _project;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('לוח חודשי')),
+      appBar: AppBar(
+        title: const Text('לוח הספקים'),
+        actions: [
+          if (_loaded && project != null && project.targetDaily > 0) ...[
+            IconButton(
+              icon: const Icon(Icons.print),
+              tooltip: 'הדפסה או שמירה כ-PDF',
+              onPressed: () => _print(project, _currentPlan(project)),
+            ),
+            IconButton(
+              icon: const Icon(Icons.table_view),
+              tooltip: 'ייצוא לאקסל',
+              onPressed: () => _exportXlsx(project, _currentPlan(project)),
+            ),
+          ],
+        ],
+      ),
       body: !_loaded
           ? const Center(child: CircularProgressIndicator())
           : project == null
@@ -423,23 +519,7 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
                           );
                         }
 
-                        final plan = _weekly
-                            ? ProductionPlan.forWeek(
-                                project: project,
-                                history: widget.history,
-                                anyDayInWeek: _anchor,
-                                rules: _rules,
-                                dayStart: _dayStart,
-                                overrides: project.planOverrides,
-                              )
-                            : ProductionPlan.forMonth(
-                                project: project,
-                                history: widget.history,
-                                anyDayInMonth: _anchor,
-                                rules: _rules,
-                                dayStart: _dayStart,
-                                overrides: project.planOverrides,
-                              );
+                        final plan = _currentPlan(project);
                         return Column(
                           children: [
                             Padding(
