@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'models.dart';
 import 'project_comparison_screen.dart';
 import 'quote_screen.dart';
+import 'proofread/proofread_screen.dart';
 import 'theme/app_theme.dart';
 import 'widgets/sofer_widgets.dart';
 import 'plan/production_plan_screen.dart';
@@ -68,6 +69,14 @@ class FeaturesScreen extends StatelessWidget {
                 "הכנסות והוצאות לפי חודש, לשנת מס — לועזי, כמו שמבקשים",
             screen:
                 AnnualReportScreen(projects: projects, history: history),
+          ),
+          _tile(
+            context,
+            icon: Icons.fact_check_outlined,
+            title: "מעקב הגהה",
+            subtitle:
+                "מה נשלח למגיה, מה חזר, כמה זמן זה לקח וכמה זה עלה",
+            screen: ProofreadScreen(projects: projects),
           ),
           _tile(
             context,

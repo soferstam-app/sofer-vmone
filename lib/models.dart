@@ -1081,6 +1081,7 @@ class Proofread implements Mergeable<Proofread> {
       _copy(deletedAt: deletedAt, restoredAt: restoredAt, touch: false);
 
   Proofread copyWith({
+    String? projectId,
     ProofreadStage? stage,
     String? scope,
     String? proofreader,
@@ -1094,6 +1095,7 @@ class Proofread implements Mergeable<Proofread> {
     bool? isDeleted,
   }) =>
       _copy(
+        projectId: projectId,
         stage: stage,
         scope: scope,
         proofreader: proofreader,
@@ -1111,6 +1113,7 @@ class Proofread implements Mergeable<Proofread> {
       );
 
   Proofread _copy({
+    String? projectId,
     ProofreadStage? stage,
     String? scope,
     String? proofreader,
@@ -1127,7 +1130,7 @@ class Proofread implements Mergeable<Proofread> {
   }) =>
       Proofread(
         id: id,
-        projectId: projectId,
+        projectId: projectId ?? this.projectId,
         stage: stage ?? this.stage,
         scope: scope ?? this.scope,
         proofreader: proofreader ?? this.proofreader,
