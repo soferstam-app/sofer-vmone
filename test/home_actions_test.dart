@@ -118,6 +118,49 @@ void main() {
           findsOneWidget);
       expect(find.widgetWithText(SoferSecondaryButton, 'המשך'), findsOneWidget);
     });
+
+    testWidgets('"המשך" resumes, and does not start another break',
+        (tester) async {
+      // It called onBreak while saying "המשך", so pressing it paused again: in
+      // plain mode the writer was stuck in a break with no way back to writing
+      // except ending the sitting, and in smart mode the break dialog reopened.
+      var resumed = 0;
+      var broke = 0;
+      final spy = HomeActions(
+        onStart: () {},
+        onStop: () {},
+        onBreak: () => broke++,
+        onManualEntry: () {},
+        onNextLine: () {},
+        onEditPosition: () {},
+        onProjectChanged: (_) {},
+        onResume: () => resumed++,
+      );
+
+      tester.view.physicalSize = const Size(800, 1720);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(MaterialApp(
+        theme: AppThemeBuilder.build(AppTheme.klaf),
+        home: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Scaffold(
+            body: RuledHomeBody(
+                snapshot: snap(running: true, paused: true),
+                actions: spy,
+                isSmart: false),
+          ),
+        ),
+      ));
+      await tester.pump(const Duration(milliseconds: 400));
+
+      await tester.tap(find.widgetWithText(SoferSecondaryButton, 'המשך'));
+      await tester.pump();
+
+      expect(resumed, 1);
+      expect(broke, 0, reason: 'pressing "המשך" started another break');
+    });
   });
 
   group('before anything has started', () {

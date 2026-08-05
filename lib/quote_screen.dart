@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'expenses/expense_editor.dart';
 import 'hebrew_utils.dart';
 import 'logic/expense_logic.dart';
+import 'logic/money_input.dart';
 import 'logic/hebrew_work_calendar.dart';
 import 'logic/project_analytics.dart';
 import 'logic/quote_calculator.dart';
@@ -111,7 +112,7 @@ class _QuoteScreenState extends State<QuoteScreen> {
     final pace = ProjectAnalytics.typicalTimePerUnit(
         _type, widget.projects, widget.history);
 
-    final units = double.tryParse(_unitsCtrl.text) ?? 0;
+    final units = MoneyInput.parse(_unitsCtrl.text) ?? 0;
 
     final recorded = _recordedExpensePerUnit;
     final expensesPerUnit = (_expensesFromRecords && recorded != null)
@@ -121,7 +122,7 @@ class _QuoteScreenState extends State<QuoteScreen> {
     // When pricing per unit, the hourly rate that price implies is derived and
     // fed back through the same estimator, so both modes produce identical
     // timing figures and differ only in which number the writer supplies.
-    final unitPrice = double.tryParse(_unitPriceCtrl.text) ?? 0;
+    final unitPrice = MoneyInput.parse(_unitPriceCtrl.text) ?? 0;
     final derivedRate = (pace == null || _priceFromHourlyRate)
         ? null
         : QuoteCalculator.impliedHourlyRate(
@@ -132,7 +133,7 @@ class _QuoteScreenState extends State<QuoteScreen> {
           );
 
     final effectiveRate = _priceFromHourlyRate
-        ? (double.tryParse(_rateCtrl.text) ?? 0)
+        ? (MoneyInput.parse(_rateCtrl.text) ?? 0)
         : (derivedRate ?? 0);
 
     final estimate = pace == null
@@ -141,7 +142,7 @@ class _QuoteScreenState extends State<QuoteScreen> {
             units: units,
             timePerUnit: pace,
             targetHourlyRate: effectiveRate,
-            hoursPerDay: double.tryParse(_hoursCtrl.text) ?? 0,
+            hoursPerDay: MoneyInput.parse(_hoursCtrl.text) ?? 0,
             expensesPerUnit: expensesPerUnit,
             rules: _rules,
           );

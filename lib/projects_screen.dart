@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'logic/completion_estimator.dart';
+import 'logic/money_input.dart';
 import 'logic/hebrew_work_calendar.dart';
 import 'logic/id_generator.dart';
 import 'models.dart';
@@ -844,7 +845,9 @@ class _ProjectDialogState extends State<ProjectDialog> {
     if (text.isEmpty) {
       return allowEmpty ? null : "יש להזין $label";
     }
-    final parsed = double.tryParse(text.replaceAll(',', '.'));
+    // The same reader the save uses. They used to differ, and the difference
+    // was a commission priced at zero — see [MoneyInput].
+    final parsed = MoneyInput.parse(text);
     if (parsed == null) return "$label חייב להיות מספר";
     if (parsed < 0) return "$label לא יכול להיות שלילי";
     return null;
@@ -911,8 +914,8 @@ class _ProjectDialogState extends State<ProjectDialog> {
         id: widget.existingProject?.id ?? IdGenerator.generate(),
         name: _nameCtrl.text,
         type: _type,
-        price: double.tryParse(_priceCtrl.text) ?? 0,
-        expenses: double.tryParse(_expensesCtrl.text) ?? 0,
+        price: MoneyInput.parse(_priceCtrl.text) ?? 0,
+        expenses: MoneyInput.parse(_expensesCtrl.text) ?? 0,
         // An existing commission keeps what it was agreed in. Only a new one
         // takes the setting — changing the setting must not restate a price.
         currency: widget.existingProject?.currency ?? _currency,

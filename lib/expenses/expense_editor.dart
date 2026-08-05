@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../hebrew_utils.dart';
 import '../logic/expense_logic.dart';
+import '../logic/money_input.dart';
 import '../logic/id_generator.dart';
 import '../models.dart';
 import '../theme/app_theme.dart';
@@ -249,9 +250,9 @@ Future<ExpenseEdit?> showExpenseEditor({
                   ? null
                   : () {
                       final product = productCtrl.text.trim();
-                      final amount = double.tryParse(
-                              amountCtrl.text.replaceAll(',', '.')) ??
-                          0;
+                      // Not replaceAll(',', '.'), which read an expense of
+                      // 40,000 as forty. See [MoneyInput].
+                      final amount = MoneyInput.parse(amountCtrl.text) ?? 0;
                       final expense = isEdit
                           ? existing.copyWith(
                               product: product,
@@ -463,9 +464,7 @@ Future<QuoteExpense?> showQuoteExpenseEditor({
                         ctx,
                         QuoteExpense(
                           label: labelCtrl.text.trim(),
-                          amount: double.tryParse(
-                                  amountCtrl.text.replaceAll(',', '.')) ??
-                              0,
+                          amount: MoneyInput.parse(amountCtrl.text) ?? 0,
                           perUnit: perUnit,
                         ),
                       ),

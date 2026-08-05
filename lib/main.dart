@@ -45,6 +45,11 @@ void main() async {
     await windowManager.waitUntilReadyToShow(
       const WindowOptions(
         size: Size(1280, 720),
+        // Below this the layouts stop being usable: the ruled themes drop to
+        // one column at 620 and below about 400 the figures and the buttons
+        // start colliding. There was no floor at all, so the window could be
+        // dragged down to a sliver and the app simply broke.
+        minimumSize: Size(420, 640),
         center: true,
         titleBarStyle: TitleBarStyle.normal,
       ),

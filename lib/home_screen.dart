@@ -361,6 +361,12 @@ class _SoferHomeState extends State<SoferHome>
               icon: const Icon(Icons.open_in_new, size: 22),
               label: const Text("חלון צף"),
               onPressed: () async {
+                // Remembered, because coming back used to impose 1280x720 and
+                // discard whatever size the writer had arranged for himself.
+                _sizeBeforeFloating = await windowManager.getSize();
+                // The floor set for the main window would refuse a 320-wide
+                // one, so it is lifted for as long as the small window is up.
+                await windowManager.setMinimumSize(const Size(280, 200));
                 await windowManager.setSize(const Size(320, 260));
                 await windowManager.setAlwaysOnTop(true);
                 await windowManager.setAlignment(Alignment.bottomRight);
@@ -951,11 +957,16 @@ class _SoferHomeState extends State<SoferHome>
     );
   }
 
+  /// The main window's size before the floating one took over, so returning
+  /// gives the writer his own window back rather than a fresh 1280x720.
+  Size? _sizeBeforeFloating;
+
   Future<void> _restoreFromFloatingWindow() async {
     if (!Platform.isWindows || widget.windowsFloatingMode == null) return;
     widget.windowsFloatingMode!.value = false;
     await windowManager.setAlwaysOnTop(false);
-    await windowManager.setSize(const Size(1280, 720));
+    await windowManager.setMinimumSize(const Size(420, 640));
+    await windowManager.setSize(_sizeBeforeFloating ?? const Size(1280, 720));
     await windowManager.center();
   }
 

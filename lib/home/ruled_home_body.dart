@@ -470,7 +470,12 @@ class _Actions extends StatelessWidget {
           s.isPaused ? "המשך" : "הפסקה",
           icon: s.isPaused ? Icons.play_arrow : Icons.coffee,
           expand: true,
-          onPressed: actions.onBreak,
+          // Resuming is its own action, which is why HomeActions carries one.
+          // This button said "המשך" and called onBreak, so pressing it paused
+          // again: in plain mode the writer was stuck in a break with no way
+          // back to writing except ending the sitting, and in smart mode the
+          // break dialog reopened. The cards layout has always had this right.
+          onPressed: s.isPaused ? actions.onResume : actions.onBreak,
         ),
       ],
     ]);
