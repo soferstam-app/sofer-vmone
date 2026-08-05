@@ -887,3 +887,260 @@ class Expense implements Mergeable<Expense> {
     );
   }
 }
+
+/// Where a piece of work stands in proofreading.
+///
+/// Ordered as the work moves, so the order of declaration is the order of the
+/// job. See [JsonCompat.enumByName] for why that order can never be changed.
+enum ProofreadStage {
+  /// Written, not yet sent. What is sitting on the sofer's desk.
+  waiting,
+
+  /// With the proofreader.
+  sent,
+
+  /// Back, with corrections to make.
+  returned,
+
+  /// Corrections made. Finished.
+  done;
+
+  String get label => switch (this) {
+        ProofreadStage.waiting => 'ממתין להגהה',
+        ProofreadStage.sent => 'אצל המגיה',
+        ProofreadStage.returned => 'חזר לתיקון',
+        ProofreadStage.done => 'הושלם',
+      };
+
+  /// Still someone's to act on.
+  bool get isOpen => this != ProofreadStage.done;
+}
+
+/// A batch of work sent out to be proofread.
+///
+/// The one stage of the job the app knew nothing about, although it was already
+/// charging for it: "הגהות מזוזות" and "הגהות תפילין" have been expense
+/// categories all along, with nowhere to say what was sent, to whom, or what
+/// came back.
+///
+/// A batch rather than a record per page, because that is how the work moves: a
+/// sofer sends a stretch of pages or a run of mezuzot and it comes back
+/// together. [scope] is free text for the same reason — a writer would put
+/// "עמודים א-ל" or "12 מזוזות", and forcing either into a page range would
+/// invent precision the job does not have.
+class Proofread implements Mergeable<Proofread> {
+  @override
+  final String id;
+
+  /// The commission this work belongs to.
+  final String projectId;
+
+  final ProofreadStage stage;
+
+  /// What was sent, in the writer's own words.
+  final String scope;
+
+  /// Who has it. A name, not a record — a sofer knows his magiah.
+  final String proofreader;
+
+  final DateTime? sentAt;
+  final DateTime? returnedAt;
+  final DateTime? doneAt;
+
+  /// What the proofreading cost, and what that is an amount of. On the record
+  /// rather than read from a setting, for the reason given in [Project.currency].
+  final double cost;
+  final Currency currency;
+
+  /// How many corrections came back. Null when nothing was written down, which
+  /// is a different answer from a clean return and has to read differently.
+  final int? findings;
+
+  final String notes;
+
+  @override
+  final DateTime lastUpdated;
+  @override
+  final DateTime? deletedAt;
+  @override
+  final DateTime? restoredAt;
+
+  bool get isDeleted {
+    final deleted = deletedAt;
+    if (deleted == null) return false;
+    final restored = restoredAt;
+    return restored == null || deleted.isAfter(restored);
+  }
+
+  /// Fields written by a newer version, carried through untouched.
+  final Map<String, dynamic> extraFields;
+
+  static const Set<String> _knownKeys = {
+    'id',
+    'projectId',
+    'stage',
+    'stageName',
+    'scope',
+    'proofreader',
+    'sentAt',
+    'returnedAt',
+    'doneAt',
+    'cost',
+    'currency',
+    'findings',
+    'notes',
+    'lastUpdated',
+    'isDeleted',
+    'deletedAt',
+    'restoredAt',
+  };
+
+  Proofread({
+    required this.id,
+    required this.projectId,
+    this.stage = ProofreadStage.waiting,
+    this.scope = '',
+    this.proofreader = '',
+    this.sentAt,
+    this.returnedAt,
+    this.doneAt,
+    this.cost = 0,
+    this.currency = Currency.ils,
+    this.findings,
+    this.notes = '',
+    DateTime? lastUpdated,
+    this.deletedAt,
+    this.restoredAt,
+    this.extraFields = const {},
+  }) : lastUpdated = lastUpdated ?? DateTime.now();
+
+  /// How long it has been out, or how long it took. Null before it was sent.
+  Duration? turnaround({DateTime? now}) {
+    final sent = sentAt;
+    if (sent == null) return null;
+    return (returnedAt ?? now ?? DateTime.now()).difference(sent);
+  }
+
+  Map<String, dynamic> toJson() => {
+        ...extraFields,
+        'id': id,
+        'projectId': projectId,
+        // Name and index both — see JsonCompat.enumByName.
+        'stageName': stage.name,
+        'stage': stage.index,
+        'scope': scope,
+        'proofreader': proofreader,
+        'sentAt': sentAt?.toIso8601String(),
+        'returnedAt': returnedAt?.toIso8601String(),
+        'doneAt': doneAt?.toIso8601String(),
+        'cost': cost,
+        'currency': currency.toJson(),
+        'findings': findings,
+        'notes': notes,
+        'lastUpdated': lastUpdated.toIso8601String(),
+        // Written for an older build that looks for the flag and would
+        // otherwise read every record as alive. The registers are what this
+        // build reads.
+        'isDeleted': isDeleted,
+        'deletedAt': deletedAt?.toIso8601String(),
+        'restoredAt': restoredAt?.toIso8601String(),
+      };
+
+  factory Proofread.fromJson(Map<String, dynamic> json) {
+    final id = JsonCompat.string(json['id']);
+    if (id.isEmpty) throw const FormatException('proofread without an id');
+
+    final lastUpdated = JsonCompat.date(json['lastUpdated'], DateTime.now());
+    final tombstone = JsonCompat.tombstone(json, lastUpdated);
+
+    return Proofread(
+      id: id,
+      projectId: JsonCompat.string(json['projectId']),
+      stage: JsonCompat.enumByName(json, 'stageName', 'stage',
+          ProofreadStage.values, ProofreadStage.waiting),
+      scope: JsonCompat.string(json['scope']),
+      proofreader: JsonCompat.string(json['proofreader']),
+      sentAt: JsonCompat.dateOrNull(json['sentAt']),
+      returnedAt: JsonCompat.dateOrNull(json['returnedAt']),
+      doneAt: JsonCompat.dateOrNull(json['doneAt']),
+      cost: JsonCompat.number(json['cost'], 0),
+      currency: Currency.fromJson(json['currency']),
+      findings: json['findings'] == null
+          ? null
+          : JsonCompat.number(json['findings'], 0).round(),
+      notes: JsonCompat.string(json['notes']),
+      lastUpdated: lastUpdated,
+      deletedAt: tombstone.deletedAt,
+      restoredAt: tombstone.restoredAt,
+      extraFields: JsonCompat.unknownKeys(json, _knownKeys),
+    );
+  }
+
+  @override
+  Proofread withTombstone({DateTime? deletedAt, DateTime? restoredAt}) =>
+      _copy(deletedAt: deletedAt, restoredAt: restoredAt, touch: false);
+
+  Proofread copyWith({
+    ProofreadStage? stage,
+    String? scope,
+    String? proofreader,
+    DateTime? sentAt,
+    DateTime? returnedAt,
+    DateTime? doneAt,
+    double? cost,
+    Currency? currency,
+    int? findings,
+    String? notes,
+    bool? isDeleted,
+  }) =>
+      _copy(
+        stage: stage,
+        scope: scope,
+        proofreader: proofreader,
+        sentAt: sentAt,
+        returnedAt: returnedAt,
+        doneAt: doneAt,
+        cost: cost,
+        currency: currency,
+        findings: findings,
+        notes: notes,
+        // Deleting and restoring each move their own register, so a later edit
+        // can never undo either by accident.
+        deletedAt: isDeleted == true ? DateTime.now() : deletedAt,
+        restoredAt: isDeleted == false ? DateTime.now() : restoredAt,
+      );
+
+  Proofread _copy({
+    ProofreadStage? stage,
+    String? scope,
+    String? proofreader,
+    DateTime? sentAt,
+    DateTime? returnedAt,
+    DateTime? doneAt,
+    double? cost,
+    Currency? currency,
+    int? findings,
+    String? notes,
+    DateTime? deletedAt,
+    DateTime? restoredAt,
+    bool touch = true,
+  }) =>
+      Proofread(
+        id: id,
+        projectId: projectId,
+        stage: stage ?? this.stage,
+        scope: scope ?? this.scope,
+        proofreader: proofreader ?? this.proofreader,
+        sentAt: sentAt ?? this.sentAt,
+        returnedAt: returnedAt ?? this.returnedAt,
+        doneAt: doneAt ?? this.doneAt,
+        cost: cost ?? this.cost,
+        currency: currency ?? this.currency,
+        findings: findings ?? this.findings,
+        notes: notes ?? this.notes,
+        lastUpdated: touch ? DateTime.now() : lastUpdated,
+        deletedAt: deletedAt,
+        restoredAt: restoredAt,
+        extraFields: extraFields,
+      );
+}

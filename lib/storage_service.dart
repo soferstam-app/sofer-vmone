@@ -19,6 +19,7 @@ class StorageService {
   static const String _keyFridayMotzeiHalfDay = 'friday_motzei_half_day';
   static const String _keyUseGregorianDates = 'use_gregorian_dates';
   static const String _keyExpenses = 'expenses';
+  static const String _keyProofreads = 'proofreads';
   static const String _keySoferName = 'sofer_name';
   static const String _keyWorkCalendarRules = 'work_calendar_rules';
   static const String _keyDayStart = 'day_start';
@@ -32,6 +33,14 @@ class StorageService {
 
   Future<void> saveProjects(List<Project> projects) =>
       _saveList(_keyProjects, projects.map((p) => p.toJson()).toList());
+
+  Future<void> saveProofreads(List<Proofread> records) =>
+      _saveList(_keyProofreads, records.map((r) => r.toJson()).toList());
+
+  Future<List<Proofread>> loadProofreads() async {
+    final prefs = await SharedPreferences.getInstance();
+    return _parseList(prefs.getString(_keyProofreads), Proofread.fromJson);
+  }
 
   /// Writes records back, leaving every stored entry not among them alone.
   ///
@@ -91,6 +100,7 @@ class StorageService {
     await eraseList(_keyProjects);
     await eraseList(_keyHistory);
     await eraseList(_keyExpenses);
+    await eraseList(_keyProofreads);
   }
 
   /// The stored entries of a list, without trying to understand any of them.
@@ -104,7 +114,7 @@ class StorageService {
     }
   }
 
-  /// How many stored records this build cannot read, across all three lists.
+  /// How many stored records this build cannot read, across every list.
   ///
   /// They are kept and written back untouched, but they take no part in any
   /// figure the app shows — so the app has to be able to say they are there
@@ -126,6 +136,7 @@ class StorageService {
     tally(_keyProjects, Project.fromJson);
     tally(_keyHistory, WorkSession.fromJson);
     tally(_keyExpenses, Expense.fromJson);
+    tally(_keyProofreads, Proofread.fromJson);
     return count;
   }
 
@@ -200,6 +211,7 @@ class StorageService {
       'projects': decodeList(prefs.getString(_keyProjects)),
       'history': decodeList(prefs.getString(_keyHistory)),
       'expenses': decodeList(prefs.getString(_keyExpenses)),
+      'proofreads': decodeList(prefs.getString(_keyProofreads)),
       'lastPositions': decodeMap(prefs.getString(_keyLastPositions)),
       'settings': {
         _keyNotificationEnabled: prefs.getBool(_keyNotificationEnabled),

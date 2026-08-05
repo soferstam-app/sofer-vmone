@@ -24,6 +24,7 @@ class BackupPreview {
   final List<Project> projects;
   final List<WorkSession> history;
   final List<Expense> expenses;
+  final List<Proofread> proofreads;
   final Map<String, dynamic> settings;
   final Map<String, dynamic> lastPositions;
 
@@ -37,6 +38,7 @@ class BackupPreview {
     required this.projects,
     required this.history,
     required this.expenses,
+    this.proofreads = const [],
     required this.settings,
     required this.lastPositions,
     required this.fileName,
@@ -263,6 +265,7 @@ class BackupService {
         projects: parse('projects', Project.fromJson),
         history: parse('history', WorkSession.fromJson),
         expenses: parse('expenses', Expense.fromJson),
+        proofreads: parse('proofreads', Proofread.fromJson),
         settings: decoded['settings'] is Map
             ? Map<String, dynamic>.from(decoded['settings'])
             : const {},
@@ -299,11 +302,14 @@ class BackupService {
       incomingProjects: preview.projects,
       incomingHistory: preview.history,
       incomingExpenses: preview.expenses,
+      localProofreads: await _storage.loadProofreads(),
+      incomingProofreads: preview.proofreads,
     );
 
     await _storage.saveProjects(outcome.projects);
     await _storage.saveHistory(outcome.history);
     await _storage.saveExpenses(outcome.expenses);
+    await _storage.saveProofreads(outcome.proofreads);
     await _restorePositions(preview.lastPositions);
     return outcome;
   }
