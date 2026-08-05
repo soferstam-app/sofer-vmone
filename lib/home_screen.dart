@@ -160,6 +160,19 @@ class _SoferHomeState extends State<SoferHome>
     super.dispose();
   }
 
+  /// Which commission the home screen opens on.
+  ///
+  /// The one last worked on, when it is still there. A commission that has been
+  /// deleted or finished since is not a starting point, and falling back to the
+  /// only one there is beats opening on nothing when there is nothing to choose.
+  static Project? _pickStartingProject(List<Project> live, String? lastId) {
+    if (live.isEmpty) return null;
+    for (final p in live) {
+      if (p.id == lastId) return p;
+    }
+    return live.length == 1 ? live.first : null;
+  }
+
   Future<void> _loadData() async {
     try {
       final loadedProjects = await _storageService.loadProjects();
@@ -169,12 +182,21 @@ class _SoferHomeState extends State<SoferHome>
       final loadedHistory = await _storageService.loadHistory();
       final activeHistory = loadedHistory.where((h) => !h.isDeleted).toList();
       final smartEnabled = await _storageService.getSmartWorkflowEnabled();
+      // The commission he was last working on, already chosen. A sofer works on
+      // one job for weeks, and being asked to pick it out of a list every time
+      // the app opens is being asked something the app already knows — the
+      // entry form has defaulted to it for a while; the home screen had not.
+      final lastId = await _storageService.getLastProjectId();
       if (!mounted) return;
       setState(() {
         projects = activeProjects;
         history = activeHistory;
         _isSmartWorkflow = smartEnabled;
+        _selectedProject = _pickStartingProject(activeProjects, lastId);
       });
+      if (_isSmartWorkflow && _selectedProject != null) {
+        await _loadSmartPosition();
+      }
       _restoreTimerState();
     } catch (e) {
       debugPrint("Error loading data: $e");

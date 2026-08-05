@@ -33,6 +33,7 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
 
   int _year = DateTime.now().year;
   List<Expense> _expenses = const [];
+  List<Proofread> _proofreads = const [];
   DayStart _dayStart = DayStart.midnight;
   Currency _currency = Currency.ils;
   bool _loaded = false;
@@ -45,11 +46,13 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
 
   Future<void> _load() async {
     final expenses = await _storage.loadExpenses();
+    final proofreads = await _storage.loadProofreads();
     final dayStart = await _storage.getDayStart();
     final currency = await _storage.getCurrency();
     if (!mounted) return;
     setState(() {
       _expenses = expenses;
+      _proofreads = proofreads;
       _dayStart = dayStart;
       _currency = currency;
       _loaded = true;
@@ -152,6 +155,7 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
                 projects: widget.projects,
                 history: widget.history,
                 expenses: _expenses,
+                proofreads: _proofreads,
                 dayStart: _dayStart,
               );
               final net = report.net(_currency);

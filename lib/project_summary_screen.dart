@@ -16,6 +16,7 @@ import 'logic/client_update.dart';
 import 'project/progress_grids.dart';
 import 'project/rhythm_panel.dart';
 import 'logic/hebrew_clock.dart';
+import 'logic/proofread_board.dart';
 import 'project/client_update_sheet.dart';
 
 class ProjectSummaryScreen extends StatefulWidget {
@@ -46,6 +47,10 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
   /// Expenses charged directly to projects, loaded once so the summary can show
   /// what a project actually cost.
   List<Expense> _expenses = [];
+
+  /// Proofreading batches, so the screen can say what is still out. The one
+  /// stage of the job somebody else is holding.
+  List<Proofread> _proofreads = const [];
   final StorageService _storage = StorageService();
 
   @override
@@ -68,6 +73,9 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
     });
     _storage.loadExpenses().then((v) {
       if (mounted) setState(() => _expenses = v);
+    });
+    _storage.loadProofreads().then((v) {
+      if (mounted) setState(() => _proofreads = v);
     });
   }
 
@@ -99,6 +107,25 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
         ],
       ),
     );
+  }
+
+  /// What proofreading on this commission is waiting on, in a line.
+  ///
+  /// Null when there is nothing recorded — an empty row saying "nothing" is
+  /// noise on a screen that is already dense. Whose turn it is comes first,
+  /// because that is the only part that asks for an action.
+  String? _proofreadLine(Project project) {
+    final board = ProofreadBoard.of(_proofreads, projectId: project.id);
+    if (board.records.isEmpty) return null;
+
+    final mine = board.mine.length;
+    final out = board.at(ProofreadStage.sent).length;
+    if (mine == 0 && out == 0) return 'הכול הושלם';
+
+    return [
+      if (mine > 0) '$mine ממתינות לך',
+      if (out > 0) '$out אצל המגיה',
+    ].join(' · ');
   }
 
   Widget _buildProjectContent(Project project) {
@@ -279,6 +306,8 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                 child: Column(
                   children: [
                     _statRow("סך הכל נכתב:", totalWrittenStr),
+                    if (_proofreadLine(project) != null)
+                      _statRow("הגהה:", _proofreadLine(project)!),
                     _statRow(
                         "סך הכל רווח:", formatMoneyExact(totalProfit, project.currency)),
                     if (projectExpenses > 0) ...[

@@ -61,6 +61,7 @@ class AnnualReport {
     required Iterable<WorkSession> history,
     required Iterable<Expense> expenses,
     required DayStart dayStart,
+    Iterable<Proofread> proofreads = const [],
   }) {
     final live = projects.where((p) => !p.isDeleted).toList();
     final months = <ReportMonth>[];
@@ -90,6 +91,17 @@ class AnnualReport {
         if (project.expenses > 0) {
           spent.addAmount(units * project.expenses, project.currency);
         }
+      }
+
+      // Proofreading, charged to the month it was paid for — which is taken to
+      // be the month the work came back, since that is when the bill lands. A
+      // batch still out has not been paid for yet.
+      for (final r in proofreads) {
+        if (r.isDeleted || r.cost <= 0) continue;
+        final when = r.doneAt ?? r.returnedAt;
+        if (when == null || when.year != year || when.month != month) continue;
+        spent.addAmount(r.cost, r.currency);
+        currencies.add(r.currency);
       }
 
       // Expenses recorded in their own right: whatever falls in this month,
