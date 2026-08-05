@@ -53,6 +53,7 @@ void main() {
     onBreak: () {},
     onManualEntry: () {},
     onNextLine: () {},
+    onLap: () {},
     onEditPosition: () {},
     onProjectChanged: (_) {},
     onResume: () {},
@@ -101,13 +102,52 @@ void main() {
   });
 
   group('where there is no line to mark', () {
-    testWidgets('a plain sitting leads with stopping', (tester) async {
-      // Nothing is tracking the position, so there is nothing to mark.
+    testWidgets('a plain sitting marks lines too', (tester) async {
+      // Nothing is tracking the position, but the writer still finishes lines
+      // and still wants them timed. The cards layout has always offered this;
+      // the ruled ones could not, because the action was never passed in.
       await pump(tester, snapshot: snap(running: true), isSmart: false);
 
-      expect(find.widgetWithText(SoferPrimaryButton, 'סיים'),
+      expect(find.widgetWithText(SoferPrimaryButton, 'סיימתי שורה'),
           findsOneWidget);
-      expect(find.text('סיימתי שורה'), findsNothing);
+      expect(find.widgetWithText(SoferSecondaryButton, 'סיים'), findsOneWidget);
+    });
+
+    testWidgets('and it marks rather than advances a position', (tester) async {
+      var lapped = 0;
+      var advanced = 0;
+      final spy = HomeActions(
+        onStart: () {},
+        onStop: () {},
+        onBreak: () {},
+        onManualEntry: () {},
+        onNextLine: () => advanced++,
+        onLap: () => lapped++,
+        onEditPosition: () {},
+        onProjectChanged: (_) {},
+        onResume: () {},
+      );
+
+      tester.view.physicalSize = const Size(800, 1720);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(MaterialApp(
+        theme: AppThemeBuilder.build(AppTheme.klaf),
+        home: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Scaffold(
+            body: RuledHomeBody(
+                snapshot: snap(running: true), actions: spy, isSmart: false),
+          ),
+        ),
+      ));
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.tap(find.widgetWithText(SoferPrimaryButton, 'סיימתי שורה'));
+      await tester.pump();
+
+      expect(lapped, 1);
+      expect(advanced, 0, reason: 'plain mode has no position to advance');
     });
 
     testWidgets('a paused sitting does too', (tester) async {
@@ -132,6 +172,7 @@ void main() {
         onBreak: () => broke++,
         onManualEntry: () {},
         onNextLine: () {},
+        onLap: () {},
         onEditPosition: () {},
         onProjectChanged: (_) {},
         onResume: () => resumed++,

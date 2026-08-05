@@ -171,7 +171,7 @@ void main() {
         projects: [project(), project(id: 'q', currency: usd)],
         history: [page(DateTime(2026, 5, 4)), page(DateTime(2026, 5, 4), projectId: 'q')],
       );
-      expect(r.otherCurrencies, containsAll([Currency.ils, usd]));
+      expect(r.currenciesPresent, containsAll([Currency.ils, usd]));
       expect(r.net(Currency.ils), isNull,
           reason: 'shekels and dollars do not make a number');
       expect(r.income.isMixed, isTrue);
@@ -179,7 +179,7 @@ void main() {
 
     test('an ordinary year holds exactly one', () {
       final r = report(history: [page(DateTime(2026, 5, 4))]);
-      expect(r.otherCurrencies, {Currency.ils});
+      expect(r.currenciesPresent, {Currency.ils});
       expect(r.net(Currency.ils), isNotNull);
     });
   });

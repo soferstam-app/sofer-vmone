@@ -128,11 +128,22 @@ class DateLogic {
   /// This is the rule the whole app is built on — the Hebrew calendar is the
   /// working representation, the Gregorian one is display.
   static bool sessionIsInMonth(
-      WorkSession session, DateTime month, DayStart dayStart) {
+          WorkSession session, DateTime month, DayStart dayStart) =>
+      sessionIsInHebrewMonth(session, JewishDate.fromDateTime(month), dayStart);
+
+  /// The same test with the month already converted.
+  ///
+  /// Callers loop over the whole history, and the two-argument form converted
+  /// the *month* again on every record — the same answer, recomputed once per
+  /// session. A conversion is the expensive operation here, which is why the
+  /// work-calendar walks days with `forward()` rather than converting each one.
+  /// Two thousand records cost four thousand conversions where two thousand and
+  /// one would do.
+  static bool sessionIsInHebrewMonth(
+      WorkSession session, JewishDate month, DayStart dayStart) {
     final a = JewishDate.fromDateTime(workingDateOf(session, dayStart));
-    final b = JewishDate.fromDateTime(month);
-    return a.getJewishYear() == b.getJewishYear() &&
-        a.getJewishMonth() == b.getJewishMonth();
+    return a.getJewishYear() == month.getJewishYear() &&
+        a.getJewishMonth() == month.getJewishMonth();
   }
 
   /// Which day of the Hebrew month a session was filed under, 1–30.

@@ -204,10 +204,16 @@ class ProductionPlan {
         .where((d) => !d.date.isBefore(today))
         .fold(0.0, (sum, d) => sum + d.weight);
 
+    // Units by the end of each day, computed once by walking the sessions in
+    // date order rather than re-scanning the whole history for every day of the
+    // range. Two passes over thirty days used to cost sixty scans of everything
+    // a writer had ever recorded, on every rebuild.
+    final byDay = _cumulativeUnits(project, mine, dayStart, start, end, opening);
+
     var actualNow = opening;
     for (final d in drafts) {
       if (d.date.isAfter(today)) break;
-      actualNow = _unitsUpTo(project, mine, dayStart, d.date, inclusive: true);
+      actualNow = byDay[d.date] ?? actualNow;
     }
 
     // Never negative: a writer already past the whole target has nothing left
@@ -240,9 +246,7 @@ class ProductionPlan {
         isOverridden: d.overridden,
         plannedTarget: planned,
         adjustedTarget: adjusted,
-        actual: isFuture
-            ? null
-            : _unitsUpTo(project, mine, dayStart, d.date, inclusive: true),
+        actual: isFuture ? null : (byDay[d.date] ?? opening),
         isToday: isToday,
         isFuture: isFuture,
       ));
@@ -275,6 +279,44 @@ class ProductionPlan {
   /// date — which is already normalised — every session on the first day of a
   /// range counted as having happened before the range began.
   static DateTime _midnight(DateTime d) => DateTime(d.year, d.month, d.day);
+
+
+  /// Billable units reached by the end of each day of the range.
+  ///
+  /// One pass: every session is placed on the day it was filed under, the days
+  /// are walked in order, and each carries the running total forward. The
+  /// alternative — asking "how much by this date" once per day — re-reads the
+  /// whole history for every day, which is the same answer computed thirty
+  /// times.
+  static Map<DateTime, double> _cumulativeUnits(
+    Project project,
+    List<WorkSession> sessions,
+    DayStart dayStart,
+    DateTime start,
+    DateTime end,
+    double opening,
+  ) {
+    final onDay = <DateTime, List<WorkSession>>{};
+    for (final s in sessions) {
+      final filed = DateLogic.workingDateOf(s, dayStart);
+      final day = DateTime(filed.year, filed.month, filed.day);
+      if (day.isBefore(start) || day.isAfter(end)) continue;
+      onDay.putIfAbsent(day, () => []).add(s);
+    }
+
+    final totals = <DateTime, double>{};
+    var running = opening;
+    final length = CalendarDays.inclusiveLength(start, end);
+    for (var i = 0; i < length; i++) {
+      final day = CalendarDays.addDays(start, i);
+      final here = onDay[day];
+      // Summed per day rather than cumulatively re-billed, because billable
+      // units are additive across sessions.
+      if (here != null) running += ProfitCalculator.billableUnits(project, here);
+      totals[day] = running;
+    }
+    return totals;
+  }
 
   static double _unitsUpTo(
     Project project,

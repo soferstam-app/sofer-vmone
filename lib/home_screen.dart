@@ -412,6 +412,7 @@ class _SoferHomeState extends State<SoferHome>
         onBreak: _onBreakTap,
         onManualEntry: () => _openEntryDialog(isManual: true),
         onNextLine: _smartNextLine,
+        onLap: _recordLap,
         onEditPosition: _showEditPositionDialog,
         onProjectChanged: _selectProject,
         onResume: _startTimer,

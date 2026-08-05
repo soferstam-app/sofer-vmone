@@ -80,6 +80,12 @@ class HomeActions {
   final VoidCallback onBreak;
   final VoidCallback onManualEntry;
   final VoidCallback onNextLine;
+
+  /// Marking a finished line in plain mode, where nothing is tracking the
+  /// position. The cards layout has always offered it and this one could not:
+  /// the action was simply never passed in, so a writer who moved to klaf or
+  /// layla found a button he had been using every evening had gone.
+  final VoidCallback onLap;
   final VoidCallback onEditPosition;
   final ValueChanged<Project?> onProjectChanged;
 
@@ -93,6 +99,7 @@ class HomeActions {
     required this.onBreak,
     required this.onManualEntry,
     required this.onNextLine,
+    required this.onLap,
     required this.onEditPosition,
     required this.onProjectChanged,
     required this.onResume,
@@ -445,9 +452,13 @@ class _Actions extends StatelessWidget {
     // the end. The button under the thumb should be the one being pressed all
     // the way through, not the one pressed last.
     return Column(children: [
-      if (isSmart && !s.isPaused) ...[
+      if (!s.isPaused) ...[
         SoferPrimaryButton("סיימתי שורה",
-            icon: Icons.flag, expand: true, onPressed: actions.onNextLine),
+            icon: Icons.flag,
+            expand: true,
+            // Smart mode advances the stored position; plain mode only times
+            // the line. Same button, because to the writer it is the same act.
+            onPressed: isSmart ? actions.onNextLine : actions.onLap),
         const SizedBox(height: 8),
         Row(children: [
           Expanded(

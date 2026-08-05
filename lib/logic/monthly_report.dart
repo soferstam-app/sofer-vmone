@@ -25,8 +25,9 @@ class MonthlyReport {
   final List<ReportDay> days;
   final Project? project;
 
-  /// Null when the month spans commissions priced in more than one currency —
-  /// see [MoneyTotal]. Almost always there is one.
+  /// Kept per currency, because a month may span commissions priced in more
+  /// than one and adding those together gives a number that is not a total of
+  /// anything. Almost always there is exactly one — see [MoneyTotal].
   final MoneyTotal earned;
 
   const MonthlyReport({
@@ -74,9 +75,11 @@ class MonthlyReport {
         !s.backlogOnly &&
         (project == null || s.projectId == project.id));
 
+    // Converted once, not once per record.
+    final monthHebrew = JewishDate.fromDateTime(anyDayInMonth);
     final byDay = <int, List<WorkSession>>{};
     for (final s in mine) {
-      if (!DateLogic.sessionIsInMonth(s, anyDayInMonth, dayStart)) continue;
+      if (!DateLogic.sessionIsInHebrewMonth(s, monthHebrew, dayStart)) continue;
       final day = DateLogic.hebrewDayOfMonth(s, dayStart);
       byDay.putIfAbsent(day, () => []).add(s);
     }

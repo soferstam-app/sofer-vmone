@@ -51,6 +51,7 @@ void main() {
     onBreak: () {},
     onManualEntry: () {},
     onNextLine: () {},
+    onLap: () {},
     onEditPosition: () {},
     onProjectChanged: (_) {},
     onResume: () {},

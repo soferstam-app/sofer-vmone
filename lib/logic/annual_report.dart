@@ -20,14 +20,16 @@ class AnnualReport {
   final int year;
   final List<ReportMonth> months;
 
-  /// What the app could not fold into the figures, because it is in another
-  /// currency. Empty for almost everyone.
-  final Set<Currency> otherCurrencies;
+  /// Every currency the year touched — commissions and expenses alike.
+  ///
+  /// More than one means [income] and [expenses] cannot be stated as a single
+  /// number, and [net] returns null. Almost always there is exactly one.
+  final Set<Currency> currenciesPresent;
 
   const AnnualReport({
     required this.year,
     required this.months,
-    required this.otherCurrencies,
+    required this.currenciesPresent,
   });
 
   MoneyTotal get income => _sum((m) => m.income);
@@ -109,7 +111,7 @@ class AnnualReport {
     return AnnualReport(
       year: year,
       months: months,
-      otherCurrencies: currencies,
+      currenciesPresent: currencies,
     );
   }
 
