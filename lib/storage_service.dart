@@ -28,6 +28,7 @@ class StorageService {
   static const String _keyAutoBackupFolder = 'auto_backup_folder';
   static const String _keySmartReminder = 'smart_reminder';
   static const String _keyLastProject = 'last_project';
+  static const String _keyWindowSize = 'window_size';
 
   Future<void> saveProjects(List<Project> projects) =>
       _saveList(_keyProjects, projects.map((p) => p.toJson()).toList());
@@ -265,6 +266,28 @@ class StorageService {
   /// position that is not the shape this expects threw on the way to the entry
   /// form. Not being able to suggest a page is a shrug; not being able to open
   /// the form is not.
+  /// The size the desktop window was last left at, or null.
+  ///
+  /// Stored as two plain numbers rather than a serialised object: whatever a
+  /// later version keeps about the window, these two still read.
+  Future<Size?> getWindowSize() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_keyWindowSize);
+    if (raw == null) return null;
+    final parts = raw.split('x');
+    if (parts.length != 2) return null;
+    final w = double.tryParse(parts[0]);
+    final h = double.tryParse(parts[1]);
+    if (w == null || h == null || w <= 0 || h <= 0) return null;
+    return Size(w, h);
+  }
+
+  Future<void> setWindowSize(Size size) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+        _keyWindowSize, '${size.width.round()}x${size.height.round()}');
+  }
+
   Future<Map<String, dynamic>> getLastPosition(String projectId) async {
     final prefs = await SharedPreferences.getInstance();
     final String? data = prefs.getString(_keyLastPositions);

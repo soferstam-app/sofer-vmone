@@ -1,13 +1,17 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:screen_retriever/screen_retriever.dart';
 import 'package:window_manager/window_manager.dart';
 import 'home_screen.dart';
-import 'notification_service.dart';
+import 'logic/window_sizing.dart';
+import 'storage_service.dart';
 import 'theme/theme_controller.dart';
+import 'notification_service.dart';
 
 final ValueNotifier<bool> windowsFloatingMode = ValueNotifier<bool>(false);
 
@@ -31,6 +35,41 @@ void registerFontLicences() {
   });
 }
 
+/// What the window should open at, measured against the display it opens on.
+///
+/// A failure to read the display is not a reason to refuse to start: it falls
+/// back to the modest default, which is what the app did before it asked.
+Future<Size> _startupWindowSize() async {
+  try {
+    final display = await screenRetriever.getPrimaryDisplay();
+    return WindowSizing.startup(
+      remembered: await StorageService().getWindowSize(),
+      available: display.visibleSize ?? display.size,
+    );
+  } catch (_) {
+    return WindowSizing.preferred;
+  }
+}
+
+/// Writes down the size the writer leaves the window at.
+///
+/// Debounced, because dragging an edge fires a resize on every frame and the
+/// only size worth keeping is the one he stops at. The floating timer window
+/// is not a size to remember, which [WindowSizing.worthRemembering] settles.
+class _WindowSizeMemory extends WindowListener {
+  Timer? _pending;
+
+  @override
+  void onWindowResized() {
+    _pending?.cancel();
+    _pending = Timer(const Duration(milliseconds: 600), () async {
+      final size = await windowManager.getSize();
+      if (!WindowSizing.worthRemembering(size)) return;
+      await StorageService().setWindowSize(size);
+    });
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   registerFontLicences();
@@ -43,13 +82,14 @@ void main() async {
   if (Platform.isWindows) {
     await windowManager.ensureInitialized();
     await windowManager.waitUntilReadyToShow(
-      const WindowOptions(
-        size: Size(1280, 720),
+      WindowOptions(
+        // The size he left it at, cut down to whatever screen he is on now.
+        size: await _startupWindowSize(),
         // Below this the layouts stop being usable: the ruled themes drop to
         // one column at 620 and below about 400 the figures and the buttons
         // start colliding. There was no floor at all, so the window could be
         // dragged down to a sliver and the app simply broke.
-        minimumSize: Size(420, 640),
+        minimumSize: WindowSizing.minimum,
         center: true,
         titleBarStyle: TitleBarStyle.normal,
       ),
@@ -58,6 +98,7 @@ void main() async {
         await windowManager.focus();
       },
     );
+    windowManager.addListener(_WindowSizeMemory());
   }
 
   // Read before the first frame, so the app never flashes the wrong look.

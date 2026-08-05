@@ -44,6 +44,9 @@ dependencies:
   flutter_local_notifications: ^17.0.0
   timezone: ^0.9.0
   window_manager: ^0.4.3
+  # Already present under window_manager; declared directly because the startup
+  # size has to be measured against the display the writer is actually on.
+  screen_retriever: ^0.2.0
   flutter_foreground_task: ^9.2.0
   # גיבוי וייצוא: שמירה מקומית (כל הפלטפורמות) ושיתוף דרך מערכת ההפעלה
   file_picker: ^8.1.7
