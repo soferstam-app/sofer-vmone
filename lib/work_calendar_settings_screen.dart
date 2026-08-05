@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'hebrew_utils.dart';
+import 'logic/calendar_days.dart';
 import 'logic/hebrew_work_calendar.dart';
 import 'storage_service.dart';
 import 'theme/app_theme.dart';
@@ -317,7 +318,7 @@ class _WorkCalendarSettingsScreenState
     final today = DateTime.now();
     final upcoming = HebrewWorkCalendar.daysOff(
       today,
-      today.add(const Duration(days: 30)),
+      CalendarDays.addDays(today, 30),
       _rules,
     );
 

@@ -102,17 +102,30 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
   }
 
   Widget _buildProjectContent(Project project) {
-    final sessions =
-        widget.history.where((s) => s.projectId == project.id).toList();
+    final sessions = widget.history
+        .where((s) => s.projectId == project.id && !s.isDeleted)
+        .toList();
     final sessionsForStats =
         sessions.where((s) => !s.backlogOnly).toList();
+
+    // Anything divided by time is measured only from work that carried time.
+    //
+    // A record entered without hours has startTime == endTime, so its duration
+    // is zero while its lines still count. Summed over everything, minutes per
+    // line came out too low and shekels per hour too high — both flattering,
+    // both invisible from the screen, and both further off the more such
+    // records a writer keeps. Totals, profit and progress still count every
+    // record: those are quantities, not rates.
+    final sessionsWithTime =
+        sessionsForStats.where((s) => s.timeRecorded).toList();
+    final someWorkUntimed = sessionsWithTime.length != sessionsForStats.length;
 
     String totalWrittenStr = "";
     double totalProfit = 0;
     String avgTimeStr = "";
 
     Duration totalTime = Duration.zero;
-    for (var s in sessionsForStats) {
+    for (var s in sessionsWithTime) {
       totalTime += s.duration;
     }
 
@@ -129,8 +142,11 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
       totalWrittenStr =
           "${totalLines ~/ linesPerPage} עמודים ו-${totalLines % linesPerPage} שורות";
 
+      // The lines on the other side of the ratio, from the same records the
+      // time came from — otherwise it divides lines that carried no time by
+      // time that produced no lines.
       int linesForStats = 0;
-      for (var s in sessionsForStats) {
+      for (var s in sessionsWithTime) {
         linesForStats += ProductionCalculator.seferLinesInSession(s);
       }
       totalProfit = ProfitCalculator.profit(project, sessionsForStats);
@@ -145,7 +161,7 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
       double mezuzot = totalMezuzotLines / ProductionCalculator.linesPerMezuza;
       totalWrittenStr = "${mezuzot.toStringAsFixed(1)} מזוזות";
       final int mezuzaLinesForStats =
-          ProductionCalculator.mezuzaLinesTotal(sessionsForStats);
+          ProductionCalculator.mezuzaLinesTotal(sessionsWithTime);
       totalProfit = ProfitCalculator.profit(project, sessionsForStats);
 
       if (mezuzaLinesForStats > 0 && totalTime.inSeconds > 0) {
@@ -157,7 +173,7 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
           ProductionCalculator.parshiyotTotal(sessions);
       totalWrittenStr = "$totalParshiyot פרשיות (סה\"כ)";
       final int parshiyotForStats =
-          ProductionCalculator.parshiyotTotal(sessionsForStats);
+          ProductionCalculator.parshiyotTotal(sessionsWithTime);
       totalProfit = ProfitCalculator.profit(project, sessionsForStats);
 
       if (parshiyotForStats > 0 && totalTime.inSeconds > 0) {
@@ -168,8 +184,9 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
 
     // Backlog sessions are excluded from both sides of this ratio: they carry
     // no earnings and their time is a placeholder.
+    // Profit per hour is a rate, so both sides come from the timed records.
     final hourlyRate =
-        ProfitCalculator.profitPerHour(project, sessionsForStats, totalTime);
+        ProfitCalculator.profitPerHour(project, sessionsWithTime, totalTime);
     // Only the costs actually in the commission's own currency count towards
     // its net. Anything bought in another is real, but subtracting it here
     // would be arithmetic across two units.
@@ -249,6 +266,7 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
               projectExpenses: projectExpenses,
               hourlyRate: hourlyRate,
               avgTimeStr: avgTimeStr,
+              someWorkUntimed: someWorkUntimed,
               estimate: estimate,
               targetPaceStr: targetPaceStr,
             )
@@ -273,6 +291,8 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                       _statRow("שכר לשעה:",
                           "${formatMoney(hourlyRate, project.currency)} לשעה"),
                     if (avgTimeStr.isNotEmpty) _statRow("ממוצע:", avgTimeStr),
+                    if (someWorkUntimed)
+                      _statRow("", "הממוצע מחושב רק מרשומות שנמדד בהן זמן"),
                   ],
                 ),
               ),
@@ -326,6 +346,7 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
     required double projectExpenses,
     required double? hourlyRate,
     required String avgTimeStr,
+    required bool someWorkUntimed,
     required CompletionEstimate? estimate,
     required String targetPaceStr,
   }) {
@@ -454,7 +475,9 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                   SoferStatRow("נותרו",
                       "${estimate.remainingUnits.toStringAsFixed(0)} ${_unitPlural(project.type)}"),
                 if (avgTimeStr.isNotEmpty)
-                  SoferStatRow("ממוצע", avgTimeStr, last: true),
+                  SoferStatRow("ממוצע", avgTimeStr, last: !someWorkUntimed),
+                if (someWorkUntimed)
+                  SoferStatRow("", "רק מרשומות שנמדד בהן זמן", last: true),
               ],
             ),
           );
@@ -622,7 +645,7 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
           ? "בקצב שנמדד — ${estimate.unitsPerWorkDay.toStringAsFixed(2)} $unit ליום עבודה"
           : "לפי היעד היומי שהגדרת, כי אין עוד מספיק עבודה מתועדת",
       "נותרו ${estimate.plan.calendarDays} ימים, מהם "
-          "${estimate.workDaysLeft.toStringAsFixed(0)} ימי עבודה",
+          "${estimate.workDaysLeft.toStringAsFixed(1)} ימי עבודה",
     ];
     if (estimate.plan.skippedTotal > 0) {
       parts.add("${estimate.plan.skippedTotal} ימים בדרך אינם ימי עבודה "
