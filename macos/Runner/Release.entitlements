@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- UpdateService asks GitHub whether a newer release exists. Without this
+	     a sandboxed app cannot open an outgoing connection, and the check fails
+	     as a caught exception reading "could not check for updates right now" —
+	     indistinguishable from the content filtering much of this audience is
+	     behind. The same omission on Android meant no release build ever
+	     managed the check. -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+</dict>
+</plist>
