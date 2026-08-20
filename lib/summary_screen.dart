@@ -116,8 +116,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                     // The ruled entries carry their own padding so their rules
                     // reach both edges; the cards keep their inset.
                     padding: EdgeInsets.symmetric(
-                        horizontal:
-                            SoferTokens.of(context).isRules ? 0 : 16),
+                        horizontal: SoferTokens.of(context).isRules ? 0 : 16),
                     // Work whose commission has since been deleted is still
                     // work that was done, and it was deliberately recorded.
                     // Filtering the group out left a day that plainly had
@@ -278,7 +277,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
         children: [
           Text(project.name,
               style: TextStyle(
-                  fontFamily: t.numeralFamily, fontSize: 17, color: t.inkMuted)),
+                  fontFamily: t.numeralFamily,
+                  fontSize: 17,
+                  color: t.inkMuted)),
           const SizedBox(height: 3),
           // On its own line rather than opposite the name: the figure can be
           // "3 עמודים ו-12 שורות", which set beside a long project name
@@ -332,6 +333,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
     // divided by lines that had never been timed.
     final measured = MeasuredWork.only(sessionsForStats);
     totalDuration = MeasuredWork.time(measured);
+    final tefillinAverage = project.type == ProjectType.tefillin
+        ? ProductionCalculator.tefillinAverageStats(measured)
+        : null;
 
     // Plenty of sofrim record what they wrote and never how long it took. The
     // total is then true but incomplete, and saying so is the difference
@@ -340,16 +344,14 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
     int linesForStats = 0;
     int unitsForStats = 0;
-    int parshiyotForStats = 0;
+    final int parshiyotForStats = tefillinAverage?.parshiyot ?? 0;
     int mezuzaLinesForStats = 0;
     for (var s in measured) {
       if (project.type == ProjectType.sefer) {
         linesForStats += ProductionCalculator.seferLinesInSession(s);
       } else {
         unitsForStats += s.amount;
-        if (project.type == ProjectType.tefillin) {
-          parshiyotForStats += ProductionCalculator.parshiyotInSession(s);
-        } else if (project.type == ProjectType.mezuza) {
+        if (project.type == ProjectType.mezuza) {
           mezuzaLinesForStats += ProductionCalculator.mezuzaLinesInSession(s);
         }
       }
@@ -408,8 +410,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
       }
 
       if (project.type == ProjectType.tefillin) {
-        if (parshiyotForStats > 0 && totalDuration.inSeconds > 0) {
-          double avgMinutes = totalDuration.inMinutes / parshiyotForStats;
+        final averageTime = tefillinAverage?.duration ?? Duration.zero;
+        if (parshiyotForStats > 0 && averageTime.inSeconds > 0) {
+          double avgMinutes = averageTime.inMinutes / parshiyotForStats;
           avgTimeText = "${avgMinutes.toStringAsFixed(2)} דקות לפרשייה";
         }
       } else if (project.type == ProjectType.mezuza) {
@@ -484,15 +487,18 @@ class _SummaryScreenState extends State<SummaryScreen> {
             LinearProgressIndicator(
               value: progressPercent > 1 ? 1 : progressPercent,
               backgroundColor: SoferTokens.of(context).rule,
-              color: progressPercent >= 1 ? SoferTokens.of(context).positive : SoferTokens.of(context).accent,
+              color: progressPercent >= 1
+                  ? SoferTokens.of(context).positive
+                  : SoferTokens.of(context).accent,
               minHeight: 8,
             ),
             const SizedBox(height: 5),
             Text(
               remainingText,
               style: TextStyle(
-                color:
-                    remainingText.contains("הושלם") ? SoferTokens.of(context).positive : SoferTokens.of(context).danger,
+                color: remainingText.contains("הושלם")
+                    ? SoferTokens.of(context).positive
+                    : SoferTokens.of(context).danger,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -526,21 +532,21 @@ class _SummaryScreenState extends State<SummaryScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-          _buildActionButton(
-            "סיכום חודשי",
-            Icons.calendar_view_month,
-            _showMonthlySummary,
-          ),
-          _buildActionButton("סיכום פרויקט", Icons.folder_special, () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ProjectSummaryScreen(
-                    projects: widget.projects, history: widget.history),
-              ),
-            );
-          }),
-          _buildActionButton("בחירת תאריך", Icons.date_range, _pickDate),
+            _buildActionButton(
+              "סיכום חודשי",
+              Icons.calendar_view_month,
+              _showMonthlySummary,
+            ),
+            _buildActionButton("סיכום פרויקט", Icons.folder_special, () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ProjectSummaryScreen(
+                      projects: widget.projects, history: widget.history),
+                ),
+              );
+            }),
+            _buildActionButton("בחירת תאריך", Icons.date_range, _pickDate),
           ],
         ),
       ),
@@ -698,7 +704,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
     }
     return formatter.format(jewishDate);
   }
-
 
   void _showMonthlySummary() => showMonthlySummary(
         context: context,

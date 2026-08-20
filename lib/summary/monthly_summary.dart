@@ -35,8 +35,7 @@ Future<void> showMonthlySummary({
   // of the days it is made of cannot disagree at a month boundary.
   final monthSessions = history
       .where((s) =>
-          !s.backlogOnly &&
-          DateLogic.sessionIsInMonth(s, month, dayStart))
+          !s.backlogOnly && DateLogic.sessionIsInMonth(s, month, dayStart))
       .toList();
 
   if (monthSessions.isEmpty) {
@@ -140,16 +139,9 @@ Future<void> showMonthlySummary({
       String tefillinText = TefillinSummary.describe(sessions);
       projectText = "${project.name}: $tefillinText";
 
-      for (var s in sessions) {
-        // Null means the parshiya is only partly written — its time would
-        // skew the per-parshiya average, so the session is skipped entirely.
-        final completed =
-            ProductionCalculator.completedParshiyotInSession(s);
-        if (completed != null && MeasuredWork.countsForTime(s)) {
-          timeForParshiyaAvg += s.duration;
-          totalParshiyotForAvg += completed;
-        }
-      }
+      final average = ProductionCalculator.tefillinAverageStats(sessions);
+      timeForParshiyaAvg += average.duration;
+      totalParshiyotForAvg += average.parshiyot;
 
       int totalUnits = 0;
       for (var s in sessions) {
@@ -182,7 +174,9 @@ Future<void> showMonthlySummary({
           LinearProgressIndicator(
             value: progressPercent > 1 ? 1 : progressPercent,
             backgroundColor: SoferTokens.of(context).rule,
-            color: progressPercent >= 1 ? SoferTokens.of(context).positive : SoferTokens.of(context).accent,
+            color: progressPercent >= 1
+                ? SoferTokens.of(context).positive
+                : SoferTokens.of(context).accent,
             minHeight: 6,
           ),
           const SizedBox(height: 2),
@@ -190,7 +184,9 @@ Future<void> showMonthlySummary({
             "יעד: ${actualForGoal.toStringAsFixed(1)} / ${target.toStringAsFixed(1)} ($remainingText)",
             style: TextStyle(
               fontSize: 12,
-              color: remaining <= 0 ? SoferTokens.of(context).positive : SoferTokens.of(context).danger,
+              color: remaining <= 0
+                  ? SoferTokens.of(context).positive
+                  : SoferTokens.of(context).danger,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -251,59 +247,59 @@ Future<void> showMonthlySummary({
       content: SizedBox(
         width: 420,
         child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text("סה\"כ זמן: ${formatClock(totalMonthTime, seconds: false)}",
-                style: const TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 6),
-            Text(
-                "הכנסות כתיבה (חודש): ${earned.format(currency, decimals: 2)}",
-                style: const TextStyle(fontWeight: FontWeight.bold)),
-            if (totalMonthTime.inSeconds > 0 && earnedOne != null)
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text("סה\"כ זמן: ${formatClock(totalMonthTime, seconds: false)}",
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
               Text(
-                  "שכר לשעה (חודש): ${formatMoney(earnedOne.amount / (totalMonthTime.inSeconds / 3600), earnedOne.currency)}",
+                  "הכנסות כתיבה (חודש): ${earned.format(currency, decimals: 2)}",
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              if (totalMonthTime.inSeconds > 0 && earnedOne != null)
+                Text(
+                    "שכר לשעה (חודש): ${formatMoney(earnedOne.amount / (totalMonthTime.inSeconds / 3600), earnedOne.currency)}",
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: SoferTokens.of(ctx).accent)),
+              Text("הוצאות (חודש): ${spent.format(currency, decimals: 2)}",
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              if (net != null)
+                Text("נטו (לאחר הוצאות): ${net.format(decimals: 2)}",
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: net.amount >= 0
+                            ? SoferTokens.of(ctx).positive
+                            : SoferTokens.of(ctx).danger))
+              else
+                Text("נטו: לא ניתן לחשב — החודש כולל יותר ממטבע אחד",
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: SoferTokens.of(ctx).caution)),
+              const Divider(),
+              SizedBox(
+                height: 200,
+                child: _monthlyChart(monthSessions, month, dayStart),
+              ),
+              const Divider(),
+              ...projectWidgets,
+              const Divider(),
+              const Text("ממוצעים:",
                   style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      color: SoferTokens.of(ctx).accent)),
-            Text("הוצאות (חודש): ${spent.format(currency, decimals: 2)}",
-                style: const TextStyle(fontWeight: FontWeight.bold)),
-            if (net != null)
-              Text("נטו (לאחר הוצאות): ${net.format(decimals: 2)}",
-                  style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: net.amount >= 0
-                          ? SoferTokens.of(ctx).positive
-                          : SoferTokens.of(ctx).danger))
-            else
-              Text("נטו: לא ניתן לחשב — החודש כולל יותר ממטבע אחד",
-                  style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: SoferTokens.of(ctx).caution)),
-            const Divider(),
-            SizedBox(
-              height: 200,
-              child: _monthlyChart(monthSessions, month, dayStart),
-            ),
-            const Divider(),
-            ...projectWidgets,
-            const Divider(),
-            const Text("ממוצעים:",
-                style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    decoration: TextDecoration.underline)),
-            if (totalLinesForAvg > 0)
-              Text(
-                  "ממוצע לשורה (ספר/מזוזה): ${(timeForLineAvg.inMinutes / totalLinesForAvg).toStringAsFixed(2)} דקות"),
-            if (totalParshiyotForAvg > 0)
-              Text(
-                  "ממוצע לפרשייה (תפילין): ${(timeForParshiyaAvg.inMinutes / totalParshiyotForAvg).toStringAsFixed(2)} דקות"),
-            if (totalLinesForAvg == 0 && totalParshiyotForAvg == 0)
-              const Text("אין מספיק נתונים לחישוב ממוצעים"),
-          ],
+                      decoration: TextDecoration.underline)),
+              if (totalLinesForAvg > 0)
+                Text(
+                    "ממוצע לשורה (ספר/מזוזה): ${(timeForLineAvg.inMinutes / totalLinesForAvg).toStringAsFixed(2)} דקות"),
+              if (totalParshiyotForAvg > 0)
+                Text(
+                    "ממוצע לפרשייה (תפילין): ${(timeForParshiyaAvg.inMinutes / totalParshiyotForAvg).toStringAsFixed(2)} דקות"),
+              if (totalLinesForAvg == 0 && totalParshiyotForAvg == 0)
+                const Text("אין מספיק נתונים לחישוב ממוצעים"),
+            ],
+          ),
         ),
-      ),
       ),
       actions: [
         TextButton(
@@ -389,7 +385,8 @@ Widget _monthlyChart(
                             },
                           ),
                         ),
-                      Container(height: 1, color: SoferTokens.of(context).inkFaint),
+                      Container(
+                          height: 1, color: SoferTokens.of(context).inkFaint),
                       if (day % 5 == 0 || day == 1)
                         Text("$day", style: const TextStyle(fontSize: 8)),
                     ],

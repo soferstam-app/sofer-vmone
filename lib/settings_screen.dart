@@ -14,6 +14,7 @@ import 'dart:io';
 import 'theme/app_theme.dart';
 import 'onboarding/onboarding_screen.dart';
 import 'settings/shortcuts_screen.dart';
+import 'settings/home_additions_screen.dart';
 import 'widgets/feedback.dart';
 import 'logic/currency.dart';
 import 'version.dart';
@@ -103,9 +104,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String get _themeSummary {
     final choice = themeController.choice.label;
     if (themeController.nightByClock) return "$choice · כרגע בערכת לילה";
-    return themeController.autoNight
-        ? "$choice · מעבר אוטומטי ללילה"
-        : choice;
+    return themeController.autoNight ? "$choice · מעבר אוטומטי ללילה" : choice;
   }
 
   String get _dayStartSummary => switch (_dayStart.boundary) {
@@ -163,8 +162,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           24,
                           (i) => DropdownMenuItem(
                             value: i,
-                            child:
-                                Text("${i.toString().padLeft(2, '0')}:00"),
+                            child: Text("${i.toString().padLeft(2, '0')}:00"),
                           ),
                         ),
                         onChanged: (v) => v == null
@@ -228,8 +226,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text("ביטול")),
+              onPressed: () => Navigator.pop(ctx), child: const Text("ביטול")),
         ],
       ),
     );
@@ -420,8 +417,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final message = switch (read.error!) {
         BackupReadError.cancelled => null,
         BackupReadError.unreadable => "לא ניתן לקרוא את הקובץ",
-        BackupReadError.notOurFormat =>
-          "הקובץ אינו קובץ גיבוי של סופר ומונה",
+        BackupReadError.notOurFormat => "הקובץ אינו קובץ גיבוי של סופר ומונה",
         BackupReadError.tooNew =>
           "הקובץ נוצר בגרסה חדשה יותר של האפליקציה. יש לעדכן את האפליקציה כדי לשחזר אותו.",
       };
@@ -461,8 +457,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Text(
                 "${p.unreadable} רשומות בקובץ אינן ניתנות לקריאה ולא ישוחזרו. "
                 "מומלץ לשמור את הקובץ.",
-                style: TextStyle(
-                    fontSize: 13, color: SoferTokens.of(ctx).danger),
+                style:
+                    TextStyle(fontSize: 13, color: SoferTokens.of(ctx).danger),
               ),
             ],
             const SizedBox(height: 14),
@@ -668,7 +664,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.coffee, size: 20, color: SoferTokens.of(context).accent),
+                    Icon(Icons.coffee,
+                        size: 20, color: SoferTokens.of(context).accent),
                     const SizedBox(width: 6),
                     Text(
                       'https://buymeacoffee.com/soferstam',
@@ -759,9 +756,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SoferRule(strong: true),
         ],
 
-        _entry(
-            "גיבוי אוטומטי",
-            _autoBackupFolder == null ? "כבוי" : "פעיל",
+        _entry("גיבוי אוטומטי", _autoBackupFolder == null ? "כבוי" : "פעיל",
             note: _autoBackupFolder ??
                 "בחר תיקייה שאתה מסנכרן ממילא — עותק ייכתב אחרי כל ישיבה",
             onTap: _pickAutoBackupFolder),
@@ -771,12 +766,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _toggle(
           "לשאול כמה זמן ההפסקה",
           "כבוי — ההפסקה מתחילה מיד בלחיצה. בלי שאלה אין גם זמן להשוות "
-          "אליו, ולכן אין צליל ואין שעון חריגה",
+              "אליו, ולכן אין צליל ואין שעון חריגה",
           _askBreakLength,
           (v) async {
             await _storage.setAskBreakLength(v);
             if (mounted) setState(() => _askBreakLength = v);
           },
+        ),
+        _entry(
+          "תוספות למסך הבית",
+          "חגיגה, יעדי זמן ומטרונום",
+          note: "כל תוספת ניתנת להפעלה או לכיבוי בנפרד",
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const HomeAdditionsScreen()),
+          ),
         ),
         const SoferRule(strong: true),
 
@@ -812,14 +816,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ? "כרגע בערכת לילה"
                 : themeController.autoNight
                     ? "מעבר אוטומטי ללילה"
-                    : null,
-            onTap: () async {
-              await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => const ThemeSettingsScreen()));
-              if (mounted) setState(() {});
-            }),
+                    : null, onTap: () async {
+          await Navigator.push(context,
+              MaterialPageRoute(builder: (_) => const ThemeSettingsScreen()));
+          if (mounted) setState(() {});
+        }),
         // Stated without a value on purpose. A summary here — Friday in
         // particular — read as though Friday were set on this screen, which is
         // the one thing this row must not imply. The rules are stated where
@@ -857,7 +858,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   "גרסה חדשה יותר תדע לקרוא אותן"),
         if (Platform.isWindows || Platform.isMacOS)
           _entry("בדוק עדכונים", _checkingUpdate ? "בודק…" : "",
-            onTap: _checkingUpdate ? null : _checkForUpdates),
+              onTap: _checkingUpdate ? null : _checkForUpdates),
         const SoferRule(strong: true),
         const SizedBox(height: 24),
       ],
@@ -932,9 +933,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 Text(label,
                     style: TextStyle(
-                        fontFamily: t.labelFamily,
-                        fontSize: 14,
-                        color: t.ink)),
+                        fontFamily: t.labelFamily, fontSize: 14, color: t.ink)),
                 const SizedBox(height: 3),
                 Text(note,
                     style: TextStyle(
@@ -953,182 +952,193 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _cardSettings() {
     return SingleChildScrollView(
-        child: Column(
-          children: [
-            TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0.0, end: 1.0),
-              duration: const Duration(milliseconds: 400),
-              curve: Curves.easeOutCubic,
-              builder: (context, value, child) {
-                return Opacity(
-                  opacity: value,
-                  child: Transform.translate(
-                    offset: Offset(0, 20 * (1 - value)),
-                    child: child,
-                  ),
-                );
-              },
-              child: Card(
-                margin: const EdgeInsets.all(10),
-                elevation: 2,
-                child: Column(
-                  children: [
-                    // See the ruled layout: hidden where it cannot work.
-                    if (NotificationService.isSupported) ...[
+      child: Column(
+        children: [
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0.0, end: 1.0),
+            duration: const Duration(milliseconds: 400),
+            curve: Curves.easeOutCubic,
+            builder: (context, value, child) {
+              return Opacity(
+                opacity: value,
+                child: Transform.translate(
+                  offset: Offset(0, 20 * (1 - value)),
+                  child: child,
+                ),
+              );
+            },
+            child: Card(
+              margin: const EdgeInsets.all(10),
+              elevation: 2,
+              child: Column(
+                children: [
+                  // See the ruled layout: hidden where it cannot work.
+                  if (NotificationService.isSupported) ...[
+                    SwitchListTile(
+                      title: const Text("התראות יומיות"),
+                      subtitle: const Text("תזכורת יומית לרישום העבודה"),
+                      value: _notificationsEnabled,
+                      onChanged: _updateNotificationSettings,
+                      secondary: Icon(Icons.notifications_active,
+                          color: SoferTokens.of(context).accent),
+                    ),
+                    if (_notificationsEnabled) ...[
                       SwitchListTile(
-                        title: const Text("התראות יומיות"),
-                        subtitle:
-                            const Text("תזכורת יומית לרישום העבודה"),
-                        value: _notificationsEnabled,
-                        onChanged: _updateNotificationSettings,
-                        secondary: Icon(Icons.notifications_active,
+                        title: const Text("תזכורת לפי ההרגלים שלי"),
+                        subtitle: const Text("לפי השעה שבה אתה בדרך כלל מתחיל"),
+                        value: _smartReminder,
+                        onChanged: _setSmartReminder,
+                        secondary: Icon(Icons.auto_awesome,
                             color: SoferTokens.of(context).accent),
                       ),
-                      if (_notificationsEnabled) ...[
-                        SwitchListTile(
-                          title: const Text("תזכורת לפי ההרגלים שלי"),
-                          subtitle: const Text(
-                              "לפי השעה שבה אתה בדרך כלל מתחיל"),
-                          value: _smartReminder,
-                          onChanged: _setSmartReminder,
-                          secondary: Icon(Icons.auto_awesome,
+                      if (!_smartReminder)
+                        ListTile(
+                          title: const Text("שעת תזכורת"),
+                          subtitle: Text(_notificationTime.format(context)),
+                          leading: Icon(Icons.access_time,
                               color: SoferTokens.of(context).accent),
+                          onTap: _pickNotificationTime,
                         ),
-                        if (!_smartReminder)
-                          ListTile(
-                            title: const Text("שעת תזכורת"),
-                            subtitle: Text(_notificationTime.format(context)),
-                            leading: Icon(Icons.access_time,
-                                color: SoferTokens.of(context).accent),
-                            onTap: _pickNotificationTime,
-                          ),
-                      ],
-                      const Divider(),
                     ],
-                    SwitchListTile(
-                      title: const Text("לשאול כמה זמן ההפסקה"),
-                      subtitle: const Text(
-                          "כבוי — ההפסקה מתחילה מיד בלחיצה. בלי שאלה אין גם "
-                          "זמן להשוות אליו, ולכן אין צליל ואין שעון חריגה"),
-                      value: _askBreakLength,
-                      onChanged: (v) async {
-                        await _storage.setAskBreakLength(v);
-                        if (mounted) setState(() => _askBreakLength = v);
-                      },
-                      secondary: Icon(Icons.coffee,
-                          color: SoferTokens.of(context).accent),
-                    ),
-                    SwitchListTile(
-                      title: const Text("תאריכים לועזיים"),
-                      subtitle: const Text(
-                          "תצוגה בלבד. החישוב — ימי עבודה, חגים וצפי סיום — "
-                          "נעשה תמיד לפי הלוח העברי"),
-                      value: _useGregorianDates,
-                      onChanged: (v) async {
-                        await _storage.setUseGregorianDates(v);
-                        if (mounted) setState(() => _useGregorianDates = v);
-                      },
-                      secondary: Icon(Icons.calendar_month,
-                          color: SoferTokens.of(context).accent),
-                    ),
-                    // The smart/plain workflow switch used to live here. It is
-                    // something the writer flips between sittings, not once at
-                    // setup, so it sits on the home screen next to the tools
-                    // button instead.
                     const Divider(),
-                    ListTile(
-                      title: const Text("עיצוב"),
-                      subtitle: Text(_themeSummary),
-                      leading: Icon(Icons.palette_outlined,
-                          color: SoferTokens.of(context).accent),
-                      trailing: const Icon(Icons.chevron_left),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const ThemeSettingsScreen(),
-                        ),
-                      ),
-                    ),
-                    const Divider(),
-                    ListTile(
-                      // No subtitle, for the same reason as the ruled sheet:
-                      // naming the Friday rule here implied it was set here.
-                      title: const Text("ימי עבודה"),
-                      leading: Icon(Icons.calendar_today,
-                          color: SoferTokens.of(context).accent),
-                      trailing: const Icon(Icons.chevron_left),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const WorkCalendarSettingsScreen(),
-                        ),
-                      ),
-                    ),
-                    ListTile(
-                      title: const Text("מעבר יום"),
-                      subtitle: Text(_dayStartSummary),
-                      leading:
-                          Icon(Icons.schedule, color: SoferTokens.of(context).accent),
-                      onTap: _pickDayStart,
-                    ),
-                    ListTile(
-                      title: const Text("מטבע"),
-                      subtitle: Text(_currencyNote.isEmpty
-                          ? "${_currency.name} (${_currency.symbol})"
-                          : "${_currency.name} · $_currencyNote"),
-                      leading: Icon(Icons.payments,
-                          color: SoferTokens.of(context).accent),
-                      onTap: _pickCurrency,
-                    ),
-                    const Divider(),
-                    ListTile(
-                      title: const Text("שם הסופר"),
-                      subtitle: Text(_soferName.isEmpty
-                          ? "לחתימה בעדכונים ללקוחות (לא הוגדר)"
-                          : _soferName),
-                      leading: Icon(Icons.badge,
-                          color: SoferTokens.of(context).accent),
-                      onTap: _editSoferName,
-                    ),
-                    const Divider(),
-                    ListTile(
-                      title: const Text("גיבוי הנתונים"),
-                      subtitle: const Text(
-                          "ייצוא כל הנתונים לקובץ אחד – פרויקטים, היסטוריה, הוצאות והגדרות"),
-                      leading: Icon(Icons.backup,
-                          color: SoferTokens.of(context).accent),
-                      trailing: _isExporting
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.chevron_left),
-                      onTap: _isExporting ? null : _showBackupOptions,
-                    ),
-                    if (_unreadable > 0)
-                      ListTile(
-                        leading: Icon(Icons.help_outline,
-                            color: SoferTokens.of(context).caution),
-                        title: Text("$_unreadable רשומות שגרסה זו אינה מבינה"),
-                        subtitle: const Text(
-                            "נשמרות כמו שהן ואינן נכנסות לאף חישוב. "
-                            "גרסה חדשה יותר תדע לקרוא אותן",
-                            style: TextStyle(fontSize: 12)),
-                      ),
-                    if (Platform.isWindows || Platform.isMacOS)
-                      ListTile(
-                        title: const Text("בדוק עדכונים"),
-                        leading:
-                            Icon(Icons.update, color: SoferTokens.of(context).accent),
-                        onTap: _checkForUpdates,
-                      ),
                   ],
-                ),
+                  SwitchListTile(
+                    title: const Text("לשאול כמה זמן ההפסקה"),
+                    subtitle: const Text(
+                        "כבוי — ההפסקה מתחילה מיד בלחיצה. בלי שאלה אין גם "
+                        "זמן להשוות אליו, ולכן אין צליל ואין שעון חריגה"),
+                    value: _askBreakLength,
+                    onChanged: (v) async {
+                      await _storage.setAskBreakLength(v);
+                      if (mounted) setState(() => _askBreakLength = v);
+                    },
+                    secondary: Icon(Icons.coffee,
+                        color: SoferTokens.of(context).accent),
+                  ),
+                  ListTile(
+                    title: const Text("תוספות למסך הבית"),
+                    subtitle:
+                        const Text("חגיגה, יעד לשורה, מטרונום וזמני כתיבה"),
+                    leading:
+                        Icon(Icons.tune, color: SoferTokens.of(context).accent),
+                    trailing: const Icon(Icons.chevron_left),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const HomeAdditionsScreen()),
+                    ),
+                  ),
+                  SwitchListTile(
+                    title: const Text("תאריכים לועזיים"),
+                    subtitle: const Text(
+                        "תצוגה בלבד. החישוב — ימי עבודה, חגים וצפי סיום — "
+                        "נעשה תמיד לפי הלוח העברי"),
+                    value: _useGregorianDates,
+                    onChanged: (v) async {
+                      await _storage.setUseGregorianDates(v);
+                      if (mounted) setState(() => _useGregorianDates = v);
+                    },
+                    secondary: Icon(Icons.calendar_month,
+                        color: SoferTokens.of(context).accent),
+                  ),
+                  // The smart/plain workflow switch used to live here. It is
+                  // something the writer flips between sittings, not once at
+                  // setup, so it sits on the home screen next to the tools
+                  // button instead.
+                  const Divider(),
+                  ListTile(
+                    title: const Text("עיצוב"),
+                    subtitle: Text(_themeSummary),
+                    leading: Icon(Icons.palette_outlined,
+                        color: SoferTokens.of(context).accent),
+                    trailing: const Icon(Icons.chevron_left),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const ThemeSettingsScreen(),
+                      ),
+                    ),
+                  ),
+                  const Divider(),
+                  ListTile(
+                    // No subtitle, for the same reason as the ruled sheet:
+                    // naming the Friday rule here implied it was set here.
+                    title: const Text("ימי עבודה"),
+                    leading: Icon(Icons.calendar_today,
+                        color: SoferTokens.of(context).accent),
+                    trailing: const Icon(Icons.chevron_left),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const WorkCalendarSettingsScreen(),
+                      ),
+                    ),
+                  ),
+                  ListTile(
+                    title: const Text("מעבר יום"),
+                    subtitle: Text(_dayStartSummary),
+                    leading: Icon(Icons.schedule,
+                        color: SoferTokens.of(context).accent),
+                    onTap: _pickDayStart,
+                  ),
+                  ListTile(
+                    title: const Text("מטבע"),
+                    subtitle: Text(_currencyNote.isEmpty
+                        ? "${_currency.name} (${_currency.symbol})"
+                        : "${_currency.name} · $_currencyNote"),
+                    leading: Icon(Icons.payments,
+                        color: SoferTokens.of(context).accent),
+                    onTap: _pickCurrency,
+                  ),
+                  const Divider(),
+                  ListTile(
+                    title: const Text("שם הסופר"),
+                    subtitle: Text(_soferName.isEmpty
+                        ? "לחתימה בעדכונים ללקוחות (לא הוגדר)"
+                        : _soferName),
+                    leading: Icon(Icons.badge,
+                        color: SoferTokens.of(context).accent),
+                    onTap: _editSoferName,
+                  ),
+                  const Divider(),
+                  ListTile(
+                    title: const Text("גיבוי הנתונים"),
+                    subtitle: const Text(
+                        "ייצוא כל הנתונים לקובץ אחד – פרויקטים, היסטוריה, הוצאות והגדרות"),
+                    leading: Icon(Icons.backup,
+                        color: SoferTokens.of(context).accent),
+                    trailing: _isExporting
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.chevron_left),
+                    onTap: _isExporting ? null : _showBackupOptions,
+                  ),
+                  if (_unreadable > 0)
+                    ListTile(
+                      leading: Icon(Icons.help_outline,
+                          color: SoferTokens.of(context).caution),
+                      title: Text("$_unreadable רשומות שגרסה זו אינה מבינה"),
+                      subtitle: const Text(
+                          "נשמרות כמו שהן ואינן נכנסות לאף חישוב. "
+                          "גרסה חדשה יותר תדע לקרוא אותן",
+                          style: TextStyle(fontSize: 12)),
+                    ),
+                  if (Platform.isWindows || Platform.isMacOS)
+                    ListTile(
+                      title: const Text("בדוק עדכונים"),
+                      leading: Icon(Icons.update,
+                          color: SoferTokens.of(context).accent),
+                      onTap: _checkForUpdates,
+                    ),
+                ],
               ),
             ),
-          ],
-        ),
-      );
+          ),
+        ],
+      ),
+    );
   }
 }

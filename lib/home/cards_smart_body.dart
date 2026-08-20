@@ -49,40 +49,40 @@ class CardsSmartBody extends StatelessWidget {
 
   /// Where the writer is, or where they left off.
   Widget _position(BuildContext context) {
-    final editButton = TextButton.icon(
-      onPressed: actions.onEditPosition,
-      icon: const Icon(Icons.edit_location_alt, size: 20),
-      label: const Text("ערוך מיקום"),
-    );
-
-    if (!snapshot.isActive) {
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(snapshot.lastPosition ?? "התחלה חדשה בפרויקט זה"),
-          const SizedBox(height: 8),
-          editButton,
-        ],
-      );
-    }
-
-    return Column(
-      children: [
-        Text(
-          snapshot.pageLabel,
-          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-        ),
-        Text(
-          "${snapshot.positionUnit} ${snapshot.currentLine}",
-          style: TextStyle(
-            fontSize: 48,
-            fontWeight: FontWeight.bold,
-            color: Theme.of(context).colorScheme.primary,
+    return Semantics(
+      button: true,
+      label: 'שינוי מיקום',
+      child: InkWell(
+        onTap: actions.onEditPosition,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (!snapshot.isActive) ...[
+                const Text('ממשיך מ'),
+                const SizedBox(height: 6),
+              ],
+              Text(
+                snapshot.positionTitle ??
+                    "${snapshot.positionUnit} ${snapshot.currentLine}",
+                style: TextStyle(
+                  fontSize: snapshot.positionTitle != null ? 34 : 48,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                snapshot.pageLabel,
+                style:
+                    const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 8),
-        editButton,
-      ],
+      ),
     );
   }
 
@@ -123,61 +123,83 @@ class CardsSmartBody extends StatelessWidget {
     }
     if (!snapshot.isRunning) return const SizedBox.shrink();
 
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 12),
-          child: FadeTransition(
-            opacity: pulse,
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: scheme.secondaryContainer,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: scheme.outlineVariant, width: 1.5),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.brush,
-                      color: scheme.onSecondaryContainer, size: 26),
-                  const SizedBox(width: 8),
-                  Text("כותב...",
-                      style: TextStyle(
-                          color: scheme.onSecondaryContainer,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500)),
-                ],
-              ),
-            ),
-          ),
-        ),
-        Container(
-          margin: const EdgeInsets.only(top: 12),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: FadeTransition(
+        opacity: pulse,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            color: scheme.surfaceContainerHighest,
+            color: scheme.secondaryContainer,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: scheme.outlineVariant),
+            border: Border.all(color: scheme.outlineVariant, width: 1.5),
           ),
-          child: Column(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text("הקפה שורה נוכחית",
-                  style: TextStyle(fontSize: 14, color: scheme.onSurfaceVariant)),
-              const SizedBox(height: 4),
-              Text(
-                snapshot.sinceLastLap,
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: scheme.onSurface,
-                ),
-              ),
+              Icon(Icons.brush, color: scheme.onSecondaryContainer, size: 26),
+              const SizedBox(width: 8),
+              Text("כותב...",
+                  style: TextStyle(
+                      color: scheme.onSecondaryContainer,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500)),
             ],
           ),
         ),
-      ],
+      ),
+    );
+  }
+
+  Widget _clocks(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    Widget metric(String label, String value, {bool danger = false}) =>
+        Expanded(
+          child: Column(
+            children: [
+              Text(label,
+                  style:
+                      TextStyle(fontSize: 13, color: scheme.onSurfaceVariant)),
+              const SizedBox(height: 4),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(value,
+                    style: TextStyle(
+                        fontSize: 36,
+                        fontWeight: FontWeight.w300,
+                        color: danger
+                            ? SoferTokens.of(context).danger
+                            : snapshot.isPaused
+                                ? scheme.onSurfaceVariant
+                                : scheme.onSurface)),
+              ),
+            ],
+          ),
+        );
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 520),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: scheme.outlineVariant),
+        ),
+        child: Row(
+          children: [
+            metric('זמן כתיבה', snapshot.elapsed),
+            Container(
+                width: 1,
+                height: 48,
+                margin: const EdgeInsets.symmetric(horizontal: 12),
+                color: scheme.outlineVariant),
+            metric(snapshot.shownLineLabel, snapshot.shownLineValue,
+                danger: snapshot.lineClockOverrun),
+          ],
+        ),
+      ),
     );
   }
 
@@ -199,7 +221,9 @@ class CardsSmartBody extends StatelessWidget {
       children: [
         ElevatedButton.icon(
           // Nothing was written during a break, so there is no line to finish.
-          onPressed: snapshot.isPaused ? null : actions.onNextLine,
+          onPressed: snapshot.isPaused || snapshot.isSavingLine
+              ? null
+              : actions.onNextLine,
           icon: const Icon(Icons.arrow_downward),
           label: const Text("מעבר שורה (סיימתי)"),
           style: ElevatedButton.styleFrom(
@@ -209,24 +233,34 @@ class CardsSmartBody extends StatelessWidget {
             foregroundColor: scheme.onPrimary,
           ),
         ),
+        if (snapshot.project?.type == ProjectType.mezuza) ...[
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: snapshot.isPaused ? null : actions.onSkipMezuza,
+            icon: const Icon(Icons.skip_next),
+            label: const Text('עבור למזוזה הבאה'),
+          ),
+        ],
         const SizedBox(height: 20),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           spacing: 20,
           children: [
             ElevatedButton.icon(
-              onPressed: snapshot.isPaused ? actions.onResume : actions.onBreak,
-              icon: Icon(
-                  snapshot.isPaused ? Icons.play_arrow : Icons.coffee),
-              label:
-                  Text(snapshot.isPaused ? "המשך כתיבה" : "הפסקת קפה"),
+              onPressed: snapshot.isSavingLine
+                  ? null
+                  : snapshot.isPaused
+                      ? actions.onResume
+                      : actions.onBreak,
+              icon: Icon(snapshot.isPaused ? Icons.play_arrow : Icons.coffee),
+              label: Text(snapshot.isPaused ? "המשך כתיבה" : "הפסקת קפה"),
               style: ElevatedButton.styleFrom(
                 backgroundColor: scheme.tertiaryContainer,
                 foregroundColor: scheme.onTertiaryContainer,
               ),
             ),
             ElevatedButton.icon(
-              onPressed: actions.onStop,
+              onPressed: snapshot.isSavingLine ? null : actions.onStop,
               icon: const Icon(Icons.logout),
               label: const Text("יציאה"),
               style: ElevatedButton.styleFrom(
@@ -251,18 +285,23 @@ class CardsSmartBody extends StatelessWidget {
             if (snapshot.project != null) ...[
               _position(context),
               const SizedBox(height: 30),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: FadeTransition(
-                  opacity: pulse,
-                  child: Text(
-                    snapshot.elapsed,
+              if (snapshot.isActive)
+                _clocks(context)
+              else
+                Text(snapshot.elapsed,
                     style: const TextStyle(
-                        fontSize: 80, fontWeight: FontWeight.w200),
+                        fontSize: 64, fontWeight: FontWeight.w200)),
+              _state(context),
+              if (snapshot.hasHomeAdditions) ...[
+                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 520),
+                    child: HomeAdditionsPanel(snapshot: snapshot),
                   ),
                 ),
-              ),
-              _state(context),
+              ],
               const SizedBox(height: 40),
               _controls(context),
             ],

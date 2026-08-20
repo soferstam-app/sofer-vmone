@@ -3,6 +3,8 @@ import '../models.dart';
 import 'id_generator.dart';
 import 'production_calculator.dart';
 import 'session_logic.dart';
+import 'tefillin_state.dart';
+import 'tefillin_units.dart';
 
 /// What the entry form was told, in the shape the builder needs it.
 ///
@@ -53,6 +55,10 @@ class EntryInput {
   /// Tefillin parshiya mode only, 1–4.
   final int tefillinParshiya;
 
+  /// Which pair the parshiya belongs to, as typed. Blank means the writer did
+  /// not say, and the work falls into the first free slot in writing order.
+  final String tefillinPair;
+
   const EntryInput({
     required this.project,
     required this.start,
@@ -71,6 +77,7 @@ class EntryInput {
     this.tefillinMode = 'set',
     this.tefillinPart = 'head',
     this.tefillinParshiya = 1,
+    this.tefillinPair = '',
   });
 }
 
@@ -145,7 +152,7 @@ class EntryBuilder {
       ProjectType.sefer => _sefer(input, history, entryId),
       ProjectType.mezuza => _counted(input, entryId),
       ProjectType.tefillin => input.tefillinMode == 'parshiya'
-          ? _parshiya(input, entryId)
+          ? _parshiya(input, history, entryId)
           : _counted(input, entryId),
     };
   }
@@ -167,9 +174,16 @@ class EntryBuilder {
       return EntryRejected("מספר העמוד חורג מהגדרת הספר ($totalPages)");
     }
 
-    final pageToParsed = _page(input.pageTo);
+    final pageToText = input.pageTo.trim();
+    final pageToParsed = _page(pageToText);
+    if (pageToText.isNotEmpty && pageToParsed <= 0) {
+      return const EntryRejected("יש להזין עמוד סיום תקין או להשאיר אותו ריק");
+    }
+    if (pageToParsed > 0 && pageToParsed < pageFrom) {
+      return const EntryRejected("עמוד הסיום לא יכול להיות לפני עמוד ההתחלה");
+    }
     final pageTo = pageToParsed <= 0 ? null : pageToParsed;
-    final isRange = pageTo != null && pageTo >= pageFrom && pageTo != pageFrom;
+    final isRange = pageTo != null && pageTo != pageFrom;
 
     if (isRange) {
       if (totalPages != null && pageTo > totalPages) {
@@ -185,40 +199,72 @@ class EntryBuilder {
             "טווח של יותר מ־$_maxPagesPerEntry עמודים בהזנה אחת — יש לפצל אותו");
       }
 
+      // In a multi-page entry the two line fields describe the two ends of
+      // one continuous stretch: the first page starts at `lineFrom`, every
+      // page in the middle is full, and the last page stops at `lineTo`.
+      // Previously both fields were silently discarded as soon as `pageTo`
+      // was present, so page מג line 1 through page מד line 21 became two full
+      // pages. Blank endpoints keep the convenient "whole pages" behaviour.
+      final firstLine = input.lineFrom.trim().isEmpty
+          ? 1
+          : int.tryParse(input.lineFrom.trim()) ?? 0;
+      final lastLine = input.lineTo.trim().isEmpty
+          ? linesPerPage
+          : int.tryParse(input.lineTo.trim()) ?? 0;
+      if (firstLine < 1 || firstLine > linesPerPage) {
+        return EntryRejected("שורת ההתחלה חייבת להיות בין 1 ל־$linesPerPage");
+      }
+      if (lastLine < 1 || lastLine > linesPerPage) {
+        return EntryRejected("שורת הסיום חייבת להיות בין 1 ל־$linesPerPage");
+      }
+
+      final ranges = <({int page, int startLine, int endLine})>[
+        for (var page = pageFrom; page <= pageTo; page++)
+          (
+            page: page,
+            startLine: page == pageFrom ? firstLine : 1,
+            endLine: page == pageTo ? lastLine : linesPerPage,
+          ),
+      ];
+
       var overlaps = false;
-      for (var p = pageFrom; p <= pageTo; p++) {
-        if (_overlaps(history, project, p, 1, linesPerPage)) {
+      for (final range in ranges) {
+        if (_overlaps(
+            history, project, range.page, range.startLine, range.endLine)) {
           overlaps = true;
           break;
         }
       }
 
       // One stretch of time was entered for the whole range, so it is divided
-      // between the pages rather than handed to each of them whole.
-      final pageCount = pageTo - pageFrom + 1;
-      final slices = SessionLogic.splitRange(
-          start: input.start, end: input.end, parts: pageCount);
+      // in proportion to the lines on each page. For a page and a half this
+      // means the full page receives twice the time of the half page.
+      final slices = SessionLogic.splitByWeight(
+        start: input.start,
+        end: input.end,
+        weights: [for (final r in ranges) r.endLine - r.startLine + 1],
+      );
 
       return EntryBuilt(
         sessions: [
-          for (var i = 0; i < pageCount; i++)
+          for (var i = 0; i < ranges.length; i++)
             _session(
               input,
-              id: IdGenerator.generate(suffix: '${pageFrom + i}'),
+              id: IdGenerator.generate(suffix: '${ranges[i].page}'),
               entryId: entryId,
               start: slices[i].start,
               end: slices[i].end,
-              amount: pageFrom + i,
-              startLine: 1,
-              endLine: linesPerPage,
-              description:
-                  "עמוד ${formatHebrewNumber(pageFrom + i)} (1-$linesPerPage)",
+              amount: ranges[i].page,
+              startLine: ranges[i].startLine,
+              endLine: ranges[i].endLine,
+              description: "עמוד ${formatHebrewNumber(ranges[i].page)} "
+                  "(${ranges[i].startLine}-${ranges[i].endLine})",
               linesPerPageAtEntry: linesPerPage,
             ),
         ],
         overlapsRecordedWork: overlaps,
         reachedPage: pageTo,
-        reachedLine: linesPerPage,
+        reachedLine: lastLine,
       );
     }
 
@@ -255,7 +301,8 @@ class EntryBuilder {
   }
 
   /// A single tefillin parshiya, whole or part-written.
-  static EntryOutcome _parshiya(EntryInput input, String entryId) {
+  static EntryOutcome _parshiya(
+      EntryInput input, Iterable<WorkSession> history, String entryId) {
     final endLine = int.tryParse(input.partialLine.trim()) ?? 0;
     final lineError = SessionLogic.validateTefillinLine(
       tefillinType: input.tefillinPart,
@@ -263,12 +310,44 @@ class EntryBuilder {
     );
     if (lineError != null) return EntryRejected(lineError);
 
-    const names = ["קדש", "והיה כי יביאך", "שמע", "והיה אם שמוע"];
     final name = input.tefillinParshiya >= 1 && input.tefillinParshiya <= 4
-        ? names[input.tefillinParshiya - 1]
+        ? TefillinUnits.names[input.tefillinParshiya - 1]
         : "";
     final part = input.tefillinPart == 'head' ? "ראש" : "יד";
+    // A pair of zero or less is no pair at all, and storing it would send the
+    // parshiya to a slot that cannot exist.
+    final pair = int.tryParse(input.tefillinPair.trim());
+    final pairIndex = pair != null && pair >= 1 ? pair : null;
+    if (pairIndex == null) {
+      return const EntryRejected(
+          "יש להזין מספר זוג כדי לשמור על סדר הפרשיות בתוך הסט");
+    }
+
+    final side =
+        input.tefillinPart == 'head' ? TefillinSide.head : TefillinSide.hand;
+    final slots = TefillinState.slots(input.project, history);
+    final target = slots.firstWhere(
+      (s) =>
+          s.pair == pairIndex &&
+          s.side == side &&
+          s.parshiya == input.tefillinParshiya,
+      orElse: () => TefillinSlot(
+        pair: pairIndex,
+        side: side,
+        parshiya: input.tefillinParshiya,
+      ),
+    );
+    if (target.state != SlotState.empty) {
+      return EntryRejected("פרשיית $name בזוג $pairIndex כבר התחילה");
+    }
+    if (!TefillinState.canStart(target, slots)) {
+      final previous = TefillinUnits.names[input.tefillinParshiya - 2];
+      return EntryRejected(
+          "אי אפשר להתחיל את $name לפני שהפרשייה $previous הסתיימה באותו סט");
+    }
+
     var description = "פרשיית $name של $part";
+    description += " (זוג $pairIndex)";
     if (endLine > 0) description += " (עד שורה $endLine)";
 
     return EntryBuilt(
@@ -285,6 +364,7 @@ class EntryBuilder {
           description: description,
           tefillinType: input.tefillinPart,
           parshiya: input.tefillinParshiya,
+          pairIndex: pairIndex,
         ),
       ],
       overlapsRecordedWork: false,
@@ -310,13 +390,12 @@ class EntryBuilder {
       endLine = int.tryParse(input.partialLine.trim()) ?? 0;
       final lineError = SessionLogic.validateMezuzaLine(endLine);
       if (lineError != null) return EntryRejected(lineError);
-      description = endLine > 0
-          ? "$amount מזוזות (עד שורה $endLine)"
-          : "$amount מזוזות";
+      description =
+          endLine > 0 ? "$amount מזוזות (עד שורה $endLine)" : "$amount מזוזות";
     } else {
       switch (input.tefillinMode) {
         case 'set':
-          description = "$amount סטים של תפילין";
+          description = "$amount זוגות תפילין";
         case 'head':
           description = "$amount תפילין של ראש";
           tefillinType = 'head';
@@ -379,6 +458,7 @@ class EntryBuilder {
     required String description,
     String? tefillinType,
     int? parshiya,
+    int? pairIndex,
     int? linesPerPageAtEntry,
   }) =>
       WorkSession(
@@ -391,6 +471,7 @@ class EntryBuilder {
         endLine: endLine,
         tefillinType: tefillinType,
         parshiya: parshiya,
+        pairIndex: pairIndex,
         description: description,
         isManual: input.isManual,
         backlogOnly: input.backlogOnly,

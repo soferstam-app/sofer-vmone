@@ -35,13 +35,13 @@ class ProjectPerformance {
   String get unitName => switch (project.type) {
         ProjectType.sefer => 'עמוד',
         ProjectType.mezuza => 'מזוזה',
-        ProjectType.tefillin => 'סט',
+        ProjectType.tefillin => 'זוג',
       };
 
   String get unitNamePlural => switch (project.type) {
         ProjectType.sefer => 'עמודים',
         ProjectType.mezuza => 'מזוזות',
-        ProjectType.tefillin => 'סטים',
+        ProjectType.tefillin => 'זוגות',
       };
 }
 

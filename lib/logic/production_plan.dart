@@ -312,7 +312,9 @@ class ProductionPlan {
       final here = onDay[day];
       // Summed per day rather than cumulatively re-billed, because billable
       // units are additive across sessions.
-      if (here != null) running += ProfitCalculator.billableUnits(project, here);
+      if (here != null) {
+        running += ProfitCalculator.billableUnits(project, here);
+      }
       totals[day] = running;
     }
     return totals;

@@ -32,6 +32,26 @@ class HomeSnapshot {
   final bool breakOverrun;
   final String sinceLastLap;
 
+  /// When a line target is enabled the second clock becomes a signed
+  /// countdown. Without it these are null and the familiar elapsed line clock
+  /// remains unchanged.
+  final String? lineClockLabel;
+  final String? lineClockValue;
+  final bool lineClockOverrun;
+
+  /// Optional, independently enabled rows below the main clocks.
+  final String? writingTargetStatus;
+  final bool writingTargetOverrun;
+  final String? endTimeStatus;
+  final bool endTimeOverrun;
+  final int? metronomeBpm;
+  final bool metronomeActive;
+
+  /// True only for the short write to local storage after "סיימתי שורה".
+  /// The action is disabled during it so two rapid taps cannot file one line
+  /// twice against the same checkpoint.
+  final bool isSavingLine;
+
   /// Where the writer left off last time, written out — or null when this
   /// commission has never been worked on, which is a different thing from
   /// starting at page one and has to read differently.
@@ -47,6 +67,14 @@ class HomeSnapshot {
 
   /// What the project counts in — "שורה", "מזוזה", "פרשייה".
   final String positionUnit;
+
+  /// What to show large instead of the unit and its number.
+  ///
+  /// Tefillin only. A sofer does not think "parshiya 2"; he thinks "the vehaya
+  /// ki yeviacha of pair four", so the name goes in the large type and the pair
+  /// and line go beneath. Null everywhere else, where a number is exactly what
+  /// the writer means.
+  final String? positionTitle;
 
   final String todayOutput;
   final String? hourlyRate;
@@ -66,10 +94,21 @@ class HomeSnapshot {
     this.breakRemaining = '',
     this.breakOverrun = false,
     this.sinceLastLap = '',
+    this.lineClockLabel,
+    this.lineClockValue,
+    this.lineClockOverrun = false,
+    this.writingTargetStatus,
+    this.writingTargetOverrun = false,
+    this.endTimeStatus,
+    this.endTimeOverrun = false,
+    this.metronomeBpm,
+    this.metronomeActive = false,
+    this.isSavingLine = false,
     this.lastPosition,
     required this.currentLine,
     required this.pageLabel,
     required this.positionUnit,
+    this.positionTitle,
     required this.todayOutput,
     this.hourlyRate,
     this.doneOfTotal,
@@ -79,6 +118,12 @@ class HomeSnapshot {
   });
 
   bool get isActive => isRunning || isPaused;
+  String get shownLineLabel => lineClockLabel ?? 'זמן השורה';
+  String get shownLineValue => lineClockValue ?? sinceLastLap;
+  bool get hasHomeAdditions =>
+      writingTargetStatus != null ||
+      endTimeStatus != null ||
+      metronomeBpm != null;
 }
 
 /// What the ruled home screen can do. Held together so the layout never has to
@@ -96,6 +141,10 @@ class HomeActions {
   /// layla found a button he had been using every evening had gone.
   final VoidCallback onLap;
   final VoidCallback onEditPosition;
+
+  /// Leaves the current mezuza part-written and moves to the next untouched
+  /// one. The position sheet is what brings the writer back later.
+  final VoidCallback onSkipMezuza;
   final ValueChanged<Project?> onProjectChanged;
 
   /// Pausing and resuming are the same button in the cards layout, so it needs
@@ -110,6 +159,7 @@ class HomeActions {
     required this.onNextLine,
     required this.onLap,
     required this.onEditPosition,
+    required this.onSkipMezuza,
     required this.onProjectChanged,
     required this.onResume,
   });
@@ -249,6 +299,11 @@ class _WorkColumn extends StatelessWidget {
           else
             _ClockHero(snapshot: s),
 
+          if (s.hasHomeAdditions) ...[
+            const SizedBox(height: 16),
+            HomeAdditionsPanel(snapshot: s),
+          ],
+
           const SizedBox(height: 20),
           _Actions(snapshot: s, actions: actions, isSmart: isSmart),
         ],
@@ -281,38 +336,48 @@ class _PositionHero extends StatelessWidget {
                   color: t.inkMuted)),
           const SizedBox(height: 5),
         ],
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            if (s.isRunning && !s.isPaused) ...[
-              Container(
-                width: 7,
-                height: 7,
-                margin: const EdgeInsetsDirectional.only(end: 10),
-                decoration:
-                    BoxDecoration(color: t.accent, shape: BoxShape.circle),
-              ),
-            ],
-            // Scaled down rather than clipped: "פרשייה 12" at this size is
-            // wider than a narrow phone.
-            Flexible(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: AlignmentDirectional.centerStart,
-                child: Text(
-                  "${s.positionUnit} ${s.currentLine}",
-                  style: TextStyle(
-                    fontFamily: t.numeralFamily,
-                    fontSize: 58,
-                    height: 1,
-                    letterSpacing: -2,
-                    color: t.ink,
+        Semantics(
+          button: true,
+          label: 'שינוי מיקום',
+          child: InkWell(
+            onTap: onEdit,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  if (s.isRunning && !s.isPaused) ...[
+                    Container(
+                      width: 7,
+                      height: 7,
+                      margin: const EdgeInsetsDirectional.only(end: 10),
+                      decoration: BoxDecoration(
+                          color: t.accent, shape: BoxShape.circle),
+                    ),
+                  ],
+                  // The large position itself is the control. A separate
+                  // "manual position" button made this feel like data entry
+                  // when the writer is simply saying where the quill is.
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: AlignmentDirectional.centerStart,
+                      child: Text(
+                        s.positionTitle ?? "${s.positionUnit} ${s.currentLine}",
+                        style: TextStyle(
+                          fontFamily: t.numeralFamily,
+                          fontSize: s.positionTitle != null ? 46 : 58,
+                          height: 1,
+                          letterSpacing: -2,
+                          color: t.ink,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
         const SizedBox(height: 6),
         Text(
@@ -322,47 +387,40 @@ class _PositionHero extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         if (s.isActive)
-          // Wrap rather than Row: with a break countdown beside it this line
-          // carries three pieces, and on a narrow column they do not fit. A
-          // Row clips what will not fit, which is how a number gets lost.
-          Wrap(
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 12,
-            runSpacing: 4,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-            Text(
-              s.elapsed,
-              style: TextStyle(
-                fontFamily: t.numeralFamily,
-                fontSize: 25,
-                color: s.isPaused ? t.inkMuted : t.ink,
-              ),
-            ),
-            if (s.isPaused) ...[
-              Text(
-                  s.breakElapsed.isEmpty
-                      ? "בהפסקה"
-                      : "בהפסקה ${s.breakElapsed}",
-                  style: TextStyle(
-                      fontFamily: t.labelFamily,
-                      fontSize: 13,
-                      color: t.inkMuted)),
-              // The same thing the cards layout says, said the ruled way. The
-              // layouts arrange differently; they never carry different
-              // features.
-              if (s.breakRemaining.isNotEmpty)
-                Text(
-                  s.breakOverrun
-                      ? "חריגה ${s.breakRemaining}"
-                      : "נותרו ${s.breakRemaining}",
-                  style: TextStyle(
-                    fontFamily: t.numeralFamily,
-                    fontSize: 14,
-                    color: s.breakOverrun ? t.danger : t.inkMuted,
-                  ),
+              _ClockPair(snapshot: s, compact: true),
+              if (s.isPaused) ...[
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 4,
+                  children: [
+                    Text(
+                        s.breakElapsed.isEmpty
+                            ? "בהפסקה"
+                            : "בהפסקה ${s.breakElapsed}",
+                        style: TextStyle(
+                            fontFamily: t.labelFamily,
+                            fontSize: 13,
+                            color: t.inkMuted)),
+                    if (s.breakRemaining.isNotEmpty)
+                      Text(
+                        s.breakOverrun
+                            ? "חריגה ${s.breakRemaining}"
+                            : "נותרו ${s.breakRemaining}",
+                        style: TextStyle(
+                          fontFamily: t.numeralFamily,
+                          fontSize: 14,
+                          color: s.breakOverrun ? t.danger : t.inkMuted,
+                        ),
+                      ),
+                  ],
                 ),
+              ],
             ],
-          ])
+          )
         else
           Text("מוכן להתחיל",
               style: TextStyle(
@@ -370,13 +428,6 @@ class _PositionHero extends StatelessWidget {
                   fontSize: 13,
                   letterSpacing: 1.2,
                   color: t.inkMuted)),
-        const SizedBox(height: 6),
-        TextButton.icon(
-          onPressed: onEdit,
-          style: TextButton.styleFrom(padding: EdgeInsets.zero),
-          icon: const Icon(Icons.edit_location_alt, size: 18),
-          label: const Text("הזנת מיקום ידנית"),
-        ),
       ],
     );
   }
@@ -397,36 +448,19 @@ class _ClockHero extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            if (s.isRunning && !s.isPaused)
-              Container(
-                width: 7,
-                height: 7,
-                margin: const EdgeInsetsDirectional.only(end: 10),
-                decoration:
-                    BoxDecoration(color: t.accent, shape: BoxShape.circle),
-              ),
-            Flexible(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: AlignmentDirectional.centerStart,
-                child: Text(
-                  s.elapsed,
-                  style: TextStyle(
-                    fontFamily: t.numeralFamily,
-                    fontSize: 56,
-                    height: 1,
-                    letterSpacing: -1,
-                    color: s.isPaused ? t.inkMuted : t.ink,
-                  ),
-                ),
-              ),
+        if (s.isActive)
+          _ClockPair(snapshot: s)
+        else
+          Text(
+            s.elapsed,
+            style: TextStyle(
+              fontFamily: t.numeralFamily,
+              fontSize: 56,
+              height: 1,
+              letterSpacing: -1,
+              color: t.ink,
             ),
-          ],
-        ),
+          ),
         const SizedBox(height: 8),
         Text(
           s.isPaused
@@ -442,6 +476,193 @@ class _ClockHero extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// The two clocks answer different questions and stay visible together: how
+/// long this sitting has run, and how long the line under the quill is taking.
+class _ClockPair extends StatelessWidget {
+  final HomeSnapshot snapshot;
+  final bool compact;
+
+  const _ClockPair({required this.snapshot, this.compact = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = SoferTokens.of(context);
+    final valueSize = compact ? 25.0 : 43.0;
+    final color = snapshot.isPaused ? t.inkMuted : t.ink;
+
+    Widget metric(String label, String value, {bool danger = false}) =>
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: TextStyle(
+                      fontFamily: t.labelFamily,
+                      fontSize: 11,
+                      color: t.inkMuted)),
+              const SizedBox(height: 3),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: AlignmentDirectional.centerStart,
+                child: Text(value,
+                    style: TextStyle(
+                        fontFamily: t.numeralFamily,
+                        fontSize: valueSize,
+                        height: 1,
+                        color: danger ? t.danger : color)),
+              ),
+            ],
+          ),
+        );
+
+    return Row(
+      children: [
+        metric('זמן כתיבה', snapshot.elapsed),
+        Container(
+          width: 1,
+          height: compact ? 42 : 58,
+          margin: const EdgeInsets.symmetric(horizontal: 14),
+          color: t.rule,
+        ),
+        metric(snapshot.shownLineLabel, snapshot.shownLineValue,
+            danger: snapshot.lineClockOverrun),
+      ],
+    );
+  }
+}
+
+/// The opt-in tools that sit beneath the clocks in every home layout.
+class HomeAdditionsPanel extends StatelessWidget {
+  final HomeSnapshot snapshot;
+
+  const HomeAdditionsPanel({super.key, required this.snapshot});
+
+  @override
+  Widget build(BuildContext context) {
+    if (!snapshot.hasHomeAdditions) return const SizedBox.shrink();
+    final t = SoferTokens.of(context);
+
+    Widget row(IconData icon, String text,
+        {bool danger = false, bool active = false}) {
+      final color = danger
+          ? t.danger
+          : active
+              ? t.accent
+              : t.inkMuted;
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: color),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                text,
+                style: TextStyle(
+                  fontFamily: t.labelFamily,
+                  fontSize: 13,
+                  height: 1.35,
+                  fontWeight: danger ? FontWeight.bold : FontWeight.normal,
+                  color: color,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: t.accent.withValues(alpha: 0.055),
+        border: Border.all(color: t.rule),
+        borderRadius: t.isCards ? BorderRadius.circular(12) : BorderRadius.zero,
+      ),
+      child: Column(
+        children: [
+          if (snapshot.writingTargetStatus case final value?)
+            row(Icons.hourglass_bottom, value,
+                danger: snapshot.writingTargetOverrun),
+          if (snapshot.endTimeStatus case final value?)
+            row(Icons.alarm, value, danger: snapshot.endTimeOverrun),
+          if (snapshot.metronomeBpm case final bpm?)
+            row(
+              Icons.graphic_eq,
+              snapshot.metronomeActive
+                  ? 'מטרונום · $bpm פעימות בדקה'
+                  : snapshot.isActive
+                      ? 'מטרונום · $bpm פעימות בדקה · מושהה'
+                      : 'מטרונום · $bpm פעימות בדקה · יתחיל עם הטיימר',
+              active: snapshot.metronomeActive,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A short, non-blocking celebration over whichever home layout is active.
+class GoalCelebrationOverlay extends StatelessWidget {
+  const GoalCelebrationOverlay({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = SoferTokens.of(context);
+    return IgnorePointer(
+      child: SafeArea(
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0.75, end: 1),
+            duration: const Duration(milliseconds: 550),
+            curve: Curves.easeOutBack,
+            builder: (context, scale, child) => Transform.scale(
+              scale: scale,
+              child: child,
+            ),
+            child: Container(
+              margin: const EdgeInsets.all(18),
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 15),
+              decoration: BoxDecoration(
+                color: t.paper,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: t.accent, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.18),
+                    blurRadius: 18,
+                    offset: const Offset(0, 7),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.auto_awesome, color: t.accent),
+                  const SizedBox(width: 10),
+                  Text(
+                    'היעד היומי הושלם! 🎉',
+                    style: TextStyle(
+                      fontFamily: t.labelFamily,
+                      color: t.ink,
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Icon(Icons.celebration, color: t.accent),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -491,17 +712,32 @@ class _Actions extends StatelessWidget {
             expand: true,
             // Smart mode advances the stored position; plain mode only times
             // the line. Same button, because to the writer it is the same act.
-            onPressed: isSmart ? actions.onNextLine : actions.onLap),
+            onPressed: s.isSavingLine
+                ? null
+                : isSmart
+                    ? actions.onNextLine
+                    : actions.onLap),
         const SizedBox(height: 8),
+        if (isSmart && s.project?.type == ProjectType.mezuza) ...[
+          SoferSecondaryButton("עבור למזוזה הבאה",
+              icon: Icons.skip_next,
+              expand: true,
+              onPressed: s.isSavingLine ? null : actions.onSkipMezuza),
+          const SizedBox(height: 8),
+        ],
         Row(children: [
           Expanded(
             child: SoferSecondaryButton("הפסקה",
-                icon: Icons.coffee, expand: true, onPressed: actions.onBreak),
+                icon: Icons.coffee,
+                expand: true,
+                onPressed: s.isSavingLine ? null : actions.onBreak),
           ),
           const SizedBox(width: 8),
           Expanded(
             child: SoferSecondaryButton("סיים",
-                icon: Icons.stop, expand: true, onPressed: actions.onStop),
+                icon: Icons.stop,
+                expand: true,
+                onPressed: s.isSavingLine ? null : actions.onStop),
           ),
         ]),
       ] else ...[

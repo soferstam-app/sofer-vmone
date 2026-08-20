@@ -38,3 +38,9 @@ target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 
 # Run the Flutter tool portions of the build. This must not be removed.
 add_dependencies(${BINARY_NAME} flutter_assemble)
+
+# The file the writer double-clicks is named in Hebrew, because he is looking
+# for "סופר ומונה" and not for a transliteration of it. It cannot simply be
+# BINARY_NAME: that is also the CMake target name, and a target name may not
+# contain a space. OUTPUT_NAME renames only the produced file.
+set_target_properties(${BINARY_NAME} PROPERTIES OUTPUT_NAME "סופר ומונה")

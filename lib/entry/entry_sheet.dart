@@ -1,4 +1,5 @@
-import 'package:flutter/cupertino.dart' show CupertinoTimerPicker, CupertinoTimerPickerMode;
+import 'package:flutter/cupertino.dart'
+    show CupertinoTimerPicker, CupertinoTimerPickerMode;
 import 'package:flutter/material.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 
@@ -15,6 +16,18 @@ import '../theme/app_theme.dart';
 import '../widgets/feedback.dart';
 import '../widgets/sofer_widgets.dart';
 import '../widgets/confirm.dart';
+
+/// Carries the length of the previous clock range into "save and continue".
+/// Clock minutes wrap at midnight; 23:00–01:00 is two hours, not a negative
+/// span that should fall back to the one-hour default.
+TimeOfDay continuationEndTime(TimeOfDay previousStart, TimeOfDay previousEnd) {
+  final from = previousStart.hour * 60 + previousStart.minute;
+  final nextStart = previousEnd.hour * 60 + previousEnd.minute;
+  final wrappedSpan = (nextStart - from + 24 * 60) % (24 * 60);
+  final span = wrappedSpan == 0 ? 60 : wrappedSpan;
+  final nextEnd = (nextStart + span) % (24 * 60);
+  return TimeOfDay(hour: nextEnd ~/ 60, minute: nextEnd % 60);
+}
 
 /// What one save from the entry form produced.
 ///
@@ -131,6 +144,10 @@ class _EntrySheetState extends State<_EntrySheet> {
   final _amountCtrl = TextEditingController();
   final _partialLineCtrl = TextEditingController();
 
+  /// Which pair of the commission a parshiya belongs to. Left blank it falls
+  /// into the first free slot, which is what the app did before pairs existed.
+  final _pairCtrl = TextEditingController();
+
   DateTime? _date;
   TimeOfDay _startTime = const TimeOfDay(hour: 9, minute: 0);
   TimeOfDay _endTime = const TimeOfDay(hour: 10, minute: 0);
@@ -193,6 +210,7 @@ class _EntrySheetState extends State<_EntrySheet> {
     _lineToCtrl.dispose();
     _amountCtrl.dispose();
     _partialLineCtrl.dispose();
+    _pairCtrl.dispose();
     super.dispose();
   }
 
@@ -388,6 +406,7 @@ class _EntrySheetState extends State<_EntrySheet> {
         tefillinMode: _tefillinMode,
         tefillinPart: _tefillinPart,
         tefillinParshiya: _tefillinParshiya,
+        tefillinPair: _pairCtrl.text,
       ),
       history: widget.history,
     );
@@ -441,13 +460,13 @@ class _EntrySheetState extends State<_EntrySheet> {
         // The next stretch of the day begins when the last one ended, keeping
         // the same length. A suggestion, like the position — the row underneath
         // says what it is and one tap changes it.
-        final startMinutes = _endTime.hour * 60 + _endTime.minute;
-        final span = startMinutes - (_startTime.hour * 60 + _startTime.minute);
-        final endMinutes = startMinutes + (span <= 0 ? 60 : span);
+        final previousStart = _startTime;
+        final previousEnd = _endTime;
+        final startMinutes = previousEnd.hour * 60 + previousEnd.minute;
+        final suggestedEnd = continuationEndTime(previousStart, previousEnd);
         _startTime = TimeOfDay(
             hour: (startMinutes ~/ 60) % 24, minute: startMinutes % 60);
-        _endTime =
-            TimeOfDay(hour: (endMinutes ~/ 60) % 24, minute: endMinutes % 60);
+        _endTime = suggestedEnd;
       }
       // The measured time of a sitting is given to one record only.
       if (!widget.isManual) _sittingTimeUsed = true;
@@ -675,8 +694,46 @@ class _EntrySheetState extends State<_EntrySheet> {
     final label = formatDisplayDate(date, widget.useGregorianDates);
     if (!_includeTime) return label;
     if (_byDuration) return "$label · ${formatClock(_worked)}";
-    return "$label · ${_startTime.format(context)}"
-        "–${_endTime.format(context)}";
+    final nextDay = _clockEndsNextDay ? " (למחרת)" : "";
+    return "$label · ${_clockText(_startTime)}"
+        "–${_clockText(_endTime)}$nextDay";
+  }
+
+  String _clockText(TimeOfDay time) =>
+      "${time.hour.toString().padLeft(2, '0')}:"
+      "${time.minute.toString().padLeft(2, '0')}";
+
+  bool get _clockEndsNextDay {
+    final startMinutes = _startTime.hour * 60 + _startTime.minute;
+    final endMinutes = _endTime.hour * 60 + _endTime.minute;
+    return endMinutes < startMinutes;
+  }
+
+  Future<void> _pickClockTime({
+    required bool isStart,
+    required StateSetter setInner,
+  }) async {
+    final label = isStart ? "שעת התחלה" : "שעת סיום";
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: isStart ? _startTime : _endTime,
+      helpText: label,
+      cancelText: "ביטול",
+      confirmText: "אישור",
+      builder: (pickerContext, child) => MediaQuery(
+        data:
+            MediaQuery.of(pickerContext).copyWith(alwaysUse24HourFormat: true),
+        child: child!,
+      ),
+    );
+    if (picked == null) return;
+    setInner(() {
+      if (isStart) {
+        _startTime = picked;
+      } else {
+        _endTime = picked;
+      }
+    });
   }
 
   String _whenNote() {
@@ -760,8 +817,7 @@ class _EntrySheetState extends State<_EntrySheet> {
         SwitchListTile(
           title: const Text("חישוב זמן כתיבה"),
           value: hasDate && _includeTime,
-          onChanged:
-              hasDate ? (v) => setInner(() => _includeTime = v) : null,
+          onChanged: hasDate ? (v) => setInner(() => _includeTime = v) : null,
           contentPadding: EdgeInsets.zero,
           dense: true,
         ),
@@ -799,24 +855,44 @@ class _EntrySheetState extends State<_EntrySheet> {
           else
             Row(
               children: [
-                const Text("התחלה: "),
-                TextButton(
-                  onPressed: () async {
-                    final picked = await showTimePicker(
-                        context: context, initialTime: _startTime);
-                    if (picked != null) setInner(() => _startTime = picked);
-                  },
-                  child: Text(_startTime.format(context)),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () =>
+                        _pickClockTime(isStart: true, setInner: setInner),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Column(
+                        children: [
+                          const Text("שעת התחלה"),
+                          const SizedBox(height: 2),
+                          Text(_clockText(_startTime),
+                              style: const TextStyle(
+                                  fontSize: 20, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-                const Spacer(),
-                const Text("סיום: "),
-                TextButton(
-                  onPressed: () async {
-                    final picked = await showTimePicker(
-                        context: context, initialTime: _endTime);
-                    if (picked != null) setInner(() => _endTime = picked);
-                  },
-                  child: Text(_endTime.format(context)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () =>
+                        _pickClockTime(isStart: false, setInner: setInner),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Column(
+                        children: [
+                          Text(_clockEndsNextDay
+                              ? "שעת סיום (למחרת)"
+                              : "שעת סיום"),
+                          const SizedBox(height: 2),
+                          Text(_clockText(_endTime),
+                              style: const TextStyle(
+                                  fontSize: 20, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -873,7 +949,8 @@ class _EntrySheetState extends State<_EntrySheet> {
                   value: years.contains(year) ? year : years.first,
                   items: [
                     for (final y in years)
-                      DropdownMenuItem(value: y, child: Text(formatHebrewYear(y)))
+                      DropdownMenuItem(
+                          value: y, child: Text(formatHebrewYear(y)))
                   ],
                   onChanged: (value) {
                     if (value == null) return;
@@ -1035,7 +1112,7 @@ class _EntrySheetState extends State<_EntrySheet> {
           value: _tefillinMode,
           isExpanded: true,
           items: const [
-            DropdownMenuItem(value: 'set', child: Text("סט שלם (ראש+יד)")),
+            DropdownMenuItem(value: 'set', child: Text("זוג שלם (ראש+יד)")),
             DropdownMenuItem(
                 value: 'head', child: Text("תפילין של ראש (4 פרשיות)")),
             DropdownMenuItem(
@@ -1056,7 +1133,8 @@ class _EntrySheetState extends State<_EntrySheet> {
                   items: const [
                     DropdownMenuItem(
                         value: 'head', child: Text("תפילין של ראש")),
-                    DropdownMenuItem(value: 'hand', child: Text("תפילין של יד")),
+                    DropdownMenuItem(
+                        value: 'hand', child: Text("תפילין של יד")),
                   ],
                   onChanged: (v) => setState(() => _tefillinPart = v!),
                 ),
@@ -1070,7 +1148,7 @@ class _EntrySheetState extends State<_EntrySheet> {
                     DropdownMenuItem(value: 1, child: Text("1. קדש")),
                     DropdownMenuItem(value: 2, child: Text("2. והיה כי יביאך")),
                     DropdownMenuItem(value: 3, child: Text("3. שמע")),
-                    DropdownMenuItem(value: 4, child: Text("4. והיה אם שמוע")),
+                    DropdownMenuItem(value: 4, child: Text("4. והיה אם שמע")),
                   ],
                   onChanged: (v) => setState(() => _tefillinParshiya = v!),
                 ),
@@ -1078,14 +1156,34 @@ class _EntrySheetState extends State<_EntrySheet> {
             ],
           ),
           const SizedBox(height: 10),
-          TextField(
-            controller: _partialLineCtrl,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              labelText: "עד שורה (השאר ריק לפרשייה מלאה)",
-              prefixIcon: const Icon(Icons.format_align_left),
-              hintText: _tefillinPart == 'head' ? "עד 4 שורות" : "עד 7 שורות",
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _pairCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: "זוג מספר (חובה)",
+                    prefixIcon: Icon(Icons.tag),
+                    // Without a pair the parshiya has a name and no address,
+                    // and the board can only guess where to put it.
+                    hintText: "למשל 4",
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextField(
+                  controller: _partialLineCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: "עד שורה",
+                    prefixIcon: const Icon(Icons.format_align_left),
+                    hintText: _tefillinPart == 'head' ? "מתוך 4" : "מתוך 7",
+                  ),
+                ),
+              ),
+            ],
           ),
         ] else ...[
           TextField(

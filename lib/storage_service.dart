@@ -5,10 +5,80 @@ import 'logic/currency.dart';
 import 'logic/hebrew_clock.dart';
 import 'logic/hebrew_work_calendar.dart';
 import 'logic/keyboard_shortcuts.dart';
+import 'logic/home_additions.dart';
 import 'models.dart';
 import 'theme/app_theme.dart';
 
+/// The handful of preference operations the app actually performs.
+///
+/// Introduced so a demo build can be given a store that is provably not the
+/// disk. shared_preferences' own test hook was tried first and does not hold
+/// in a release build on Windows: the app went on reading and writing the real
+/// file, which is the one thing a demo must never do.
+abstract class KeyValueStore {
+  String? getString(String key);
+  bool? getBool(String key);
+  int? getInt(String key);
+  Future<void> setString(String key, String value);
+  Future<void> setBool(String key, bool value);
+  Future<void> setInt(String key, int value);
+  Future<void> remove(String key);
+}
+
+class _DiskStore implements KeyValueStore {
+  final SharedPreferences _prefs;
+  const _DiskStore(this._prefs);
+
+  @override
+  String? getString(String key) => _prefs.getString(key);
+  @override
+  bool? getBool(String key) => _prefs.getBool(key);
+  @override
+  int? getInt(String key) => _prefs.getInt(key);
+  @override
+  Future<void> setString(String key, String value) =>
+      _prefs.setString(key, value);
+  @override
+  Future<void> setBool(String key, bool value) => _prefs.setBool(key, value);
+  @override
+  Future<void> setInt(String key, int value) => _prefs.setInt(key, value);
+  @override
+  Future<void> remove(String key) => _prefs.remove(key);
+}
+
+/// A store that lives and dies with the process. Demo builds only.
+class MemoryStore implements KeyValueStore {
+  final Map<String, Object> _values;
+  MemoryStore(Map<String, Object> initial) : _values = {...initial};
+
+  @override
+  String? getString(String key) => _values[key] as String?;
+  @override
+  bool? getBool(String key) => _values[key] as bool?;
+  @override
+  int? getInt(String key) => _values[key] as int?;
+  @override
+  Future<void> setString(String key, String value) async =>
+      _values[key] = value;
+  @override
+  Future<void> setBool(String key, bool value) async => _values[key] = value;
+  @override
+  Future<void> setInt(String key, int value) async => _values[key] = value;
+  @override
+  Future<void> remove(String key) async => _values.remove(key);
+}
+
 class StorageService {
+  /// Set once, by a demo build, before anything reads a setting. While it is
+  /// set nothing in the app opens the preferences file at all.
+  static MemoryStore? demoStore;
+
+  static Future<KeyValueStore> _open() async {
+    final demo = demoStore;
+    if (demo != null) return demo;
+    return _DiskStore(await SharedPreferences.getInstance());
+  }
+
   static const String _keyProjects = 'projects';
   static const String _keyHistory = 'history';
   static const String _keyNotificationEnabled = 'notification_enabled';
@@ -36,6 +106,7 @@ class StorageService {
   static const String _keyLastProject = 'last_project';
   static const String _keyWindowSize = 'window_size';
   static const String _keyShortcuts = 'keyboard_shortcuts';
+  static const String _keyHomeAdditions = 'home_additions';
 
   Future<void> saveProjects(List<Project> projects) =>
       _saveList(_keyProjects, projects.map((p) => p.toJson()).toList());
@@ -44,7 +115,7 @@ class StorageService {
       _saveList(_keyProofreads, records.map((r) => r.toJson()).toList());
 
   Future<List<Proofread>> loadProofreads() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     return _parseList(prefs.getString(_keyProofreads), Proofread.fromJson);
   }
 
@@ -52,7 +123,7 @@ class StorageService {
       _saveList(_keyPayments, records.map((r) => r.toJson()).toList());
 
   Future<List<Payment>> loadPayments() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     return _parseList(prefs.getString(_keyPayments), Payment.fromJson);
   }
 
@@ -79,7 +150,7 @@ class StorageService {
     String key,
     List<Map<String, dynamic>> records,
   ) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     final written = {
       for (final record in records)
         if (record['id'] is String) record['id'] as String,
@@ -105,7 +176,7 @@ class StorageService {
   /// here is recoverable afterwards, which is what makes it the wrong tool for
   /// anything smaller.
   Future<void> eraseList(String key) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     await prefs.remove(key);
   }
 
@@ -148,7 +219,7 @@ class StorageService {
   /// figure the app shows — so the app has to be able to say they are there
   /// rather than quietly reporting totals that are short.
   Future<int> unreadableRecordCount() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     var count = 0;
     void tally<T>(String key, T Function(Map<String, dynamic>) fromJson) {
       for (final entry in _rawEntries(prefs.getString(key))) {
@@ -195,7 +266,7 @@ class StorageService {
   }
 
   Future<List<Project>> loadProjects() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     return _parseList(prefs.getString(_keyProjects), Project.fromJson);
   }
 
@@ -203,7 +274,7 @@ class StorageService {
       _saveList(_keyHistory, history.map((s) => s.toJson()).toList());
 
   Future<List<WorkSession>> loadHistory() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     return _parseList(prefs.getString(_keyHistory), WorkSession.fromJson);
   }
 
@@ -212,7 +283,7 @@ class StorageService {
   /// holds state worth restoring (timer_state is deliberately excluded, it is
   /// per-device and transient).
   Future<Map<String, dynamic>> exportAll() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
 
     // Decoded rather than embedded as raw strings so the backup file is one
     // well-formed document that an importer can validate field by field.
@@ -261,22 +332,23 @@ class StorageService {
         _keyAutoBackupFolder: prefs.getString(_keyAutoBackupFolder),
         _keySmartReminder: prefs.getBool(_keySmartReminder),
         _keyLastProject: prefs.getString(_keyLastProject),
+        _keyHomeAdditions: prefs.getString(_keyHomeAdditions),
       },
     };
   }
 
   Future<bool> getNotificationEnabled() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     return prefs.getBool(_keyNotificationEnabled) ?? true;
   }
 
   Future<void> setNotificationEnabled(bool enabled) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     await prefs.setBool(_keyNotificationEnabled, enabled);
   }
 
   Future<TimeOfDay> getNotificationTime() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     final timeStr = prefs.getString(_keyNotificationTime);
     if (timeStr != null) {
       final parts = timeStr.split(':');
@@ -286,17 +358,17 @@ class StorageService {
   }
 
   Future<void> setNotificationTime(TimeOfDay time) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     await prefs.setString(_keyNotificationTime, '${time.hour}:${time.minute}');
   }
 
   Future<bool> getSmartWorkflowEnabled() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     return prefs.getBool(_keySmartWorkflowEnabled) ?? false;
   }
 
   Future<void> setSmartWorkflowEnabled(bool enabled) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     await prefs.setBool(_keySmartWorkflowEnabled, enabled);
   }
 
@@ -313,7 +385,7 @@ class StorageService {
   /// Stored as two plain numbers rather than a serialised object: whatever a
   /// later version keeps about the window, these two still read.
   Future<Size?> getWindowSize() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     final raw = prefs.getString(_keyWindowSize);
     if (raw == null) return null;
     final parts = raw.split('x');
@@ -325,7 +397,7 @@ class StorageService {
   }
 
   Future<void> setWindowSize(Size size) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     await prefs.setString(
         _keyWindowSize, '${size.width.round()}x${size.height.round()}');
   }
@@ -333,7 +405,7 @@ class StorageService {
   /// Which key does what. Falls back per action to the default, so one
   /// unreadable entry costs one shortcut rather than all three.
   Future<ShortcutMap> getShortcuts() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     final raw = prefs.getString(_keyShortcuts);
     if (raw == null) return ShortcutMap.defaults;
     try {
@@ -346,12 +418,12 @@ class StorageService {
   }
 
   Future<void> setShortcuts(ShortcutMap map) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     await prefs.setString(_keyShortcuts, jsonEncode(map.encode()));
   }
 
   Future<Map<String, dynamic>> getLastPosition(String projectId) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     final String? data = prefs.getString(_keyLastPositions);
     if (data == null) return {};
     try {
@@ -367,7 +439,7 @@ class StorageService {
   /// Pages and lines are counted from one, so neither is ever stored as zero —
   /// a zero would come back out and be displayed as "עמוד 0".
   Future<void> saveLastPosition(String projectId, int page, int line) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     final String? data = prefs.getString(_keyLastPositions);
     // Unreadable stored positions are replaced rather than thrown on: refusing
     // to save the writer's place because somebody else's is corrupt would keep
@@ -389,12 +461,12 @@ class StorageService {
   }
 
   Future<void> saveTimerState(Map<String, dynamic> state) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     await prefs.setString(_keyTimerState, jsonEncode(state));
   }
 
   Future<Map<String, dynamic>> getTimerState() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     final String? data = prefs.getString(_keyTimerState);
     if (data == null) return {};
     try {
@@ -405,17 +477,17 @@ class StorageService {
   }
 
   Future<void> clearTimerState() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     await prefs.remove(_keyTimerState);
   }
 
   Future<int> getDayRolloverHour() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     return prefs.getInt(_keyDayRolloverHour) ?? 0;
   }
 
   Future<void> setDayRolloverHour(int hour) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     await prefs.setInt(_keyDayRolloverHour, hour.clamp(0, 23));
   }
 
@@ -425,7 +497,7 @@ class StorageService {
   /// Falls back to the standalone rollover hour this replaced, so a device that
   /// had set 02:00 keeps that boundary without the user touching anything.
   Future<DayStart> getDayStart() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     final raw = prefs.getString(_keyDayStart);
     if (raw != null && raw.isNotEmpty) {
       final decoded = _decodeSettings(raw);
@@ -435,12 +507,11 @@ class StorageService {
   }
 
   Future<void> setDayStart(DayStart dayStart) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     await prefs.setString(_keyDayStart, jsonEncode(dayStart.toJson()));
     // Kept in step so a build that predates this setting still reads a sensible
     // hour instead of reverting the user to midnight.
-    await prefs.setInt(
-        _keyDayRolloverHour,
+    await prefs.setInt(_keyDayRolloverHour,
         dayStart.boundary == DayBoundary.fixedHour ? dayStart.hour : 0);
   }
 
@@ -466,7 +537,7 @@ class StorageService {
   /// new defaults apply instead, since a full Friday of writing was never a
   /// deliberate setting.
   Future<WorkCalendarRules> getWorkCalendarRules() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     final raw = prefs.getString(_keyWorkCalendarRules);
     if (raw != null && raw.isNotEmpty) {
       final decoded = _decodeSettings(raw);
@@ -484,7 +555,7 @@ class StorageService {
   }
 
   Future<void> setWorkCalendarRules(WorkCalendarRules rules) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     await prefs.setString(_keyWorkCalendarRules, jsonEncode(rules.toJson()));
   }
 
@@ -495,12 +566,12 @@ class StorageService {
   /// setting that reached backwards would relabel every price the writer ever
   /// agreed, silently and irreversibly.
   Future<Currency> getCurrency() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     return Currency.fromJson(prefs.getString(_keyCurrency));
   }
 
   Future<void> setCurrency(Currency currency) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     await prefs.setString(_keyCurrency, currency.code);
   }
 
@@ -523,13 +594,13 @@ class StorageService {
   /// A folder he already syncs — Dropbox, OneDrive — which is what makes this
   /// "automatic backup" without the app growing a sync engine of its own.
   Future<String?> getAutoBackupFolder() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     final path = prefs.getString(_keyAutoBackupFolder);
     return path == null || path.isEmpty ? null : path;
   }
 
   Future<void> setAutoBackupFolder(String? path) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     if (path == null || path.isEmpty) {
       await prefs.remove(_keyAutoBackupFolder);
     } else {
@@ -541,12 +612,12 @@ class StorageService {
   /// the hour he named. Off until he asks: a reminder that moves on its own is
   /// a surprise, and a surprise from a reminder is not a good one.
   Future<bool> getSmartReminder() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     return prefs.getBool(_keySmartReminder) ?? false;
   }
 
   Future<void> setSmartReminder(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     await prefs.setBool(_keySmartReminder, value);
   }
 
@@ -556,23 +627,23 @@ class StorageService {
   /// weeks and being asked to pick it out of a list every single time is asking
   /// him to answer a question the app already knows the answer to.
   Future<String?> getLastProjectId() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     final id = prefs.getString(_keyLastProject);
     return id == null || id.isEmpty ? null : id;
   }
 
   Future<void> setLastProjectId(String id) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     await prefs.setString(_keyLastProject, id);
   }
 
   Future<bool> getUseGregorianDates() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     return prefs.getBool(_keyUseGregorianDates) ?? false;
   }
 
   Future<void> setUseGregorianDates(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     await prefs.setBool(_keyUseGregorianDates, value);
   }
 
@@ -580,12 +651,12 @@ class StorageService {
   /// build that added a fourth — fall back to the modern one rather than
   /// leaving the app unthemed.
   Future<AppTheme> getAppTheme() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     return AppTheme.fromName(prefs.getString(_keyAppTheme));
   }
 
   Future<void> setAppTheme(AppTheme theme) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     await prefs.setString(_keyAppTheme, theme.name);
   }
 
@@ -597,12 +668,12 @@ class StorageService {
   /// and [shouldShowOnboarding] then declines anyway for anyone with work in
   /// the app, which is who a stale file belongs to.
   Future<bool> getOnboardingSeen() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     return prefs.getBool(_keyOnboardingSeen) ?? false;
   }
 
   Future<void> setOnboardingSeen(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     await prefs.setBool(_keyOnboardingSeen, value);
   }
 
@@ -612,12 +683,12 @@ class StorageService {
   /// break simply starts — and with no way left to name a length there is no
   /// countdown, no chime and no overrun, which is the writer's own rule.
   Future<bool> getAskBreakLength() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     return prefs.getBool(_keyAskBreakLength) ?? true;
   }
 
   Future<void> setAskBreakLength(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     await prefs.setBool(_keyAskBreakLength, value);
   }
 
@@ -629,34 +700,55 @@ class StorageService {
   /// the usual answer is already there. Off until asked for: an app that makes
   /// a noise nobody chose is an app that gets muted.
   Future<bool> getBreakChime() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     return prefs.getBool(_keyBreakChime) ?? false;
   }
 
   Future<void> setBreakChime(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     await prefs.setBool(_keyBreakChime, value);
   }
 
+  /// Optional home tools are stored together so a newer build can add another
+  /// one without scattering more keys through the preferences file.
+  Future<HomeAdditionsSettings> getHomeAdditions() async {
+    final prefs = await _open();
+    final raw = prefs.getString(_keyHomeAdditions);
+    if (raw == null || raw.isEmpty) return HomeAdditionsSettings.defaults;
+    try {
+      final decoded = jsonDecode(raw);
+      return decoded is Map
+          ? HomeAdditionsSettings.fromJson(Map<String, dynamic>.from(decoded))
+          : HomeAdditionsSettings.defaults;
+    } catch (_) {
+      return HomeAdditionsSettings.defaults;
+    }
+  }
+
+  Future<void> setHomeAdditions(HomeAdditionsSettings value) async {
+    final prefs = await _open();
+    await prefs.setString(_keyHomeAdditions, jsonEncode(value.toJson()));
+  }
+
   Future<bool> getAutoNightTheme() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     return prefs.getBool(_keyAutoNightTheme) ?? false;
   }
 
   Future<void> setAutoNightTheme(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     await prefs.setBool(_keyAutoNightTheme, value);
   }
 
   /// The writer's own name, used to sign the client update email.
   /// Empty when not set — the email then simply omits the signature.
   Future<String> getSoferName() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     return prefs.getString(_keySoferName) ?? '';
   }
 
   Future<void> setSoferName(String name) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     await prefs.setString(_keySoferName, name.trim());
   }
 
@@ -664,7 +756,7 @@ class StorageService {
       _saveList(_keyExpenses, expenses.map((e) => e.toJson()).toList());
 
   Future<List<Expense>> loadExpenses() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _open();
     return _parseList(prefs.getString(_keyExpenses), Expense.fromJson);
   }
 }

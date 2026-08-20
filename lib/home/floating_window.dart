@@ -27,6 +27,7 @@ class FloatingTimerWindow extends StatelessWidget {
   final VoidCallback onStop;
   final VoidCallback onLap;
   final VoidCallback onRestore;
+  final bool lineSaving;
 
   const FloatingTimerWindow({
     super.key,
@@ -36,10 +37,11 @@ class FloatingTimerWindow extends StatelessWidget {
     required this.onStop,
     required this.onLap,
     required this.onRestore,
+    this.lineSaving = false,
   });
 
   Widget _button({
-    required VoidCallback onPressed,
+    required VoidCallback? onPressed,
     required IconData icon,
     required String tooltip,
     required Color background,
@@ -67,17 +69,23 @@ class FloatingTimerWindow extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                formatClock(clock.elapsed),
-                style: TextStyle(
-                  color: t.ink,
-                  fontFamily: t.numeralFamily,
-                  fontSize: 42,
-                  fontWeight: FontWeight.w300,
-                  // Tabular figures, or the digits shift the whole clock
-                  // sideways every time a 1 goes by.
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
+              Row(
+                children: [
+                  _FloatingClock(
+                    label: 'זמן כתיבה',
+                    value: formatClock(clock.elapsed),
+                  ),
+                  Container(
+                    width: 1,
+                    height: 46,
+                    margin: const EdgeInsets.symmetric(horizontal: 10),
+                    color: t.rule,
+                  ),
+                  _FloatingClock(
+                    label: 'זמן השורה',
+                    value: formatClock(clock.sinceLastLap),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
               Row(
@@ -85,14 +93,18 @@ class FloatingTimerWindow extends StatelessWidget {
                 spacing: 8,
                 children: [
                   _button(
-                    onPressed: clock.isPaused ? onStart : onPause,
+                    onPressed: lineSaving
+                        ? null
+                        : clock.isPaused
+                            ? onStart
+                            : onPause,
                     icon: clock.isPaused ? Icons.play_arrow : Icons.pause,
                     tooltip: clock.isPaused ? "המשך" : "הפסקה",
                     background: t.caution,
                     foreground: t.paper,
                   ),
                   _button(
-                    onPressed: onStop,
+                    onPressed: lineSaving ? null : onStop,
                     icon: Icons.stop,
                     tooltip: "סיום",
                     background: t.danger,
@@ -102,7 +114,7 @@ class FloatingTimerWindow extends StatelessWidget {
                   // time it would report is time nobody was writing.
                   if (!clock.isPaused)
                     _button(
-                      onPressed: onLap,
+                      onPressed: lineSaving ? null : onLap,
                       icon: Icons.flag,
                       tooltip: "סיום שורה",
                       background: t.accent,
@@ -122,6 +134,39 @@ class FloatingTimerWindow extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _FloatingClock extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _FloatingClock({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = SoferTokens.of(context);
+    return Expanded(
+      child: Column(
+        children: [
+          Text(label, style: TextStyle(fontSize: 10, color: t.inkMuted)),
+          const SizedBox(height: 2),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              style: TextStyle(
+                color: t.ink,
+                fontFamily: t.numeralFamily,
+                fontSize: 28,
+                fontWeight: FontWeight.w300,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

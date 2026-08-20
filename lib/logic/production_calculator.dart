@@ -1,4 +1,16 @@
 import '../models.dart';
+import 'tefillin_units.dart';
+
+/// The measured, fully completed work that can form a time-per-parshiya ratio.
+class TefillinAverageStats {
+  final int parshiyot;
+  final Duration duration;
+
+  const TefillinAverageStats({
+    required this.parshiyot,
+    required this.duration,
+  });
+}
 
 /// Pure production calculations — how much was actually written.
 ///
@@ -120,6 +132,8 @@ class ProductionCalculator {
         session.parshiya == null) {
       return session.amount * parshiyotPerUnit;
     }
+    // A resumed smart-mode stretch is the rest of a parshiya already counted
+    // by its first stretch. It deliberately carries amount 0 for 0.4.0 too.
     return session.amount;
   }
 
@@ -158,5 +172,136 @@ class ProductionCalculator {
       return null;
     }
     return null;
+  }
+
+  /// Completed parshiyot and the measured time that produced exactly them.
+  ///
+  /// A smart parshiya may span several sittings. Its first record carries the
+  /// count and its resumed record carries zero for backward compatibility, so
+  /// no record by itself contains both the full duration and a completed unit.
+  /// Grouping by pair, side and parshiya reconstructs the physical unit and
+  /// counts it only when the measured records cover every ruled line.
+  static TefillinAverageStats tefillinAverageStats(
+      Iterable<WorkSession> sessions) {
+    final measured = sessions
+        .where((s) => s.timeRecorded && s.duration > Duration.zero)
+        .toList();
+    var count = 0;
+    var duration = Duration.zero;
+    final identified = <String, List<WorkSession>>{};
+
+    for (final session in measured) {
+      final isIndividual =
+          session.tefillinType != null && session.parshiya != null;
+      if (isIndividual && session.pairIndex != null) {
+        final key = '${session.pairIndex}|${session.tefillinType}|'
+            '${session.parshiya}';
+        identified.putIfAbsent(key, () => []).add(session);
+        continue;
+      }
+
+      // Whole pairs/units and legacy unidentifiable parshiyot cannot be joined
+      // to another record safely, so retain their per-record meaning.
+      final completed = completedParshiyotInSession(session);
+      if (completed != null && completed > 0) {
+        count += completed;
+        duration += session.duration;
+      }
+    }
+
+    for (final group in identified.values) {
+      final first = group.first;
+      final maxLines = first.tefillinType == 'head'
+          ? linesPerHeadParshiya
+          : linesPerHandParshiya;
+      final covered = List<bool>.filled(maxLines, false);
+
+      for (final session in group) {
+        final from = session.startLine > 0 ? session.startLine : 1;
+        final to = session.endLine <= 0 ? maxLines : session.endLine;
+        for (var line = from.clamp(1, maxLines);
+            line <= to.clamp(0, maxLines);
+            line++) {
+          covered[line - 1] = true;
+        }
+      }
+
+      if (covered.every((line) => line)) {
+        count++;
+        for (final session in group) {
+          duration += session.duration;
+        }
+      }
+    }
+
+    return TefillinAverageStats(parshiyot: count, duration: duration);
+  }
+
+  /// Sefer torah lines produced by one tefillin session.
+  ///
+  /// The unit every comparison is made in. Counting parshiyot instead treated
+  /// all eight as equal, so a sitting spent on שמע — seven sefer lines — scored
+  /// the same as one spent on והיה אם שמע, which is seventeen. A writer could
+  /// not see which of his work paid.
+  ///
+  /// Works on any subset of the history, because a session names its own
+  /// parshiya and a parshiya's size does not depend on which pair it belongs
+  /// to.
+  static double tefillinSeferLines(WorkSession session) {
+    final count = session.amount <= 0 ? 0 : session.amount;
+    final type = session.tefillinType;
+    final parshiya = session.parshiya;
+
+    if (type != null && parshiya != null && parshiya >= 1 && parshiya <= 4) {
+      final side = type == 'head' ? TefillinSide.head : TefillinSide.hand;
+      final ruled = TefillinUnits.linesIn(side);
+      // New smart records are exact ranges, including continuation records
+      // whose amount is deliberately zero so an older build does not count a
+      // resumed parshiya twice. Legacy/manual records have startLine zero and
+      // keep the old "last line reached" meaning.
+      final explicitRange = session.startLine > 0;
+      final lines = session.endLine <= 0
+          ? ruled
+          : explicitRange
+              ? session.endLine - session.startLine + 1
+              : session.endLine;
+      final records = explicitRange ? 1 : count;
+      final fraction = lines.clamp(0, ruled) / ruled;
+      return records * TefillinUnits.seferLines[parshiya - 1] * fraction;
+    }
+
+    if (count == 0) return 0;
+
+    // A whole head or hand is a set; anything else recorded is a whole pair.
+    if (type == 'head' || type == 'hand') {
+      return count * TefillinUnits.seferLinesPerSet.toDouble();
+    }
+    return count * TefillinUnits.seferLinesPerPair.toDouble();
+  }
+
+  static double tefillinSeferLinesTotal(Iterable<WorkSession> sessions) {
+    var total = 0.0;
+    for (final session in sessions) {
+      total += tefillinSeferLines(session);
+    }
+    return total;
+  }
+
+  /// Work of any kind, measured in sefer torah lines.
+  ///
+  /// What makes an hour on tefillin comparable to an hour on a sefer. Before
+  /// this the monthly average was labelled "ספר/מזוזה" and simply left tefillin
+  /// out, because the only tefillin figure available was a count of parshiyot
+  /// and there was nothing to compare it to.
+  static double seferEquivalentLines(
+      Project project, Iterable<WorkSession> sessions) {
+    switch (project.type) {
+      case ProjectType.sefer:
+        return seferLinesTotal(sessions).toDouble();
+      case ProjectType.mezuza:
+        return mezuzaLinesTotal(sessions).toDouble();
+      case ProjectType.tefillin:
+        return tefillinSeferLinesTotal(sessions);
+    }
   }
 }

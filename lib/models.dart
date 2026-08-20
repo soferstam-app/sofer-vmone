@@ -73,6 +73,26 @@ class Project implements Mergeable<Project> {
   /// may take Tuesday off one sefer and spend it on another.
   final Map<DateTime, double> planOverrides;
 
+  /// Tefillin slots that are neither unwritten nor finished, keyed
+  /// `"pair:side:parshiya"` — `"5:head:2"` — and valued `stuck` or `void`.
+  ///
+  /// How far a parshiya got is derived from the sessions and never stored.
+  /// These two are not: a parshiya stopped on until it can be corrected, and
+  /// one written off altogether, are facts about the work that no session
+  /// records. They are also rare, which is why a small map on the commission
+  /// is enough.
+  ///
+  /// It lives here rather than in a list of its own because
+  /// [StorageService.exportAll] builds a file from the keys it knows: a new
+  /// top-level list would be dropped by an older build's import, while an
+  /// unknown field on a commission travels through [extraFields] and comes
+  /// back whole.
+  final Map<String, String> tefillinFlags;
+
+  /// The key a slot is flagged under.
+  static String slotKey(int pair, String side, int parshiya) =>
+      '$pair:$side:$parshiya';
+
   /// Fields written by a newer version of the app, carried through untouched.
   ///
   /// Without this, a phone on a newer build exporting to a PC on an older one
@@ -102,6 +122,7 @@ class Project implements Mergeable<Project> {
     'clientEmail',
     'targetCompletionDate',
     'planOverrides',
+    'tefillinFlags',
   };
 
   /// The size of the job in billable units — pages, mezuzot or sets — however
@@ -130,6 +151,7 @@ class Project implements Mergeable<Project> {
     this.clientEmail,
     this.targetCompletionDate,
     this.planOverrides = const {},
+    this.tefillinFlags = const {},
     this.extraFields = const {},
   }) : lastUpdated = lastUpdated ?? DateTime.now();
 
@@ -174,6 +196,7 @@ class Project implements Mergeable<Project> {
       'planOverrides': {
         for (final e in planOverrides.entries) _planKey(e.key): e.value,
       },
+      'tefillinFlags': tefillinFlags,
     };
   }
 
@@ -219,6 +242,15 @@ class Project implements Mergeable<Project> {
           },
         _ => const <DateTime, double>{},
       },
+      // A flag that is not a string is dropped rather than taken down with the
+      // commission it belongs to.
+      tefillinFlags: switch (json['tefillinFlags']) {
+        final Map raw => {
+            for (final e in raw.entries)
+              if (e.value is String) '${e.key}': e.value as String,
+          },
+        _ => const <String, String>{},
+      },
       extraFields: JsonCompat.unknownKeys(json, _knownKeys),
     );
   }
@@ -238,6 +270,7 @@ class Project implements Mergeable<Project> {
     String? clientEmail,
     DateTime? targetCompletionDate,
     Map<DateTime, double>? planOverrides,
+    Map<String, String>? tefillinFlags,
   }) {
     return Project(
       id: id,
@@ -260,6 +293,7 @@ class Project implements Mergeable<Project> {
       clientEmail: clientEmail ?? this.clientEmail,
       targetCompletionDate: targetCompletionDate ?? this.targetCompletionDate,
       planOverrides: planOverrides ?? this.planOverrides,
+      tefillinFlags: tefillinFlags ?? this.tefillinFlags,
       extraFields: extraFields,
     );
   }
@@ -284,6 +318,7 @@ class Project implements Mergeable<Project> {
         clientEmail: clientEmail,
         targetCompletionDate: targetCompletionDate,
         planOverrides: planOverrides,
+        tefillinFlags: tefillinFlags,
         extraFields: extraFields,
       );
 
@@ -316,10 +351,36 @@ class WorkSession implements Mergeable<WorkSession> {
   final int amount;
   final int startLine;
   final int endLine;
+
+  /// Which mezuza in the commission this work belongs to, 1-based.
+  ///
+  /// Null on records written before individual mezuzot could be left and
+  /// resumed. Older builds carry the unknown field through [extraFields] and
+  /// still count [amount], so adding the identity does not change the storage
+  /// meaning they already understand.
+  final int? mezuzaIndex;
   final String? tefillinType; // 'head' or 'hand'
   final int? parshiya; // 1-4
+
+  /// Which pair of the commission this belongs to, 1-based. Tefillin only.
+  ///
+  /// A session used to know it was the second parshiya of a head, but not
+  /// whose head, so a commission of ten pairs was eighty indistinguishable
+  /// slots and "pair three is waiting on a correction, I am moving to pair
+  /// seven" was a sentence the app could not hold.
+  ///
+  /// Null on everything recorded before this existed, and on work a writer
+  /// records without caring which pair it lands in. Those fill the commission
+  /// in writing order, which is exactly what an older build showed.
+  ///
+  /// An older build reading a record that carries this keeps it in
+  /// [extraFields] and writes it back untouched, and still counts the record
+  /// correctly from [amount] — so a phone on this version and a PC on the last
+  /// one can go on exchanging files.
+  final int? pairIndex;
   final String description;
   final bool isManual;
+
   /// When true: counts only for project total written (הספק); excluded from profit, averages, daily goal.
   final bool backlogOnly;
 
@@ -459,8 +520,10 @@ class WorkSession implements Mergeable<WorkSession> {
     'amount',
     'startLine',
     'endLine',
+    'mezuzaIndex',
     'tefillinType',
     'parshiya',
+    'pairIndex',
     'description',
     'isManual',
     'backlogOnly',
@@ -484,8 +547,10 @@ class WorkSession implements Mergeable<WorkSession> {
     required this.amount,
     required this.startLine,
     required this.endLine,
+    this.mezuzaIndex,
     this.tefillinType,
     this.parshiya,
+    this.pairIndex,
     required this.description,
     required this.isManual,
     this.backlogOnly = false,
@@ -532,8 +597,10 @@ class WorkSession implements Mergeable<WorkSession> {
       'amount': amount,
       'startLine': startLine,
       'endLine': endLine,
+      'mezuzaIndex': mezuzaIndex,
       'tefillinType': tefillinType,
       'parshiya': parshiya,
+      'pairIndex': pairIndex,
       'description': description,
       'isManual': isManual,
       'backlogOnly': backlogOnly,
@@ -573,8 +640,10 @@ class WorkSession implements Mergeable<WorkSession> {
       amount: JsonCompat.integer(json['amount'], 0),
       startLine: JsonCompat.integer(json['startLine'], 0),
       endLine: JsonCompat.integer(json['endLine'], 0),
+      mezuzaIndex: JsonCompat.intOrNull(json['mezuzaIndex']),
       tefillinType: json['tefillinType'] as String?,
       parshiya: JsonCompat.intOrNull(json['parshiya']),
+      pairIndex: JsonCompat.intOrNull(json['pairIndex']),
       description: JsonCompat.string(json['description']),
       isManual: JsonCompat.boolean(json['isManual'], false),
       backlogOnly: JsonCompat.boolean(json['backlogOnly'], false),
@@ -611,8 +680,10 @@ class WorkSession implements Mergeable<WorkSession> {
         amount: amount,
         startLine: startLine,
         endLine: endLine,
+        mezuzaIndex: mezuzaIndex,
         tefillinType: tefillinType,
         parshiya: parshiya,
+        pairIndex: pairIndex,
         description: description,
         isManual: isManual,
         backlogOnly: backlogOnly,
@@ -650,8 +721,10 @@ class WorkSession implements Mergeable<WorkSession> {
       amount: amount ?? this.amount,
       startLine: startLine ?? this.startLine,
       endLine: endLine ?? this.endLine,
+      mezuzaIndex: mezuzaIndex,
       tefillinType: tefillinType,
       parshiya: parshiya,
+      pairIndex: pairIndex,
       description: description ?? this.description,
       isManual: isManual,
       backlogOnly: backlogOnly ?? this.backlogOnly,
@@ -1148,8 +1221,9 @@ class Proofread implements Mergeable<Proofread> {
         scope: scope ?? this.scope,
         proofreader: proofreader ?? this.proofreader,
         sentAt: identical(sentAt, _keep) ? this.sentAt : sentAt as DateTime?,
-        returnedAt:
-            identical(returnedAt, _keep) ? this.returnedAt : returnedAt as DateTime?,
+        returnedAt: identical(returnedAt, _keep)
+            ? this.returnedAt
+            : returnedAt as DateTime?,
         doneAt: identical(doneAt, _keep) ? this.doneAt : doneAt as DateTime?,
         cost: cost ?? this.cost,
         currency: currency ?? this.currency,

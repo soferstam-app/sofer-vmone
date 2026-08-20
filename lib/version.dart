@@ -7,4 +7,4 @@
 ///
 /// version_test.dart reads pubspec.yaml and refuses to let this disagree with
 /// it, which is what makes one place actually one place.
-const String appVersion = '0.4.0';
+const String appVersion = '0.5.0';

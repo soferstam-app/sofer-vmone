@@ -8,6 +8,7 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:screen_retriever/screen_retriever.dart';
 import 'package:window_manager/window_manager.dart';
 import 'home_screen.dart';
+import 'logic/demo_data.dart';
 import 'logic/onboarding.dart';
 import 'logic/window_sizing.dart';
 import 'onboarding/onboarding_screen.dart';
@@ -75,6 +76,12 @@ class _WindowSizeMemory extends WindowListener {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Before anything reads a setting. A demo build keeps every record in
+  // memory, so it can be walked through without a fabricated commission ever
+  // reaching the writer's own data.
+  if (DemoData.enabled) await DemoData.install();
+
   registerFontLicences();
   await NotificationService().init();
 

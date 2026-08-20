@@ -485,8 +485,8 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
     if (p.type == ProjectType.sefer) return "ספר תורה (${p.totalPages} עמודים)";
     if (p.type == ProjectType.tefillin) {
       return p.targetUnits == null
-          ? "תפילין (ראש + יד)"
-          : "תפילין – ${p.targetUnits} סטים";
+          ? "תפילין (כתיבה פתוחה)"
+          : "תפילין – ${p.targetUnits} זוגות";
     }
     return p.targetUnits == null
         ? "מזוזה (22 שורות)"
@@ -635,7 +635,7 @@ class _ProjectDialogState extends State<ProjectDialog> {
                   ),
                   DropdownMenuItem(
                     value: ProjectType.tefillin,
-                    child: Text("תפילין (סט שלם)"),
+                    child: Text("תפילין"),
                   ),
                 ],
                 onChanged: widget.existingProject == null
@@ -739,7 +739,7 @@ class _ProjectDialogState extends State<ProjectDialog> {
             decoration: InputDecoration(
               labelText: _type == ProjectType.mezuza
                   ? 'כמה מזוזות בהזמנה'
-                  : 'כמה סטים בהזמנה',
+                  : 'כמה זוגות בהזמנה',
               helperText: 'משמש לחישוב ההתקדמות וצפי הסיום',
             ),
             validator: (v) {
@@ -797,18 +797,15 @@ class _ProjectDialogState extends State<ProjectDialog> {
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
                   labelText: _type == ProjectType.tefillin
-                      ? "פרשיות ליום (עד 8)"
+                      ? "פרשיות ליום"
                       : (_dailyGoalInLines
                           ? "יעד יומי (שורות)"
                           : "יעד יומי (עמודים)"),
                 ),
-                validator: (v) {
-                  if (_type == ProjectType.tefillin &&
-                      (int.tryParse(v ?? "0") ?? 0) > 8) {
-                    return "מקסימום 8";
-                  }
-                  return null;
-                },
+                // No cap. Eight was the number of parshiyot in a pair, from
+                // when a commission could only be one — meaningless against an
+                // order of ten pairs, and it refused a perfectly ordinary goal.
+                validator: (v) => null,
               ),
             ),
             const SizedBox(width: 10),
@@ -872,7 +869,7 @@ class _ProjectDialogState extends State<ProjectDialog> {
 
   String _getPriceLabel() {
     if (_type == ProjectType.sefer) return "כספים (לעמוד)";
-    if (_type == ProjectType.tefillin) return "כספים (ליחידה: ראש+יד)";
+    if (_type == ProjectType.tefillin) return "כספים (לזוג)";
     return "כספים (למזוזה)";
   }
 

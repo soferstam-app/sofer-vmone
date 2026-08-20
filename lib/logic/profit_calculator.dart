@@ -1,5 +1,6 @@
 import '../models.dart';
 import 'production_calculator.dart';
+import 'tefillin_units.dart';
 
 /// Money calculations, kept separate from the screens so every view agrees.
 ///
@@ -8,14 +9,19 @@ import 'production_calculator.dart';
 ///
 /// * sefer    → per page      ("כספים (לעמוד)")
 /// * mezuza   → per mezuza    ("כספים (למזוזה)")
-/// * tefillin → per full set  ("כספים (ליחידה: ראש+יד)")
+/// * tefillin → per pair      ("כספים (לזוג)") — head and hand together
 class ProfitCalculator {
   const ProfitCalculator._();
 
   /// Billable units produced by [sessions], as a fraction.
   ///
-  /// Half a page is 0.5 pages; a head-only tefillin is 4 of the 8 parshiyot in
-  /// a set, so half a set.
+  /// Half a page is 0.5 pages; a head on its own is half a pair.
+  ///
+  /// Tefillin is measured through sefer torah lines rather than by counting
+  /// parshiyot. The count made all four the same size, so a writer who had
+  /// finished קדש of a head was credited an eighth of a pair when he had
+  /// actually done 16 of its 104 lines. The money followed the same figure, so
+  /// it was wrong in the same direction.
   static double billableUnits(Project project, Iterable<WorkSession> sessions) {
     switch (project.type) {
       case ProjectType.sefer:
@@ -26,8 +32,8 @@ class ProfitCalculator {
         return ProductionCalculator.mezuzaLinesTotal(sessions) /
             ProductionCalculator.linesPerMezuza;
       case ProjectType.tefillin:
-        return ProductionCalculator.parshiyotTotal(sessions) /
-            ProductionCalculator.parshiyotPerSet;
+        return ProductionCalculator.tefillinSeferLinesTotal(sessions) /
+            TefillinUnits.seferLinesPerPair;
     }
   }
 

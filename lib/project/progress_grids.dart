@@ -83,23 +83,22 @@ Widget seferProgressGrid(
               child: Container(
                 decoration: BoxDecoration(
                   border: Border.all(color: SoferTokens.of(context).rule),
-              // How far into the page the writing got, filled from the top.
-              // The accent marks what is done, here as everywhere.
-              gradient: progress > 0
-                  ? LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        SoferTokens.of(context).accent,
-                        SoferTokens.of(context).accent,
-                        SoferTokens.of(context).paper,
-                        SoferTokens.of(context).paper,
-                      ],
-                      stops: [0.0, progress, progress, 1.0],
-                    )
-                  : null,
-                  color:
-                      progress == 0 ? SoferTokens.of(context).paper : null,
+                  // How far into the page the writing got, filled from the top.
+                  // The accent marks what is done, here as everywhere.
+                  gradient: progress > 0
+                      ? LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            SoferTokens.of(context).accent,
+                            SoferTokens.of(context).accent,
+                            SoferTokens.of(context).paper,
+                            SoferTokens.of(context).paper,
+                          ],
+                          stops: [0.0, progress, progress, 1.0],
+                        )
+                      : null,
+                  color: progress == 0 ? SoferTokens.of(context).paper : null,
                 ),
                 alignment: Alignment.center,
                 // At this size only the shortest numerals fit, and the map is
@@ -201,8 +200,8 @@ Widget tefillinProgressGrid(
         const SizedBox(height: 8),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children:
-              List.generate(4, (i) => _tefillinBox(context, i, counts[i], true)),
+          children: List.generate(
+              4, (i) => _tefillinBox(context, i, counts[i], true)),
         ),
         const SizedBox(height: 24),
         const Text("תפילין של יד",
@@ -219,7 +218,7 @@ Widget tefillinProgressGrid(
 }
 
 Widget _tefillinBox(BuildContext context, int index, int count, bool isHead) {
-  List<String> names = ["קדש", "והיה כי יביאך", "שמע", "והיה אם שמוע"];
+  List<String> names = ["קדש", "והיה כי יביאך", "שמע", "והיה אם שמע"];
   String name = names[index];
 
   return InkWell(
@@ -231,8 +230,7 @@ Widget _tefillinBox(BuildContext context, int index, int count, bool isHead) {
           content: Text("נכתבו בשלמות: $count"),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text("סגור"))
+                onPressed: () => Navigator.pop(ctx), child: const Text("סגור"))
           ],
         ),
       );
@@ -241,7 +239,9 @@ Widget _tefillinBox(BuildContext context, int index, int count, bool isHead) {
       width: 70,
       height: 70,
       decoration: BoxDecoration(
-        color: count > 0 ? SoferTokens.of(context).paper : SoferTokens.of(context).rule,
+        color: count > 0
+            ? SoferTokens.of(context).paper
+            : SoferTokens.of(context).rule,
         border: Border.all(color: SoferTokens.of(context).accent),
         borderRadius: BorderRadius.circular(8),
       ),

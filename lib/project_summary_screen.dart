@@ -12,10 +12,14 @@ import 'project/scroll_map.dart';
 import 'storage_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/sofer_widgets.dart';
+import 'widgets/confirm.dart';
 import 'format.dart';
 import 'logic/client_update.dart';
+import 'logic/tefillin_state.dart';
+import 'logic/tefillin_units.dart';
 import 'project/progress_grids.dart';
 import 'project/rhythm_panel.dart';
+import 'project/tefillin_board.dart';
 import 'logic/hebrew_clock.dart';
 import 'logic/payment_ledger.dart';
 import 'logic/proofread_board.dart';
@@ -59,6 +63,201 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
   /// actually been paid" beside the price it already shows.
   List<Payment> _payments = const [];
   final StorageService _storage = StorageService();
+
+  /// Whether the tefillin board is laid out a row per pair, or transposed so
+  /// that every קדש sits under every other.
+  BoardGrouping _boardGrouping = BoardGrouping.byPair;
+
+  /// Flags edited on this screen, held here so the board redraws before the
+  /// write comes back. Keyed like [Project.tefillinFlags].
+  Map<String, String>? _flagsOverride;
+
+  Map<String, String> _flagsFor(Project project) =>
+      _flagsOverride ?? project.tefillinFlags;
+
+  /// The commission drawn as the thing it is, and the one place its
+  /// exceptional states can be set.
+  Widget _tefillinBoard(
+    Project project,
+    List<WorkSession> sessions, {
+    BoardGrouping? grouping,
+    ValueChanged<BoardGrouping>? onGroupingChanged,
+    Future<void> Function(TefillinSlot)? onSlotTap,
+  }) {
+    final withFlags = project.copyWith(tefillinFlags: _flagsFor(project));
+    return TefillinBoard(
+      projectName: project.name,
+      slots: TefillinState.slots(withFlags, sessions),
+      pairsOrdered: project.targetUnits,
+      dailyTarget: '${project.targetDaily} פרשיות',
+      grouping: grouping ?? _boardGrouping,
+      onGroupingChanged:
+          onGroupingChanged ?? (g) => setState(() => _boardGrouping = g),
+      onSlotTap: (slot) =>
+          (onSlotTap ?? (slot) => _slotActions(project, slot))(slot),
+      onHelp: () => showDialog<void>(
+        context: context,
+        builder: (_) => const TefillinShareHelp(),
+      ),
+    );
+  }
+
+  /// What can be said about a slot that the sessions cannot say themselves.
+  Future<void> _slotActions(Project project, TefillinSlot slot) async {
+    final t = SoferTokens.of(context);
+    final name = TefillinUnits.names[slot.parshiya - 1];
+    final where =
+        'זוג ${slot.pair} · ${TefillinUnits.sideName(slot.side)} · $name';
+
+    final action = await showModalBottomSheet<_TefillinSlotAction>(
+      context: context,
+      backgroundColor: t.paper,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                child: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text(where,
+                      style: TextStyle(
+                          fontFamily: t.numeralFamily,
+                          fontSize: 16,
+                          color: t.ink)),
+                ),
+              ),
+              if (slot.state != SlotState.stuck)
+                ListTile(
+                  leading: Icon(Icons.build_outlined, color: t.caution),
+                  title: const Text('מסמן: ממתין לתיקון'),
+                  onTap: () =>
+                      Navigator.pop(ctx, _TefillinSlotAction.markStuck),
+                ),
+              if (slot.state != SlotState.voided)
+                ListTile(
+                  leading: Icon(Icons.block, color: t.danger),
+                  title: const Text('מסמן: נפסל'),
+                  onTap: () =>
+                      Navigator.pop(ctx, _TefillinSlotAction.markVoided),
+                ),
+              if (slot.state == SlotState.stuck ||
+                  slot.state == SlotState.voided)
+                ListTile(
+                  leading: Icon(Icons.undo, color: t.accent),
+                  title: const Text('ביטול הסימון'),
+                  onTap: () => Navigator.pop(ctx, _TefillinSlotAction.clear),
+                ),
+              if (slot.state == SlotState.voided)
+                ListTile(
+                  leading: Icon(Icons.restart_alt, color: t.danger),
+                  title: const Text('הסר את הפרשייה והתחל מחדש'),
+                  subtitle: const Text('גם הפרשיות שאחריה באותו סט יוסרו'),
+                  onTap: () => Navigator.pop(ctx, _TefillinSlotAction.remove),
+                ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    switch (action) {
+      case _TefillinSlotAction.markStuck:
+        await _setFlag(project, slot, TefillinState.stuckFlag);
+      case _TefillinSlotAction.markVoided:
+        await _setFlag(project, slot, TefillinState.voidFlag);
+      case _TefillinSlotAction.clear:
+        await _setFlag(project, slot, null);
+      case _TefillinSlotAction.remove:
+        await _removeTefillinFrom(project, slot);
+      case null:
+        return;
+    }
+  }
+
+  /// Marks a slot held for correction or written off, or clears the mark.
+  ///
+  /// Writes the whole project list back rather than the one commission,
+  /// because that is the only shape the store takes.
+  Future<void> _setFlag(
+      Project project, TefillinSlot slot, String? flag) async {
+    final key = Project.slotKey(slot.pair,
+        slot.side == TefillinSide.head ? 'head' : 'hand', slot.parshiya);
+    final next = {...project.tefillinFlags};
+    if (flag == null) {
+      next.remove(key);
+    } else {
+      next[key] = flag;
+    }
+
+    setState(() {
+      _flagsOverride = next;
+      _selectedProject = project.copyWith(tefillinFlags: next);
+    });
+
+    final all = await _storage.loadProjects();
+    final at = all.indexWhere((p) => p.id == project.id);
+    if (at != -1) {
+      all[at] = all[at].copyWith(tefillinFlags: next);
+      await _storage.saveProjects(all);
+    }
+  }
+
+  /// Removes a rejected parshiya and every later parshiya in the same four.
+  /// Keeping later work would leave an invalid set that appears valid on the
+  /// board, so the cascade is part of the operation rather than a second
+  /// question the writer can miss.
+  Future<void> _removeTefillinFrom(Project project, TefillinSlot slot) async {
+    final name = TefillinUnits.names[slot.parshiya - 1];
+    final confirmed = await confirmAction(
+      context,
+      title: 'להסיר את פרשיית $name?',
+      message: 'הפרשייה וכל הפרשיות שאחריה באותו סט יועברו לסל המחזור. '
+          'לאחר מכן יהיה אפשר להתחיל את $name מחדש.',
+      cancelLabel: 'ביטול',
+      confirmLabel: 'הסר והתחל מחדש',
+      danger: true,
+    );
+    if (!confirmed || !mounted) return;
+
+    final side = slot.side == TefillinSide.head ? 'head' : 'hand';
+    final nextFlags = {...project.tefillinFlags};
+    for (var p = slot.parshiya; p <= 4; p++) {
+      nextFlags.remove(Project.slotKey(slot.pair, side, p));
+    }
+
+    final nextHistory = TefillinState.removeFrom(
+      history: widget.history,
+      projectId: project.id,
+      pair: slot.pair,
+      side: slot.side,
+      parshiya: slot.parshiya,
+    );
+    widget.history
+      ..clear()
+      ..addAll(nextHistory);
+
+    final updated = project.copyWith(tefillinFlags: nextFlags);
+    final localProject = widget.projects.indexWhere((p) => p.id == project.id);
+    if (localProject != -1) widget.projects[localProject] = updated;
+    setState(() {
+      _flagsOverride = nextFlags;
+      _selectedProject = updated;
+    });
+
+    final storedProjects = await _storage.loadProjects();
+    final storedAt = storedProjects.indexWhere((p) => p.id == project.id);
+    if (storedAt != -1) storedProjects[storedAt] = updated;
+    await _storage.saveProjects(storedProjects);
+    await _storage.saveHistory(widget.history);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('פרשיית $name הוסרה ואפשר להתחיל אותה מחדש')),
+    );
+  }
 
   @override
   void initState() {
@@ -179,8 +378,7 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
     final sessions = widget.history
         .where((s) => s.projectId == project.id && !s.isDeleted)
         .toList();
-    final sessionsForStats =
-        sessions.where((s) => !s.backlogOnly).toList();
+    final sessionsForStats = sessions.where((s) => !s.backlogOnly).toList();
 
     // Anything divided by time is measured only from work that carried time.
     //
@@ -195,6 +393,9 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
     // by hand -- and summing those raw took an honest hour down to half of one.
     final sessionsWithTime = MeasuredWork.only(sessionsForStats);
     final someWorkUntimed = sessionsWithTime.length != sessionsForStats.length;
+    final tefillinAverage = project.type == ProjectType.tefillin
+        ? ProductionCalculator.tefillinAverageStats(sessionsWithTime)
+        : null;
 
     String totalWrittenStr = "";
     double totalProfit = 0;
@@ -242,15 +443,14 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
         avgTimeStr = "${avg.toStringAsFixed(2)} דקות לשורה";
       }
     } else {
-      final int totalParshiyot =
-          ProductionCalculator.parshiyotTotal(sessions);
+      final int totalParshiyot = ProductionCalculator.parshiyotTotal(sessions);
       totalWrittenStr = "$totalParshiyot פרשיות (סה\"כ)";
-      final int parshiyotForStats =
-          ProductionCalculator.parshiyotTotal(sessionsWithTime);
+      final int parshiyotForStats = tefillinAverage?.parshiyot ?? 0;
       totalProfit = ProfitCalculator.profit(project, sessionsForStats);
 
-      if (parshiyotForStats > 0 && totalTime.inSeconds > 0) {
-        double avg = totalTime.inMinutes / parshiyotForStats;
+      final averageTime = tefillinAverage?.duration ?? Duration.zero;
+      if (parshiyotForStats > 0 && averageTime.inSeconds > 0) {
+        double avg = averageTime.inMinutes / parshiyotForStats;
         avgTimeStr = "${avg.toStringAsFixed(2)} דקות לפרשייה";
       }
     }
@@ -370,13 +570,15 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                     if (_proofreadLine(project) != null)
                       _statRow("הגהה:", _proofreadLine(project)!),
                     _paymentRow(project),
-                    _statRow(
-                        "סך הכל רווח:", formatMoneyExact(totalProfit, project.currency)),
+                    _statRow("סך הכל רווח:",
+                        formatMoneyExact(totalProfit, project.currency)),
                     if (projectExpenses > 0) ...[
                       _statRow("הוצאות משויכות:",
                           formatMoneyExact(projectExpenses, project.currency)),
-                      _statRow("נטו (לאחר הוצאות):",
-                          formatMoneyExact(totalProfit - projectExpenses, project.currency)),
+                      _statRow(
+                          "נטו (לאחר הוצאות):",
+                          formatMoneyExact(
+                              totalProfit - projectExpenses, project.currency)),
                     ],
                     if (hourlyRate != null)
                       _statRow("שכר לשעה:",
@@ -399,7 +601,7 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
             if (project.type == ProjectType.sefer)
               seferProgressGrid(context, project, sessions),
             if (project.type == ProjectType.tefillin)
-              tefillinProgressGrid(context, project, sessions),
+              _tefillinBoard(project, sessions),
           ],
           RhythmPanel(
             project: project,
@@ -462,8 +664,7 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                   fontFamily: t.numeralFamily,
                   fontSize: 21,
                   height: 1.4,
-                  color:
-                      project.plannedUnits == null ? t.caution : t.inkMuted),
+                  color: project.plannedUnits == null ? t.caution : t.inkMuted),
             ),
           )
         else ...[
@@ -581,12 +782,12 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                 const SoferSectionTitle("הכסף", padding: EdgeInsets.zero),
                 const SizedBox(height: 6),
                 if (projectExpenses > 0) ...[
-                  SoferStatRow("רווח", formatMoney(totalProfit, project.currency)),
+                  SoferStatRow(
+                      "רווח", formatMoney(totalProfit, project.currency)),
                   SoferStatRow("הוצאות משויכות",
                       formatMoney(projectExpenses, project.currency)),
                 ],
-                SoferStatRow(
-                    projectExpenses > 0 ? "נטו" : "רווח",
+                SoferStatRow(projectExpenses > 0 ? "נטו" : "רווח",
                     formatMoney(net, project.currency)),
                 SoferStatRow(
                     "לשעה",
@@ -664,7 +865,7 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
   static String _mapSubtitle(Project project) => switch (project.type) {
         ProjectType.sefer => "כל עמוד בספר, ומה נכתב בו",
         ProjectType.mezuza => "כל מזוזה בהזמנה, ומה כבר נכתב",
-        ProjectType.tefillin => "כל סט בהזמנה, ומה כבר נכתב",
+        ProjectType.tefillin => "כל זוג בהזמנה, ומה כבר נכתב",
       };
 
   /// The day the first session on this commission was recorded, or null when
@@ -708,20 +909,55 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
       return;
     }
 
-    // Mezuzot and tefillin are counted, not paginated: the map is how many of
-    // the order are finished, filled from the first.
+    // Tefillin has a map of its own. Filling counted units from the first
+    // said only how much was done, never which parshiya of which pair — and
+    // for tefillin that is the whole question.
+    if (project.type == ProjectType.tefillin) {
+      var grouping = _boardGrouping;
+      Navigator.of(context).push<void>(MaterialPageRoute(
+        builder: (_) => Scaffold(
+          backgroundColor: SoferTokens.of(context).paper,
+          appBar: AppBar(
+            backgroundColor: SoferTokens.of(context).paper,
+            foregroundColor: SoferTokens.of(context).ink,
+            elevation: 0,
+            title: const Text("מפת העבודה"),
+          ),
+          body: StatefulBuilder(
+            builder: (mapContext, setMapState) => _tefillinBoard(
+              project,
+              widget.history
+                  .where((s) => s.projectId == project.id && !s.isDeleted)
+                  .toList(),
+              grouping: grouping,
+              onGroupingChanged: (next) => setMapState(() {
+                grouping = next;
+                _boardGrouping = next;
+              }),
+              onSlotTap: (slot) async {
+                await _slotActions(project, slot);
+                if (mapContext.mounted) setMapState(() {});
+              },
+            ),
+          ),
+        ),
+      ));
+      return;
+    }
+
+    // Mezuzot are counted, not paginated: the map is how many of the order are
+    // finished, filled from the first.
     final done = ProfitCalculator.billableUnits(project, sessions);
     final total = (project.targetUnits ?? done.ceil()).clamp(1, 1 << 20);
     showScrollMap(
       context,
-      title: project.type == ProjectType.mezuza ? "מפת המזוזות" : "מפת הסטים",
+      title: "מפת המזוזות",
       total: total,
       fill: {
-        for (var i = 1; i <= total; i++)
-          i: (done - (i - 1)).clamp(0.0, 1.0),
+        for (var i = 1; i <= total; i++) i: (done - (i - 1)).clamp(0.0, 1.0),
       },
-      unitSingular: project.type == ProjectType.mezuza ? "מזוזה" : "סט",
-      unitPlural: project.type == ProjectType.mezuza ? "מזוזות" : "סטים",
+      unitSingular: "מזוזה",
+      unitPlural: "מזוזות",
       hebrewNumerals: false,
     );
   }
@@ -752,13 +988,13 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
   static String _sizeQuestion(Project project) => switch (project.type) {
         ProjectType.sefer => "מספר העמודים בספר",
         ProjectType.mezuza => "כמה מזוזות בהזמנה",
-        ProjectType.tefillin => "כמה סטים בהזמנה",
+        ProjectType.tefillin => "כמה זוגות בהזמנה",
       };
 
   static String _unitPlural(ProjectType type) => switch (type) {
         ProjectType.sefer => 'עמודים',
         ProjectType.mezuza => 'מזוזות',
-        ProjectType.tefillin => 'סטים',
+        ProjectType.tefillin => 'זוגות',
       };
 
   /// The delivery date, and what it rests on.
@@ -784,7 +1020,8 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
           children: [
             Row(
               children: [
-                Icon(Icons.event_available, color: SoferTokens.of(context).accent),
+                Icon(Icons.event_available,
+                    color: SoferTokens.of(context).accent),
                 const SizedBox(width: 8),
                 const Text("צפי סיום",
                     style:
@@ -818,7 +1055,8 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
               "${estimate.doneUnits.toStringAsFixed(1)} מתוך "
               "${estimate.totalUnits.toStringAsFixed(0)} $unit "
               "(${(estimate.progress * 100).toStringAsFixed(0)}%)",
-              style: TextStyle(fontSize: 13, color: SoferTokens.of(context).inkMuted),
+              style: TextStyle(
+                  fontSize: 13, color: SoferTokens.of(context).inkMuted),
             ),
             const Divider(height: 24),
             _statRow(
@@ -829,7 +1067,8 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
               Text(
                 "עדיין אין מספיק עבודה מתועדת בפרויקט, לכן החישוב לפי היעד "
                 "היומי שהגדרת ולא לפי הקצב בפועל.",
-                style: TextStyle(fontSize: 12, color: SoferTokens.of(context).caution),
+                style: TextStyle(
+                    fontSize: 12, color: SoferTokens.of(context).caution),
               ),
             if (targetPaceStr.isNotEmpty)
               _statRow("נדרש כדי לעמוד בתאריך היעד:", targetPaceStr),
@@ -838,7 +1077,8 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
               Text(
                 "${plan.skippedTotal} ימים בדרך אינם ימי עבודה: "
                 "${formatSkippedDays(plan)}",
-                style: TextStyle(fontSize: 12, color: SoferTokens.of(context).inkMuted),
+                style: TextStyle(
+                    fontSize: 12, color: SoferTokens.of(context).inkMuted),
               ),
             ],
           ],
@@ -853,7 +1093,7 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
     final what = switch (project.type) {
       ProjectType.sefer => "מספר העמודים בספר",
       ProjectType.mezuza => "כמה מזוזות בהזמנה",
-      ProjectType.tefillin => "כמה סטים בהזמנה",
+      ProjectType.tefillin => "כמה זוגות בהזמנה",
     };
     return Card(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -875,5 +1115,6 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
       ),
     );
   }
-
 }
+
+enum _TefillinSlotAction { markStuck, markVoided, clear, remove }

@@ -98,13 +98,13 @@ class _QuoteScreenState extends State<QuoteScreen> {
   String get _unitLabel => switch (_type) {
         ProjectType.sefer => 'עמודים',
         ProjectType.mezuza => 'מזוזות',
-        ProjectType.tefillin => 'סטים',
+        ProjectType.tefillin => 'זוגות',
       };
 
   String get _singularLabel => switch (_type) {
         ProjectType.sefer => 'עמוד',
         ProjectType.mezuza => 'מזוזה',
-        ProjectType.tefillin => 'סט',
+        ProjectType.tefillin => 'זוג',
       };
 
   @override

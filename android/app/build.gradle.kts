@@ -114,7 +114,7 @@ project.gradle.taskGraph.whenReady {
                     "\n" +
                     "Create the keystore, then copy android/key.properties.example to\n" +
                     "android/key.properties and fill it in.\n" +
-                    "See DOCUMENTATION.md, section 11 — before a release build.\n"
+                    "See docs/SIGNING.md before a release build.\n"
             )
         }
     }

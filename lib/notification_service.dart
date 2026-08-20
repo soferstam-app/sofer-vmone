@@ -257,4 +257,41 @@ class NotificationService {
     if (!isSupported) return;
     await flutterLocalNotificationsPlugin.cancel(1);
   }
+
+  /// Books the end of the sitting selected on the home-additions screen.
+  /// Notification id 2 is kept separate from both the daily ring and breaks.
+  Future<void> scheduleWritingEndAlert(DateTime when) async {
+    if (!isSupported || !when.isAfter(DateTime.now())) return;
+    await cancelWritingEndAlert();
+    try {
+      final mode = await canScheduleExactly()
+          ? AndroidScheduleMode.exactAllowWhileIdle
+          : AndroidScheduleMode.inexactAllowWhileIdle;
+      await flutterLocalNotificationsPlugin.zonedSchedule(
+        2,
+        'זמן הכתיבה הסתיים',
+        'הגעת לשעת הסיום שקבעת לישיבה',
+        tz.TZDateTime.from(when, tz.local),
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'writing_end_channel',
+            'שעת סיום כתיבה',
+            channelDescription: 'התראה בשעת הסיום שנבחרה לישיבת כתיבה',
+            importance: Importance.max,
+            priority: Priority.high,
+          ),
+        ),
+        androidScheduleMode: mode,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+      );
+    } catch (e) {
+      debugPrint('Error scheduling writing end alert: $e');
+    }
+  }
+
+  Future<void> cancelWritingEndAlert() async {
+    if (!isSupported) return;
+    await flutterLocalNotificationsPlugin.cancel(2);
+  }
 }

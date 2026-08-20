@@ -112,8 +112,10 @@ install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
 # "Microsoft Visual C++ 2015-2022 Redistributable" installed.
 if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
   get_filename_component(CMAKE_CXX_COMPILER_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
-  # From .../VC/Tools/MSVC/14.xx/bin/Hostx64/x64 go up to VC (5 levels)
-  get_filename_component(VC_DIR "${CMAKE_CXX_COMPILER_DIR}/../../../../.." ABSOLUTE)
+  # From .../VC/Tools/MSVC/14.xx/bin/Hostx64/x64 go up to VC (6 levels).
+  # Five levels stop at VC/Tools, so the old path silently missed Redist and
+  # the release ZIP did not contain the runtime promised in the README.
+  get_filename_component(VC_DIR "${CMAKE_CXX_COMPILER_DIR}/../../../../../.." ABSOLUTE)
   set(VC_REDIST_MSVC "${VC_DIR}/Redist/MSVC")
   file(GLOB VC_CRT_DIRS "${VC_REDIST_MSVC}/*/x64/Microsoft.VC*.CRT")
   if(VC_CRT_DIRS)

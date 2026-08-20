@@ -124,7 +124,10 @@ class TimerController {
       _isRunning ? _monotonic() - _runMark : Duration.zero;
 
   /// Time since the writer last marked a line finished.
-  Duration get sinceLastLap => elapsed - _lastLap;
+  Duration get sinceLastLap {
+    final since = elapsed - _lastLap;
+    return since.isNegative ? Duration.zero : since;
+  }
 
   void start() {
     _isPaused = false;
@@ -206,6 +209,12 @@ class TimerController {
         'isPaused': _isPaused,
         'sessionStartTime': _startedAt?.toIso8601String(),
         'accumulatedElapsedSeconds': _banked.inSeconds,
+        'breakStartedAt': _breakStartedAt?.toIso8601String(),
+        'accumulatedBreakSeconds': _breakSoFar.inSeconds,
+        // The line clock is part of the sitting, not decoration. Without its
+        // checkpoint a restored timer showed the whole sitting as the current
+        // line until the next press of "סיימתי שורה".
+        'lastLapElapsedSeconds': _lastLap.inSeconds,
       };
 
   /// Picks a sitting back up. Returns true when the clock is running again, so
@@ -214,12 +223,28 @@ class TimerController {
     final isPaused = state['isPaused'] == true;
     _banked = Duration(
         seconds: (state['accumulatedElapsedSeconds'] as num?)?.toInt() ?? 0);
+    _lastLap = Duration(
+        seconds: (state['lastLapElapsedSeconds'] as num?)?.toInt() ?? 0);
+    _breakSoFar = Duration(
+        seconds: (state['accumulatedBreakSeconds'] as num?)?.toInt() ?? 0);
     final started = state['sessionStartTime'] as String?;
     // A paused sitting has no start to count from: its time is all banked.
     final resumedFrom =
         started != null && !isPaused ? DateTime.tryParse(started) : null;
     _isPaused = isPaused;
     _startedAt = null;
+
+    if (isPaused) {
+      final breakStarted = state['breakStartedAt'] as String?;
+      // New states retain the original wall-clock mark so a break continues
+      // while the process is closed. An older state has no recoverable mark;
+      // continue from restore time instead of inventing elapsed break time.
+      _breakStartedAt = breakStarted == null
+          ? _now()
+          : DateTime.tryParse(breakStarted) ?? _now();
+      _startTicking();
+      return false;
+    }
 
     if (resumedFrom == null) return false;
 
@@ -243,7 +268,8 @@ class TimerController {
   /// notification while it does.
   Future<void> initForegroundService() async {
     if (!Platform.isAndroid) return;
-    final permission = await FlutterForegroundTask.checkNotificationPermission();
+    final permission =
+        await FlutterForegroundTask.checkNotificationPermission();
     if (permission != NotificationPermission.granted) {
       await FlutterForegroundTask.requestNotificationPermission();
     }

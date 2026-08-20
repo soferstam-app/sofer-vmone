@@ -20,7 +20,7 @@ class TefillinSummary {
     "קדש",
     "והיה כי יביאך",
     "שמע",
-    "והיה אם שמוע",
+    "והיה אם שמע",
   ];
 
   static String parshiyaName(int index) =>
@@ -37,10 +37,34 @@ class TefillinSummary {
     // How many of each parshiya were finished, and what was left part-written.
     final counts = List.filled(_slots, 0);
     final partials = <String>[];
+    final rangeLines = <String, int>{};
+    final rangeReachedEnd = <String, bool>{};
+    final rangeSide = <String, String>{};
+    final rangeParshiya = <String, int>{};
 
     for (final s in sessions) {
       final type = s.tefillinType;
       final parshiya = s.parshiya;
+
+      // Smart-mode continuation records are exact ranges. Gather all ranges
+      // belonging to the same physical parshiya before describing them, or a
+      // parshiya written in two sittings would be reported as one complete and
+      // another partial parshiya.
+      if (type != null &&
+          parshiya != null &&
+          s.pairIndex != null &&
+          s.startLine > 0) {
+        final maxLines =
+            type == 'head' ? linesInHeadParshiya : linesInHandParshiya;
+        final key = '${s.pairIndex}:$type:$parshiya';
+        final lines = (s.endLine - s.startLine + 1).clamp(0, maxLines);
+        rangeLines[key] = (rangeLines[key] ?? 0) + lines;
+        rangeReachedEnd[key] =
+            (rangeReachedEnd[key] ?? false) || s.endLine >= maxLines;
+        rangeSide[key] = type;
+        rangeParshiya[key] = parshiya;
+        continue;
+      }
 
       if (type == null && parshiya == null) {
         // A whole pair: every slot advances.
@@ -69,6 +93,21 @@ class TefillinSummary {
       }
     }
 
+    for (final entry in rangeLines.entries) {
+      final type = rangeSide[entry.key]!;
+      final parshiya = rangeParshiya[entry.key]!;
+      final maxLines =
+          type == 'head' ? linesInHeadParshiya : linesInHandParshiya;
+      if (rangeReachedEnd[entry.key] == true || entry.value >= maxLines) {
+        final base = type == 'head' ? 0 : 4;
+        counts[base + parshiya - 1]++;
+      } else {
+        final part = type == 'head' ? 'ראש' : 'יד';
+        partials
+            .add('${parshiyaName(parshiya)} של $part (עד שורה ${entry.value})');
+      }
+    }
+
     // Gather the loose parshiyot back into wholes, largest first: a pair is
     // eight, a head or a hand is four, and only the remainder is named singly.
     final pairs = _smallest(counts, 0, _slots);
@@ -86,8 +125,8 @@ class TefillinSummary {
       if (handSets > 0) "$handSets תפילין של יד",
       for (var i = 0; i < _slots; i++)
         if (counts[i] > 0)
-          _looseParshiyot(counts[i], parshiyaName((i % 4) + 1),
-              i < 4 ? "ראש" : "יד"),
+          _looseParshiyot(
+              counts[i], parshiyaName((i % 4) + 1), i < 4 ? "ראש" : "יד"),
       ...partials,
     ];
 
@@ -96,9 +135,7 @@ class TefillinSummary {
   }
 
   static String _looseParshiyot(int count, String name, String part) =>
-      count == 1
-          ? "פרשיית $name של $part"
-          : "$count פרשיות $name של $part";
+      count == 1 ? "פרשיית $name של $part" : "$count פרשיות $name של $part";
 
   /// How many complete sets the slots in `[from, to)` can make.
   static int _smallest(List<int> counts, int from, int to) =>

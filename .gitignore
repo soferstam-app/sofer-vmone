@@ -56,6 +56,10 @@ oauth_credentials.json
 # חבילות שהורדו כארכיון (הפרויקט משתמש בתיקיית kosher_dart)
 /packages/*.tar.gz
 
+# Flutter/Gradle writes machine-specific SDK paths in every local.properties,
+# including examples inside vendored packages. They are never source files.
+**/local.properties
+
 # תוצרי בנייה לשחרור – מקומם ב-GitHub Releases ולא במאגר
 *.apk
 *.aab
@@ -74,6 +78,28 @@ key.properties
 
 # רשימות וקבצי פיתוח אישיים (אופציונלי – מחק את השורה אם אתה רוצה לכלול)
 GEMINI.MD
+
+# חומרי עבודה פנימיים שאינם חלק מקוד המקור הציבורי
+/.cursor/
+/AUDIT*.md
+/DESIGN_PLAN.md
+/DOCUMENTATION.md
+/ROADMAP-*.md
+/SUGGESTIONS.md
+/TEFILLIN-*.md
+/docs/GIT_UPLOAD.md
+/docs/data-format/
+/docs/manual/*.html
+/docs/manual/real/
+/docs/*.gif
+/docs/*.mp4
+/test/manual/
+/tool/build_manual.ps1
+/tool/demo/
+/tool/demo_json.dart
+/tool/hebdate.dart
+/tool/preview/
+/tool/shoot_window.ps1
 
 # docs/unnamed.jpg הייתה כאן בטעות — אתר הפרויקט בנוי עליה כרקע, ולכן היא
 # חייבת להיות במאגר. בזמן שהיא הייתה מוחרגת היא הועלתה ידנית דרך הדפדפן.

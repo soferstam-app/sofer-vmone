@@ -44,7 +44,7 @@ class PlanTable {
     return switch (project.type) {
       ProjectType.sefer => 'עמוד ${formatHebrewNumber(n)}',
       ProjectType.mezuza => 'מזוזה $n',
-      ProjectType.tefillin => 'סט $n',
+      ProjectType.tefillin => 'זוג $n',
     };
   }
 

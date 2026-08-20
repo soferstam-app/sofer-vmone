@@ -27,7 +27,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 720);
-  if (!window.Create(L"Sofer v'Mone", origin, size)) {
+  // The title bar reads in Hebrew, and it is spelled out in code points
+  // rather than typed as text: which encoding the compiler assumes for this
+  // file is not something worth betting a mangled title bar on.
+  const wchar_t kAppTitle[] = {0x05E1, 0x05D5, 0x05E4, 0x05E8, 0x0020,
+                               0x05D5, 0x05DE, 0x05D5, 0x05E0, 0x05D4, 0};
+  if (!window.Create(kAppTitle, origin, size)) {
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);
