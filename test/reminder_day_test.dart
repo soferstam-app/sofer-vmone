@@ -47,7 +47,8 @@ void main() {
     final afterMidnight = DateTime(2026, 5, 5, 0, 30);
 
     test('the working day is still the fourth', () {
-      expect(ReminderPlan.workingDay(afterMidnight, rule), DateTime(2026, 5, 4));
+      expect(
+          ReminderPlan.workingDay(afterMidnight, rule), DateTime(2026, 5, 4));
     });
 
     test('and its id is not the new calendar day\'s', () {

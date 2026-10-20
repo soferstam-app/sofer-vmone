@@ -34,6 +34,19 @@ void main() {
       expect(declares('INTERNET'), isTrue);
     });
 
+    test('uses the system package installer for verified Android updates', () {
+      expect(declares('REQUEST_INSTALL_PACKAGES'), isTrue);
+      final manifestSource = source();
+      expect(manifestSource, contains('androidx.core.content.FileProvider'));
+      expect(manifestSource,
+          contains(r'android:authorities="${applicationId}.update_provider"'));
+      expect(manifestSource, contains('android:exported="false"'));
+      expect(
+          File('android/app/src/main/res/xml/update_file_paths.xml')
+              .readAsStringSync(),
+          contains('<cache-path'));
+    });
+
     test('still declares what the timer and the reminder need', () {
       for (final permission in [
         'RECEIVE_BOOT_COMPLETED',

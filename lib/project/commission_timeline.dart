@@ -78,17 +78,24 @@ class TimelineRun {
     required DateTime estimatedEnd,
     DateTime? target,
     required String Function(DateTime) formatDate,
+    bool english = false,
   }) =>
       [
-        TimelineMark(caption: "התחלה", value: formatDate(from), at: 0),
-        TimelineMark(caption: "היום", at: at(DateTime.now()), current: true),
         TimelineMark(
-            caption: "צפי סיום",
+            caption: english ? "Start" : "התחלה",
+            value: formatDate(from),
+            at: 0),
+        TimelineMark(
+            caption: english ? "Today" : "היום",
+            at: at(DateTime.now()),
+            current: true),
+        TimelineMark(
+            caption: english ? "Estimated completion" : "צפי סיום",
             value: formatDate(estimatedEnd),
             at: at(estimatedEnd)),
         if (target != null)
           TimelineMark(
-              caption: "תאריך יעד",
+              caption: english ? "Target date" : "תאריך יעד",
               value: formatDate(target),
               at: at(target),
               quiet: true),
@@ -103,6 +110,7 @@ class TimelineRun {
 ({String text, bool late})? deadlineVerdict({
   required DateTime? target,
   required DateTime estimatedEnd,
+  bool english = false,
 }) {
   if (target == null) return null;
 
@@ -111,11 +119,25 @@ class TimelineRun {
   // measured pace is not precise to the day, and saying "late by one day" from
   // it would be claiming an accuracy it does not have.
   if (days.abs() < 3) {
-    return (text: "צפוי להסתיים בדיוק בתאריך היעד", late: false);
+    return (
+      text: english
+          ? "Expected to finish on the target date"
+          : "צפוי להסתיים בדיוק בתאריך היעד",
+      late: false
+    );
   }
 
   final off = days.abs();
   final weeks = off ~/ 7;
+  if (english) {
+    final amount = weeks >= 1
+        ? '$weeks ${weeks == 1 ? 'week' : 'weeks'}'
+        : '$off ${off == 1 ? 'day' : 'days'}';
+    return days > 0
+        ? (text: "You are ahead of the target date by $amount", late: false)
+        : (text: "You are behind the target date by $amount", late: true);
+  }
+
   final amount = weeks >= 1
       ? hebrewCount(weeks, one: 'שבוע', two: 'שבועיים', many: 'שבועות')
       : hebrewCount(off, one: 'יום', two: 'יומיים', many: 'ימים');

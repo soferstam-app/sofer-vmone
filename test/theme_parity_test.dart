@@ -13,12 +13,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sofer_vmone/expenses_screen.dart';
 import 'package:sofer_vmone/features_screen.dart';
 import 'package:sofer_vmone/models.dart';
+import 'package:sofer_vmone/onboarding/onboarding_screen.dart';
+import 'package:sofer_vmone/platform_support.dart';
 import 'package:sofer_vmone/project_comparison_screen.dart';
 import 'package:sofer_vmone/project_summary_screen.dart';
 import 'package:sofer_vmone/projects_screen.dart';
 import 'package:sofer_vmone/quote_screen.dart';
 import 'package:sofer_vmone/recycle_bin_screen.dart';
 import 'package:sofer_vmone/settings_screen.dart';
+import 'package:sofer_vmone/settings/accessibility_screen.dart';
+import 'package:sofer_vmone/settings/shortcuts_screen.dart';
 import 'package:sofer_vmone/summary_screen.dart';
 import 'package:sofer_vmone/theme/app_theme.dart';
 import 'package:sofer_vmone/work_calendar_settings_screen.dart';
@@ -170,7 +174,8 @@ void main() {
     );
   });
 
-  testWidgets('the expenses screen opens empty in the same way', (tester) async {
+  testWidgets('the expenses screen opens empty in the same way',
+      (tester) async {
     await inEveryTheme(
       tester,
       () => ExpensesScreen(projects: projects),
@@ -200,6 +205,7 @@ void main() {
       () => FeaturesScreen(projects: projects, history: history),
       (tester, theme) async {
         expect(find.text('השוואת רווחיות'), findsOneWidget, reason: theme.name);
+        expect(find.text('יומן כתיבה'), findsOneWidget, reason: theme.name);
         expect(find.text('מחשבון הצעת מחיר'), findsOneWidget,
             reason: theme.name);
       },
@@ -231,6 +237,10 @@ void main() {
         for (final entry in [
           'מטבע',
           'תאריכים לועזיים',
+          if (PlatformSupport.isDesktop) 'קיצורי מקלדת',
+          'מסך הפתיחה',
+          'יומן כתיבה',
+          'נגישות',
           'עיצוב',
           'ימי עבודה',
           'מעבר יום',
@@ -239,6 +249,44 @@ void main() {
         ]) {
           expect(find.text(entry), findsOneWidget,
               reason: '$entry is missing in ${theme.name}');
+        }
+      },
+    );
+  });
+
+  testWidgets('settings links open the same screens in every theme',
+      (tester) async {
+    await inEveryTheme(
+      tester,
+      () => const SettingsScreen(),
+      (tester, theme) async {
+        final onboarding = find.text('מסך הפתיחה');
+        await tester.ensureVisible(onboarding);
+        await tester.tap(onboarding);
+        await tester.pumpAndSettle();
+        expect(find.byType(OnboardingScreen), findsOneWidget,
+            reason: theme.name);
+        Navigator.of(tester.element(find.byType(OnboardingScreen))).pop();
+        await tester.pumpAndSettle();
+
+        final accessibility = find.text('נגישות');
+        await tester.ensureVisible(accessibility);
+        await tester.tap(accessibility);
+        await tester.pumpAndSettle();
+        expect(find.byType(AccessibilityScreen), findsOneWidget,
+            reason: theme.name);
+        Navigator.of(tester.element(find.byType(AccessibilityScreen))).pop();
+        await tester.pumpAndSettle();
+
+        if (PlatformSupport.isDesktop) {
+          final shortcuts = find.text('קיצורי מקלדת');
+          await tester.ensureVisible(shortcuts);
+          await tester.tap(shortcuts);
+          await tester.pumpAndSettle();
+          expect(find.byType(ShortcutsScreen), findsOneWidget,
+              reason: theme.name);
+          Navigator.of(tester.element(find.byType(ShortcutsScreen))).pop();
+          await tester.pumpAndSettle();
         }
       },
     );

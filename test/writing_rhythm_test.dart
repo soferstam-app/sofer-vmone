@@ -89,17 +89,16 @@ void main() {
     test('a record with no working time', () {
       // Not a pace of zero — no pace at all. Averaged as zero it would drag
       // every hour a writer records output in down towards nothing.
-      expect(byHour([sitting(hour: 6, lines: 10, timeRecorded: false)]),
-          isEmpty);
+      expect(
+          byHour([sitting(hour: 6, lines: 10, timeRecorded: false)]), isEmpty);
     });
 
     test('a sitting too short to judge', () {
       // Twelve lines against four seconds is a slip, not a pace, and one of
       // them would dominate the average of everything else.
       expect(
-          byHour([
-            sitting(hour: 6, lines: 12, took: const Duration(seconds: 4))
-          ]),
+          byHour(
+              [sitting(hour: 6, lines: 12, took: const Duration(seconds: 4))]),
           isEmpty);
     });
 
@@ -200,13 +199,15 @@ void main() {
 
     test('Sunday is the first day, as the week is counted here', () {
       // 19 July 2026 is a Sunday.
-      final slots = byDay([sitting(hour: 9, lines: 10, day: DateTime(2026, 7, 19))]);
+      final slots =
+          byDay([sitting(hour: 9, lines: 10, day: DateTime(2026, 7, 19))]);
       expect(slots.single.slot, 1);
     });
 
     test('and Friday is the sixth', () {
       // 24 July 2026 is a Friday.
-      final slots = byDay([sitting(hour: 9, lines: 10, day: DateTime(2026, 7, 24))]);
+      final slots =
+          byDay([sitting(hour: 9, lines: 10, day: DateTime(2026, 7, 24))]);
       expect(slots.single.slot, 6);
     });
 

@@ -7,6 +7,10 @@
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sofer_vmone/logic/entry_builder.dart';
+import 'package:sofer_vmone/logic/mezuza_state.dart';
+import 'package:sofer_vmone/logic/production_calculator.dart';
+import 'package:sofer_vmone/logic/tefillin_state.dart';
+import 'package:sofer_vmone/logic/tefillin_units.dart';
 import 'package:sofer_vmone/models.dart';
 
 void main() {
@@ -246,7 +250,11 @@ void main() {
   });
 
   group('mezuzot', () {
-    EntryInput mezuza({String amount = '', String partialLine = ''}) =>
+    EntryInput mezuza({
+      String amount = '',
+      String partialLine = '',
+      int? mezuzaIndex,
+    }) =>
         EntryInput(
           project: project(ProjectType.mezuza),
           start: start,
@@ -254,6 +262,20 @@ void main() {
           isManual: true,
           amount: amount,
           partialLine: partialLine,
+          mezuzaIndex: mezuzaIndex,
+        );
+
+    WorkSession partialMezuza({int index = 1, int lines = 11}) => WorkSession(
+          id: 'partial-$index',
+          projectId: 'p',
+          startTime: DateTime(2026, 7, 19, 9),
+          endTime: DateTime(2026, 7, 19, 10),
+          amount: 1,
+          startLine: 0,
+          endLine: lines,
+          description: 'מזוזה $index עד שורה $lines',
+          isManual: true,
+          mezuzaIndex: index,
         );
 
     test('are counted, and carry no page geometry', () {
@@ -269,6 +291,47 @@ void main() {
       final result = built(build(mezuza(amount: '2', partialLine: '14')));
       expect(result.sessions.single.endLine, 14);
       expect(result.sessions.single.description, contains('14'));
+    });
+
+    test('a single new partial mezuza receives an identity for later', () {
+      final result = built(build(mezuza(amount: '1', partialLine: '11')));
+
+      expect(result.sessions.single.mezuzaIndex, 1);
+      expect(result.sessions.single.endLine, 11);
+    });
+
+    test('the second half completes the same physical mezuza', () {
+      final old = partialMezuza();
+      final result = built(build(
+        mezuza(partialLine: '22', mezuzaIndex: 1),
+        history: [old],
+      ));
+      final added = result.sessions.single;
+
+      expect(added.amount, 1);
+      expect(added.mezuzaIndex, 1);
+      expect(added.endLine, 11,
+          reason: 'only the newly written half is recorded');
+      expect(added.description, contains('שורות 12–22'));
+
+      final all = [old, added];
+      expect(ProductionCalculator.mezuzaLinesTotal(all), 22);
+      expect(
+        MezuzaState.slots(project(ProjectType.mezuza), all)
+            .firstWhere((slot) => slot.index == 1)
+            .state,
+        MezuzaSlotState.done,
+      );
+    });
+
+    test('resuming must advance beyond the line already recorded', () {
+      expect(
+        rejection(build(
+          mezuza(partialLine: '11', mezuzaIndex: 1),
+          history: [partialMezuza()],
+        )),
+        contains('כבר נכתבה עד שורה 11'),
+      );
     });
 
     test('refuse a line past the end of a mezuza', () {
@@ -366,6 +429,115 @@ void main() {
       expect(
         build(tefillin(mode: 'parshiya', parshiya: 2), history: [previous]),
         isA<EntryBuilt>(),
+      );
+    });
+
+    test('a manual continuation completes the same physical parshiya', () {
+      final first = WorkSession(
+        id: 'first-stretch',
+        projectId: 'p',
+        startTime: start,
+        endTime: end,
+        amount: 1,
+        startLine: 0,
+        endLine: 3,
+        tefillinType: 'hand',
+        parshiya: 4,
+        pairIndex: 1,
+        description: 'והיה אם שמע עד שורה 3',
+        isManual: true,
+      );
+
+      final result = built(build(
+        tefillin(
+          mode: 'parshiya',
+          part: 'hand',
+          parshiya: 4,
+          partialLine: '7',
+        ),
+        history: [
+          for (var parshiya = 1; parshiya <= 3; parshiya++)
+            WorkSession(
+              id: 'done-$parshiya',
+              projectId: 'p',
+              startTime: start.subtract(Duration(days: 4 - parshiya)),
+              endTime: end.subtract(Duration(days: 4 - parshiya)),
+              amount: 1,
+              startLine: 0,
+              endLine: 0,
+              tefillinType: 'hand',
+              parshiya: parshiya,
+              pairIndex: 1,
+              description: 'done',
+              isManual: true,
+            ),
+          first,
+        ],
+      ));
+      final continued = result.sessions.single;
+
+      expect(continued.amount, 0,
+          reason: 'continuing is not another physical parshiya');
+      expect((continued.startLine, continued.endLine), (4, 7));
+      expect(continued.pairIndex, 1);
+      expect(continued.parshiya, 4);
+      expect(continued.description, contains('השלמת'));
+
+      final all = [first, continued];
+      expect(ProductionCalculator.parshiyotTotal(all), 1);
+      expect(
+        TefillinState.slots(project(ProjectType.tefillin), [
+          for (var parshiya = 1; parshiya <= 3; parshiya++)
+            WorkSession(
+              id: 'previous-$parshiya',
+              projectId: 'p',
+              startTime: start,
+              endTime: end,
+              amount: 1,
+              startLine: 0,
+              endLine: 0,
+              tefillinType: 'hand',
+              parshiya: parshiya,
+              pairIndex: 1,
+              description: 'done',
+              isManual: true,
+            ),
+          ...all,
+        ])
+            .firstWhere((slot) =>
+                slot.pair == 1 &&
+                slot.side == TefillinSide.hand &&
+                slot.parshiya == 4)
+            .state,
+        SlotState.done,
+      );
+    });
+
+    test('a continuation cannot repeat already recorded lines', () {
+      final first = WorkSession(
+        id: 'partial',
+        projectId: 'p',
+        startTime: start,
+        endTime: end,
+        amount: 1,
+        startLine: 0,
+        endLine: 3,
+        tefillinType: 'head',
+        parshiya: 1,
+        pairIndex: 1,
+        description: 'קדש',
+        isManual: true,
+      );
+      expect(
+        rejection(build(
+          tefillin(
+            mode: 'parshiya',
+            part: 'head',
+            partialLine: '3',
+          ),
+          history: [first],
+        )),
+        contains('כבר נכתבה עד שורה 3'),
       );
     });
   });

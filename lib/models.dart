@@ -3,7 +3,12 @@ import 'logic/hebrew_clock.dart';
 import 'logic/json_compat.dart';
 import 'logic/mergeable.dart';
 
-enum ProjectType { sefer, mezuza, tefillin }
+// Append new values only: older backups also carry the numeric enum index.
+enum ProjectType { sefer, mezuza, tefillin, megillah }
+
+extension ProjectTypeGeometry on ProjectType {
+  bool get isPaged => this == ProjectType.sefer || this == ProjectType.megillah;
+}
 
 class Project implements Mergeable<Project> {
   @override
@@ -23,10 +28,16 @@ class Project implements Mergeable<Project> {
   final int targetDaily;
   final int targetMonthly;
 
-  /// For sefer: when true, [targetDaily] is in lines; when false, in pages.
+  /// For paged work (Sefer Torah or Megillah): when true, [targetDaily] is in
+  /// lines; when false, in pages.
   final bool dailyGoalInLines;
   final int? totalPages;
   final int? linesPerPage;
+
+  /// The selected Megillah layout. Kept separately from page geometry so the
+  /// intentionally comic 14.5 layout can be removed without hunting for
+  /// projects that merely happen to have the same numbers.
+  final String? megillahFormat;
 
   /// How large the order is, for mezuzot and tefillin — the number of mezuzot
   /// or of full sets. A sefer states its size through [totalPages] instead.
@@ -114,6 +125,7 @@ class Project implements Mergeable<Project> {
     'dailyGoalInLines',
     'totalPages',
     'linesPerPage',
+    'megillahFormat',
     'targetUnits',
     'lastUpdated',
     'isDeleted',
@@ -125,10 +137,11 @@ class Project implements Mergeable<Project> {
     'tefillinFlags',
   };
 
-  /// The size of the job in billable units — pages, mezuzot or sets — however
-  /// the project happens to state it. Null when unknown.
+  /// The physical size of the job — pages, mezuzot or sets. A Megillah is
+  /// priced as one commission but its physical plan is still stated in pages.
+  /// Null when unknown.
   double? get plannedUnits => switch (type) {
-        ProjectType.sefer => totalPages?.toDouble(),
+        ProjectType.sefer || ProjectType.megillah => totalPages?.toDouble(),
         ProjectType.mezuza || ProjectType.tefillin => targetUnits?.toDouble(),
       };
 
@@ -144,6 +157,7 @@ class Project implements Mergeable<Project> {
     this.dailyGoalInLines = false,
     this.totalPages,
     this.linesPerPage,
+    this.megillahFormat,
     this.targetUnits,
     DateTime? lastUpdated,
     this.deletedAt,
@@ -183,6 +197,7 @@ class Project implements Mergeable<Project> {
       'dailyGoalInLines': dailyGoalInLines,
       'totalPages': totalPages,
       'linesPerPage': linesPerPage,
+      'megillahFormat': megillahFormat,
       'targetUnits': targetUnits,
       'lastUpdated': lastUpdated.toIso8601String(),
       // The flag is still written because an older build looks for it and
@@ -223,11 +238,15 @@ class Project implements Mergeable<Project> {
       dailyGoalInLines: JsonCompat.boolean(json['dailyGoalInLines'], false),
       totalPages: JsonCompat.intOrNull(json['totalPages']),
       linesPerPage: JsonCompat.intOrNull(json['linesPerPage']),
+      megillahFormat: JsonCompat.string(json['megillahFormat']).isEmpty
+          ? null
+          : JsonCompat.string(json['megillahFormat']),
       targetUnits: JsonCompat.intOrNull(json['targetUnits']),
       lastUpdated: lastUpdated,
       deletedAt: tombstone.deletedAt,
       restoredAt: tombstone.restoredAt,
-      clientEmail: json['clientEmail'] as String?,
+      clientEmail:
+          json['clientEmail'] is String ? json['clientEmail'] as String : null,
       targetCompletionDate: JsonCompat.dateOrNull(json['targetCompletionDate']),
       // A key that is not a date, or a weight that is not a number, is dropped
       // rather than taken down with the whole commission: one bad entry in a
@@ -265,12 +284,14 @@ class Project implements Mergeable<Project> {
     bool? dailyGoalInLines,
     int? totalPages,
     int? linesPerPage,
+    String? megillahFormat,
     int? targetUnits,
     bool? isDeleted,
-    String? clientEmail,
-    DateTime? targetCompletionDate,
+    Object? clientEmail = _keep,
+    Object? targetCompletionDate = _keep,
     Map<DateTime, double>? planOverrides,
     Map<String, String>? tefillinFlags,
+    Map<String, dynamic>? extraFields,
   }) {
     return Project(
       id: id,
@@ -284,19 +305,29 @@ class Project implements Mergeable<Project> {
       dailyGoalInLines: dailyGoalInLines ?? this.dailyGoalInLines,
       totalPages: totalPages ?? this.totalPages,
       linesPerPage: linesPerPage ?? this.linesPerPage,
+      megillahFormat: megillahFormat ?? this.megillahFormat,
       targetUnits: targetUnits ?? this.targetUnits,
       lastUpdated: DateTime.now(),
       // Deleting and restoring each move their own register, so a later edit
       // can never undo either of them by accident.
       deletedAt: isDeleted == true ? DateTime.now() : deletedAt,
       restoredAt: isDeleted == false ? DateTime.now() : restoredAt,
-      clientEmail: clientEmail ?? this.clientEmail,
-      targetCompletionDate: targetCompletionDate ?? this.targetCompletionDate,
+      clientEmail: identical(clientEmail, _keep)
+          ? this.clientEmail
+          : clientEmail as String?,
+      targetCompletionDate: identical(targetCompletionDate, _keep)
+          ? this.targetCompletionDate
+          : targetCompletionDate as DateTime?,
       planOverrides: planOverrides ?? this.planOverrides,
       tefillinFlags: tefillinFlags ?? this.tefillinFlags,
-      extraFields: extraFields,
+      extraFields: extraFields ?? this.extraFields,
     );
   }
+
+  /// Distinguishes an omitted nullable field from an explicit request to clear
+  /// it. Without this, editing a project could never remove an old email or
+  /// target date once it had been entered.
+  static const Object _keep = Object();
 
   @override
   Project withTombstone({DateTime? deletedAt, DateTime? restoredAt}) => Project(
@@ -311,6 +342,7 @@ class Project implements Mergeable<Project> {
         dailyGoalInLines: dailyGoalInLines,
         totalPages: totalPages,
         linesPerPage: linesPerPage,
+        megillahFormat: megillahFormat,
         targetUnits: targetUnits,
         lastUpdated: lastUpdated,
         deletedAt: deletedAt,
@@ -331,6 +363,324 @@ class Project implements Mergeable<Project> {
   int get hashCode => id.hashCode;
 }
 
+/// The lifecycle of a customer's order. Delivery can also be partial: the
+/// quantities on [OrderItem] are the source of truth for the progress shown.
+enum OrderStatus { open, partial, supplied, cancelled }
+
+/// One kind of work inside an order. An order is deliberately not limited to
+/// one project type or one project: a customer may ask for mezuzot, a
+/// Megillah and tefillin together.
+class OrderItem {
+  final String id;
+  final ProjectType type;
+  final int quantity;
+  final int suppliedQuantity;
+  final String notes;
+  final String? projectId;
+  final Map<String, dynamic> extraFields;
+
+  const OrderItem({
+    required this.id,
+    required this.type,
+    required this.quantity,
+    this.suppliedQuantity = 0,
+    this.notes = '',
+    this.projectId,
+    this.extraFields = const {},
+  });
+
+  int get remainingQuantity =>
+      (quantity - suppliedQuantity).clamp(0, quantity).toInt();
+
+  bool get isSupplied => remainingQuantity == 0;
+
+  Map<String, dynamic> toJson() => {
+        ...extraFields,
+        'id': id,
+        'typeName': type.name,
+        'type': type.index,
+        'quantity': quantity,
+        'suppliedQuantity': suppliedQuantity,
+        'notes': notes,
+        'projectId': projectId,
+      };
+
+  factory OrderItem.fromJson(Map<String, dynamic> json) {
+    final id = JsonCompat.string(json['id']);
+    if (id.isEmpty) throw const FormatException('order item without an id');
+    final quantity =
+        JsonCompat.integer(json['quantity'], 1).clamp(1, 100000).toInt();
+    final supplied = JsonCompat.integer(json['suppliedQuantity'], 0)
+        .clamp(0, quantity)
+        .toInt();
+    return OrderItem(
+      id: id,
+      type: JsonCompat.enumByName(
+          json, 'typeName', 'type', ProjectType.values, ProjectType.sefer),
+      quantity: quantity,
+      suppliedQuantity: supplied,
+      notes: JsonCompat.string(json['notes']),
+      projectId:
+          json['projectId'] is String ? json['projectId'] as String : null,
+      extraFields: JsonCompat.unknownKeys(json, {
+        'id',
+        'typeName',
+        'type',
+        'quantity',
+        'suppliedQuantity',
+        'notes',
+        'projectId',
+      }),
+    );
+  }
+
+  OrderItem copyWith({
+    ProjectType? type,
+    int? quantity,
+    int? suppliedQuantity,
+    String? notes,
+    Object? projectId = _keep,
+  }) {
+    final nextQuantity = (quantity ?? this.quantity).clamp(1, 100000).toInt();
+    return OrderItem(
+      id: id,
+      type: type ?? this.type,
+      quantity: nextQuantity,
+      suppliedQuantity: (suppliedQuantity ?? this.suppliedQuantity)
+          .clamp(0, nextQuantity)
+          .toInt(),
+      notes: notes ?? this.notes,
+      projectId:
+          identical(projectId, _keep) ? this.projectId : projectId as String?,
+      extraFields: extraFields,
+    );
+  }
+
+  static const Object _keep = Object();
+}
+
+/// A customer's commitment, separate from a writing [Project].
+///
+/// Keeping this as its own record means one order can contain mixed work and
+/// can exist before the writer decides how to split it into projects.
+class Order implements Mergeable<Order> {
+  @override
+  final String id;
+  final String customerName;
+  final String phone;
+  final String email;
+  final DateTime orderedAt;
+  final DateTime dueDate;
+  final String requirements;
+  final double price;
+  final Currency currency;
+  final List<OrderItem> items;
+
+  /// Nested records this version cannot interpret, retained verbatim on save.
+  final List<dynamic> unreadableItems;
+  final OrderStatus status;
+  final DateTime? suppliedAt;
+
+  @override
+  final DateTime lastUpdated;
+  @override
+  final DateTime? deletedAt;
+  @override
+  final DateTime? restoredAt;
+  final Map<String, dynamic> extraFields;
+
+  bool get isDeleted {
+    final deleted = deletedAt;
+    if (deleted == null) return false;
+    final restored = restoredAt;
+    return restored == null || deleted.isAfter(restored);
+  }
+
+  bool get isFullySupplied =>
+      status == OrderStatus.supplied ||
+      (unreadableItems.isEmpty &&
+          items.isNotEmpty &&
+          items.every((item) => item.isSupplied));
+
+  int get totalQuantity => items.fold(0, (sum, item) => sum + item.quantity);
+  int get suppliedQuantity =>
+      items.fold(0, (sum, item) => sum + item.suppliedQuantity);
+
+  const Order({
+    required this.id,
+    required this.customerName,
+    this.phone = '',
+    this.email = '',
+    required this.orderedAt,
+    required this.dueDate,
+    this.requirements = '',
+    this.price = 0,
+    this.currency = Currency.ils,
+    this.items = const [],
+    this.unreadableItems = const [],
+    this.status = OrderStatus.open,
+    this.suppliedAt,
+    required this.lastUpdated,
+    this.deletedAt,
+    this.restoredAt,
+    this.extraFields = const {},
+  });
+
+  Map<String, dynamic> toJson() => {
+        ...extraFields,
+        'id': id,
+        'customerName': customerName,
+        'phone': phone,
+        'email': email,
+        'orderedAt': orderedAt.toIso8601String(),
+        'dueDate': dueDate.toIso8601String(),
+        'requirements': requirements,
+        'price': price,
+        'currency': currency.toJson(),
+        'items': [for (final item in items) item.toJson(), ...unreadableItems],
+        'statusName': status.name,
+        'status': status.index,
+        'suppliedAt': suppliedAt?.toIso8601String(),
+        'lastUpdated': lastUpdated.toIso8601String(),
+        'isDeleted': isDeleted,
+        'deletedAt': deletedAt?.toIso8601String(),
+        'restoredAt': restoredAt?.toIso8601String(),
+      };
+
+  factory Order.fromJson(Map<String, dynamic> json) {
+    final id = JsonCompat.string(json['id']);
+    if (id.isEmpty) throw const FormatException('order without an id');
+    final orderedAt = JsonCompat.date(json['orderedAt'], DateTime.now());
+    final dueDate = JsonCompat.date(json['dueDate'], orderedAt);
+    final lastUpdated = JsonCompat.date(json['lastUpdated'], orderedAt);
+    final tombstone = JsonCompat.tombstone(json, lastUpdated);
+    final rawItems = json['items'];
+    if (rawItems != null && rawItems is! List) {
+      throw const FormatException('Unreadable order items');
+    }
+    final items = <OrderItem>[];
+    final unreadableItems = <dynamic>[];
+    if (rawItems is List) {
+      for (final raw in rawItems) {
+        try {
+          if (raw is Map) {
+            items.add(OrderItem.fromJson(Map<String, dynamic>.from(raw)));
+          } else {
+            unreadableItems.add(raw);
+          }
+        } catch (_) {
+          unreadableItems.add(raw);
+        }
+      }
+    }
+    return Order(
+      id: id,
+      customerName: JsonCompat.string(json['customerName']),
+      phone: JsonCompat.string(json['phone']),
+      email: JsonCompat.string(json['email']),
+      orderedAt: orderedAt,
+      dueDate: dueDate,
+      requirements: JsonCompat.string(json['requirements']),
+      price: JsonCompat.number(json['price'], 0),
+      currency: Currency.fromJson(json['currency']),
+      items: items,
+      unreadableItems: unreadableItems,
+      status: JsonCompat.enumByName(
+          json, 'statusName', 'status', OrderStatus.values, OrderStatus.open),
+      suppliedAt: JsonCompat.dateOrNull(json['suppliedAt']),
+      lastUpdated: lastUpdated,
+      deletedAt: tombstone.deletedAt,
+      restoredAt: tombstone.restoredAt,
+      extraFields: JsonCompat.unknownKeys(json, {
+        'id',
+        'customerName',
+        'phone',
+        'email',
+        'orderedAt',
+        'dueDate',
+        'requirements',
+        'price',
+        'currency',
+        'items',
+        'statusName',
+        'status',
+        'suppliedAt',
+        'lastUpdated',
+        'isDeleted',
+        'deletedAt',
+        'restoredAt',
+      }),
+    );
+  }
+
+  Order copyWith({
+    String? customerName,
+    String? phone,
+    String? email,
+    DateTime? orderedAt,
+    DateTime? dueDate,
+    String? requirements,
+    double? price,
+    Currency? currency,
+    List<OrderItem>? items,
+    OrderStatus? status,
+    Object? suppliedAt = _keep,
+    bool? isDeleted,
+  }) {
+    final now = DateTime.now();
+    return Order(
+      id: id,
+      customerName: customerName ?? this.customerName,
+      phone: phone ?? this.phone,
+      email: email ?? this.email,
+      orderedAt: orderedAt ?? this.orderedAt,
+      dueDate: dueDate ?? this.dueDate,
+      requirements: requirements ?? this.requirements,
+      price: price ?? this.price,
+      currency: currency ?? this.currency,
+      items: items ?? this.items,
+      unreadableItems: unreadableItems,
+      status: status ?? this.status,
+      suppliedAt: identical(suppliedAt, _keep)
+          ? this.suppliedAt
+          : suppliedAt as DateTime?,
+      lastUpdated: now,
+      deletedAt: isDeleted == true ? now : deletedAt,
+      restoredAt: isDeleted == false ? now : restoredAt,
+      extraFields: extraFields,
+    );
+  }
+
+  @override
+  Order withTombstone({DateTime? deletedAt, DateTime? restoredAt}) => Order(
+        id: id,
+        customerName: customerName,
+        phone: phone,
+        email: email,
+        orderedAt: orderedAt,
+        dueDate: dueDate,
+        requirements: requirements,
+        price: price,
+        currency: currency,
+        items: items,
+        unreadableItems: unreadableItems,
+        status: status,
+        suppliedAt: suppliedAt,
+        lastUpdated: lastUpdated,
+        deletedAt: deletedAt,
+        restoredAt: restoredAt,
+        extraFields: extraFields,
+      );
+
+  static const Object _keep = Object();
+
+  @override
+  bool operator ==(Object other) => other is Order && other.id == id;
+
+  @override
+  int get hashCode => id.hashCode;
+}
+
 class WorkSession implements Mergeable<WorkSession> {
   @override
   final String id;
@@ -341,7 +691,7 @@ class WorkSession implements Mergeable<WorkSession> {
   /// Quantity, whose meaning depends on the project type — use the named
   /// accessors below rather than reading this directly:
   ///
-  /// * sefer    → the **page number** this session was written on
+  /// * sefer/megillah → the **page number** this session was written on
   /// * mezuza   → the **count** of mezuzot
   /// * tefillin → the **count** of sets, head/hand units, or parshiyot,
   ///              depending on [tefillinType] and [parshiya]
@@ -383,6 +733,30 @@ class WorkSession implements Mergeable<WorkSession> {
 
   /// When true: counts only for project total written (הספק); excluded from profit, averages, daily goal.
   final bool backlogOnly;
+
+  /// Work that was genuinely written but cannot count as valid output.
+  ///
+  /// This differs from deletion: a mistaken entry goes to the recycle bin,
+  /// while invalid work keeps the time the sofer actually spent on it. Older
+  /// records have no such field and therefore remain valid.
+  final bool isInvalid;
+
+  /// Time spent on the line named by [partialPositionPage] and
+  /// [partialPositionLine] without claiming that the line was completed.
+  ///
+  /// Smart writing can end half way through a line.  Keeping that time as a
+  /// real session preserves the day on which it was worked, while production,
+  /// profit and progress must treat it as zero output.  Once the line is
+  /// completed the fragment remains for time totals and is marked
+  /// [partialLineCompleted], so it is no longer carried into the line clock.
+  /// Older records have no such field and remain ordinary completed output.
+  final bool isPartialLine;
+  final bool partialLineCompleted;
+
+  /// The smart-mode coordinate this time belongs to.  `page` is also the
+  /// mezuza index or the folded tefillin slot, matching [SmartPosition].
+  final int? partialPositionPage;
+  final int? partialPositionLine;
 
   /// Whether a working time was actually given for this session.
   ///
@@ -527,6 +901,11 @@ class WorkSession implements Mergeable<WorkSession> {
     'description',
     'isManual',
     'backlogOnly',
+    'isInvalid',
+    'isPartialLine',
+    'partialLineCompleted',
+    'partialPositionPage',
+    'partialPositionLine',
     'timeRecorded',
     'timeOfDayKnown',
     'linesPerPageAtEntry',
@@ -554,6 +933,11 @@ class WorkSession implements Mergeable<WorkSession> {
     required this.description,
     required this.isManual,
     this.backlogOnly = false,
+    this.isInvalid = false,
+    this.isPartialLine = false,
+    this.partialLineCompleted = false,
+    this.partialPositionPage,
+    this.partialPositionLine,
     bool? timeRecorded,
     this.timeOfDayKnown = true,
     this.linesPerPageAtEntry,
@@ -572,6 +956,13 @@ class WorkSession implements Mergeable<WorkSession> {
         lastUpdated = lastUpdated ?? DateTime.now();
 
   Duration get duration => endTime.difference(startTime);
+
+  /// Word ranges carry the legacy time-only flag so older apps preserve the
+  /// time without guessing complete parshiyot. This reader understands their
+  /// explicit production extension; unknown versions yield zero in calculators.
+  bool get isTefillinWordRecord => extraFields.containsKey('tefillinWords');
+  bool get isTimeOnly => isPartialLine && !isTefillinWordRecord;
+  bool get countsAsOutput => !isTimeOnly;
 
   /// The page this session was written on. Sefer projects only — reading it
   /// for another type is a bug, since [amount] means a count there.
@@ -604,6 +995,11 @@ class WorkSession implements Mergeable<WorkSession> {
       'description': description,
       'isManual': isManual,
       'backlogOnly': backlogOnly,
+      'isInvalid': isInvalid,
+      'isPartialLine': isPartialLine,
+      'partialLineCompleted': partialLineCompleted,
+      'partialPositionPage': partialPositionPage,
+      'partialPositionLine': partialPositionLine,
       'timeRecorded': timeRecorded,
       'timeOfDayKnown': timeOfDayKnown,
       'linesPerPageAtEntry': linesPerPageAtEntry,
@@ -641,12 +1037,20 @@ class WorkSession implements Mergeable<WorkSession> {
       startLine: JsonCompat.integer(json['startLine'], 0),
       endLine: JsonCompat.integer(json['endLine'], 0),
       mezuzaIndex: JsonCompat.intOrNull(json['mezuzaIndex']),
-      tefillinType: json['tefillinType'] as String?,
+      tefillinType: json['tefillinType'] is String
+          ? json['tefillinType'] as String
+          : null,
       parshiya: JsonCompat.intOrNull(json['parshiya']),
       pairIndex: JsonCompat.intOrNull(json['pairIndex']),
       description: JsonCompat.string(json['description']),
       isManual: JsonCompat.boolean(json['isManual'], false),
       backlogOnly: JsonCompat.boolean(json['backlogOnly'], false),
+      isInvalid: JsonCompat.boolean(json['isInvalid'], false),
+      isPartialLine: JsonCompat.boolean(json['isPartialLine'], false),
+      partialLineCompleted:
+          JsonCompat.boolean(json['partialLineCompleted'], false),
+      partialPositionPage: JsonCompat.intOrNull(json['partialPositionPage']),
+      partialPositionLine: JsonCompat.intOrNull(json['partialPositionLine']),
       // Absent on anything written before the field existed. Reading it off the
       // times is exactly what the old writer meant by them.
       timeRecorded:
@@ -687,6 +1091,11 @@ class WorkSession implements Mergeable<WorkSession> {
         description: description,
         isManual: isManual,
         backlogOnly: backlogOnly,
+        isInvalid: isInvalid,
+        isPartialLine: isPartialLine,
+        partialLineCompleted: partialLineCompleted,
+        partialPositionPage: partialPositionPage,
+        partialPositionLine: partialPositionLine,
         timeRecorded: timeRecorded,
         timeOfDayKnown: timeOfDayKnown,
         linesPerPageAtEntry: linesPerPageAtEntry,
@@ -700,6 +1109,7 @@ class WorkSession implements Mergeable<WorkSession> {
       );
 
   WorkSession copyWith({
+    String? entryId,
     DateTime? startTime,
     DateTime? endTime,
     int? amount,
@@ -707,11 +1117,15 @@ class WorkSession implements Mergeable<WorkSession> {
     int? endLine,
     String? description,
     bool? backlogOnly,
+    bool? isInvalid,
+    bool? isPartialLine,
+    bool? partialLineCompleted,
     bool? timeRecorded,
     bool? timeOfDayKnown,
     bool? isDeleted,
     DayStart? dayRule,
     DateTime? workingDateAtEntry,
+    Map<String, dynamic>? extraFields,
   }) {
     return WorkSession(
       id: id,
@@ -728,6 +1142,11 @@ class WorkSession implements Mergeable<WorkSession> {
       description: description ?? this.description,
       isManual: isManual,
       backlogOnly: backlogOnly ?? this.backlogOnly,
+      isInvalid: isInvalid ?? this.isInvalid,
+      isPartialLine: isPartialLine ?? this.isPartialLine,
+      partialLineCompleted: partialLineCompleted ?? this.partialLineCompleted,
+      partialPositionPage: partialPositionPage,
+      partialPositionLine: partialPositionLine,
       // Carried through rather than re-derived: editing an amount must not turn
       // a session that never had a time into one that did, or the other way
       // round.
@@ -737,7 +1156,7 @@ class WorkSession implements Mergeable<WorkSession> {
       // Kept through an edit. A corrected record is still one of the records
       // that save produced, and losing the mark would strand the rest of the
       // group with a stretch that no longer accounts for it.
-      entryId: entryId,
+      entryId: entryId ?? this.entryId,
       dayRule: dayRule ?? this.dayRule,
       workingDateAtEntry: workingDateAtEntry ?? this.workingDateAtEntry,
       lastUpdated: DateTime.now(),
@@ -745,7 +1164,7 @@ class WorkSession implements Mergeable<WorkSession> {
       // can never undo either of them by accident.
       deletedAt: isDeleted == true ? DateTime.now() : deletedAt,
       restoredAt: isDeleted == false ? DateTime.now() : restoredAt,
-      extraFields: extraFields,
+      extraFields: extraFields ?? this.extraFields,
     );
   }
 }
@@ -937,8 +1356,8 @@ class Expense implements Mergeable<Expense> {
     Currency? currency,
     ExpenseAllocation? allocation,
     List<String>? projectIds,
-    DateTime? periodStart,
-    DateTime? periodEnd,
+    Object? periodStart = _keep,
+    Object? periodEnd = _keep,
     bool? isDeleted,
   }) {
     return Expense(
@@ -949,8 +1368,11 @@ class Expense implements Mergeable<Expense> {
       currency: currency ?? this.currency,
       allocation: allocation ?? this.allocation,
       projectIds: projectIds ?? this.projectIds,
-      periodStart: periodStart ?? this.periodStart,
-      periodEnd: periodEnd ?? this.periodEnd,
+      periodStart: identical(periodStart, _keep)
+          ? this.periodStart
+          : periodStart as DateTime?,
+      periodEnd:
+          identical(periodEnd, _keep) ? this.periodEnd : periodEnd as DateTime?,
       lastUpdated: DateTime.now(),
       // Deleting and restoring each move their own register, so a later edit
       // can never undo either of them by accident.
@@ -959,6 +1381,8 @@ class Expense implements Mergeable<Expense> {
       extraFields: extraFields,
     );
   }
+
+  static const Object _keep = Object();
 }
 
 /// Where a piece of work stands in proofreading.

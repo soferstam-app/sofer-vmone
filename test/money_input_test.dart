@@ -68,7 +68,13 @@ void main() {
       // The validator and the save call this one function, so a value the form
       // accepts is the value that gets stored. That is the whole point.
       for (final typed in [
-        '40,000', '40000', '40.5', '1,200.50', '0', '  180  ', '40 000',
+        '40,000',
+        '40000',
+        '40.5',
+        '1,200.50',
+        '0',
+        '  180  ',
+        '40 000',
       ]) {
         final first = MoneyInput.parse(typed);
         expect(first, isNotNull, reason: '"$typed" was accepted');

@@ -64,12 +64,14 @@ void main() {
         amount: 5000,
         receivedAt: DateTime(2026, 5, 1),
       );
-      expect(ledger([other], [pages(3)]).received.single(Currency.ils)!.amount, 0);
+      expect(
+          ledger([other], [pages(3)]).received.single(Currency.ils)!.amount, 0);
     });
 
     test('a deleted payment is not counted', () {
       final gone = paid(4000).copyWith(isDeleted: true);
-      expect(ledger([gone], [pages(3)]).received.single(Currency.ils)!.amount, 0);
+      expect(
+          ledger([gone], [pages(3)]).received.single(Currency.ils)!.amount, 0);
     });
   });
 

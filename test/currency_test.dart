@@ -138,24 +138,21 @@ void main() {
     });
 
     test('of two has no single answer, and says so', () {
-      final total =
-          MoneyTotal.of([Money(10, usd), Money(400, Currency.ils)]);
+      final total = MoneyTotal.of([Money(10, usd), Money(400, Currency.ils)]);
       expect(total.isMixed, isTrue);
       expect(total.single(Currency.ils), isNull,
           reason: 'returning the larger part would be the lie this prevents');
     });
 
     test('and states every part rather than one of them', () {
-      final total =
-          MoneyTotal.of([Money(10, usd), Money(400, Currency.ils)]);
+      final total = MoneyTotal.of([Money(10, usd), Money(400, Currency.ils)]);
       final text = total.format(Currency.ils);
       expect(text, contains('\$10'));
       expect(text, contains('₪400'));
     });
 
     test('the largest part comes first, whichever sign it carries', () {
-      final total =
-          MoneyTotal.of([Money(10, usd), Money(400, Currency.ils)]);
+      final total = MoneyTotal.of([Money(10, usd), Money(400, Currency.ils)]);
       expect(total.parts.first.currency, Currency.ils);
     });
 
@@ -166,8 +163,7 @@ void main() {
         Money(5, usd),
       ]);
       expect(total.parts, hasLength(2));
-      expect(
-          total.parts.firstWhere((m) => m.currency == usd).amount, 15);
+      expect(total.parts.firstWhere((m) => m.currency == usd).amount, 15);
     });
   });
 }

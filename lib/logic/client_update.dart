@@ -1,5 +1,6 @@
 import '../models.dart';
 import 'production_calculator.dart';
+import 'megillah_format.dart';
 
 /// The progress update a sofer sends a client.
 ///
@@ -22,45 +23,60 @@ class ClientUpdate {
     required String soferName,
     required DateTime today,
     required String Function(DateTime) formatDate,
+    bool english = false,
   }) {
     final lines = <String>[
-      'בס"ד',
+      if (!english) ...['בס"ד', ''],
+      english ? 'Hello,' : 'שלום וברכה,',
       '',
-      'שלום וברכה,',
-      '',
-      'להלן עדכון על התקדמות העבודה בפרויקט "${project.name}", '
-          'נכון לתאריך ${formatDate(today)}:',
+      english
+          ? 'Here is a progress update for the project "${project.name}", as of ${formatDate(today)}:'
+          : 'להלן עדכון על התקדמות העבודה בפרויקט "${project.name}", נכון לתאריך ${formatDate(today)}:',
       '',
     ];
 
     // A percentage needs a whole to be a fraction of, and only a sefer whose
     // length is known has one. Quoting one without is inventing a denominator.
     final totalPages = project.totalPages;
-    if (project.type == ProjectType.sefer && totalPages != null) {
+    if (project.type.isPaged && totalPages != null) {
       final linesPerPage = ProductionCalculator.linesPerPageOf(project);
       final totalLines = totalPages * linesPerPage;
-      lines.add('• נכתב עד כה: $totalWritten (מתוך $totalPages עמודים)');
+      lines.add(english
+          ? '• Written so far: $totalWritten (of $totalPages pages)'
+          : '• נכתב עד כה: $totalWritten (מתוך $totalPages עמודים)');
       if (totalLines > 0) {
-        final percent = (linesWritten / totalLines * 100).clamp(0, 100);
-        lines.add('• התקדמות: ${percent.toStringAsFixed(0)}%');
+        final realProgress = (linesWritten / totalLines).clamp(0.0, 1.0);
+        final percent =
+            MegillahFormat.displayedProgress(project, realProgress) * 100;
+        lines.add(english
+            ? '• Progress: ${percent.toStringAsFixed(0)}%'
+            : '• התקדמות: ${percent.toStringAsFixed(0)}%');
       }
     } else {
-      lines.add('• נכתב עד כה: $totalWritten');
+      lines.add(english
+          ? '• Written so far: $totalWritten'
+          : '• נכתב עד כה: $totalWritten');
     }
 
     if (estimatedEnd.isNotEmpty) {
-      lines.add('• צפי סיום משוער: $estimatedEnd');
+      lines.add(english
+          ? '• Estimated completion: $estimatedEnd'
+          : '• צפי סיום משוער: $estimatedEnd');
     }
     final target = project.targetCompletionDate;
     if (target != null) {
-      lines.add('• תאריך יעד מוסכם: ${formatDate(target)}');
+      lines.add(english
+          ? '• Agreed target date: ${formatDate(target)}'
+          : '• תאריך יעד מוסכם: ${formatDate(target)}');
     }
 
     lines.addAll([
       '',
-      'אשמח לעמוד לרשותכם בכל שאלה.',
+      english
+          ? 'Please feel free to contact me with any questions.'
+          : 'אשמח לעמוד לרשותכם בכל שאלה.',
       '',
-      'בברכה,',
+      english ? 'Best regards,' : 'בברכה,',
     ]);
     // Unset in settings, and signing with an empty line is worse than not
     // signing: it reads as a name that failed to print.

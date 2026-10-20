@@ -1,5 +1,8 @@
 import '../models.dart';
+import 'megillah_format.dart';
 import 'tefillin_units.dart';
+import 'tefillin_text.dart';
+import 'tefillin_state.dart';
 
 /// The measured, fully completed work that can form a time-per-parshiya ratio.
 class TefillinAverageStats {
@@ -22,6 +25,26 @@ class TefillinAverageStats {
 class ProductionCalculator {
   const ProductionCalculator._();
 
+  /// Relative difficulty of one physical writing line when comparing the
+  /// four kinds of work. A mezuzah line is worth 1.1 Sefer lines and a
+  /// tefillin line 1.3; Sefer Torah and Megillah lines are the reference 1.0.
+  /// These are production/value weights, not a change to the stored line
+  /// counts or to the progress shown for a project.
+  static const double mezuzaLineWeight = 1.1;
+  static const double tefillinLineWeight = 1.3;
+
+  /// A Megillah's pricing axis is deliberately fixed at ten standard Sefer
+  /// pages, even when its physical layout has 418 or 448 lines.
+  static const int megillahPricingPages = 10;
+  static const int megillahPricingLines =
+      megillahPricingPages * defaultLinesPerPage;
+
+  static double lineWeight(ProjectType type) => switch (type) {
+        ProjectType.sefer || ProjectType.megillah => 1.0,
+        ProjectType.mezuza => mezuzaLineWeight,
+        ProjectType.tefillin => tefillinLineWeight,
+      };
+
   /// Standard line count of a single mezuza.
   static const int linesPerMezuza = 22;
 
@@ -33,7 +56,13 @@ class ProductionCalculator {
   /// * `amount: 3, endLine: 0`  → three complete mezuzot (66 lines)
   /// * `amount: 3, endLine: 10` → two complete plus 10 lines (54 lines)
   /// * `amount: 1, endLine: 10` → 10 lines into the first mezuza
-  static int mezuzaLinesInSession(WorkSession session) {
+  static int mezuzaLinesInSession(WorkSession session,
+      {bool includeInvalid = false}) {
+    if (session.isDeleted ||
+        !session.countsAsOutput ||
+        (!includeInvalid && session.isInvalid)) {
+      return 0;
+    }
     if (session.endLine > 0) {
       final completed = session.amount > 0 ? session.amount - 1 : 0;
       return completed * linesPerMezuza + session.endLine;
@@ -42,10 +71,11 @@ class ProductionCalculator {
   }
 
   /// Total lines written across mezuza sessions.
-  static int mezuzaLinesTotal(Iterable<WorkSession> sessions) {
+  static int mezuzaLinesTotal(Iterable<WorkSession> sessions,
+      {bool includeInvalid = false}) {
     var total = 0;
     for (final session in sessions) {
-      total += mezuzaLinesInSession(session);
+      total += mezuzaLinesInSession(session, includeInvalid: includeInvalid);
     }
     return total;
   }
@@ -64,14 +94,20 @@ class ProductionCalculator {
   ///
   /// The range is inclusive on both ends: writing line 5 through line 5 is one
   /// line, not zero.
-  static int seferLinesInSession(WorkSession session) =>
-      session.endLine - session.startLine + 1;
+  static int seferLinesInSession(WorkSession session,
+          {bool includeInvalid = false}) =>
+      session.isDeleted ||
+              !session.countsAsOutput ||
+              (!includeInvalid && session.isInvalid)
+          ? 0
+          : session.endLine - session.startLine + 1;
 
   /// Total lines written across sefer sessions.
-  static int seferLinesTotal(Iterable<WorkSession> sessions) {
+  static int seferLinesTotal(Iterable<WorkSession> sessions,
+      {bool includeInvalid = false}) {
     var total = 0;
     for (final session in sessions) {
-      total += seferLinesInSession(session);
+      total += seferLinesInSession(session, includeInvalid: includeInvalid);
     }
     return total;
   }
@@ -99,10 +135,11 @@ class ProductionCalculator {
   ///
   /// Each session is converted using the page size that applied to it, so a
   /// project whose geometry changed mid-way still totals correctly.
-  static double seferPages(Iterable<WorkSession> sessions, Project project) {
+  static double seferPages(Iterable<WorkSession> sessions, Project project,
+      {bool includeInvalid = false}) {
     var pages = 0.0;
     for (final session in sessions) {
-      pages += seferLinesInSession(session) /
+      pages += seferLinesInSession(session, includeInvalid: includeInvalid) /
           linesPerPageForSession(project, session);
     }
     return pages;
@@ -125,6 +162,17 @@ class ProductionCalculator {
   /// * a type but no parshiya  → whole head or hand units, 4 parshiyot each
   /// * both set               → individual parshiyot, counted as-is
   static int parshiyotInSession(WorkSession session) {
+    if (session.isDeleted || session.isInvalid || !session.countsAsOutput) {
+      return 0;
+    }
+    if (TefillinWordRange.isWordRecord(session)) {
+      final w = TefillinWordRange.read(session);
+      return w != null &&
+              w.baselineFraction == 0 &&
+              w.until == w.text.words.length
+          ? 1
+          : 0;
+    }
     if (session.tefillinType == null && session.parshiya == null) {
       return session.amount * parshiyotPerSet;
     }
@@ -146,6 +194,52 @@ class ProductionCalculator {
     return total;
   }
 
+  /// Physical ruled lines attempted in a tefillin session. Invalid work may
+  /// be included for time-per-line; deleted records never return.
+  static int tefillinPhysicalLinesInSession(WorkSession session,
+      {bool includeInvalid = false}) {
+    if (session.isDeleted ||
+        !session.countsAsOutput ||
+        (!includeInvalid && session.isInvalid)) {
+      return 0;
+    }
+    final type = session.tefillinType;
+    final parshiya = session.parshiya;
+    if (type != null && parshiya != null) {
+      final ruled =
+          type == 'head' ? linesPerHeadParshiya : linesPerHandParshiya;
+      final explicitRange = session.startLine > 0;
+      final lines = session.endLine <= 0
+          ? ruled
+          : explicitRange
+              ? session.endLine - session.startLine + 1
+              : session.endLine;
+      final records =
+          explicitRange ? 1 : (session.amount <= 0 ? 0 : session.amount);
+      return records * lines.clamp(0, ruled);
+    }
+    if (type == 'head' || type == 'hand') {
+      final perParshiya =
+          type == 'head' ? linesPerHeadParshiya : linesPerHandParshiya;
+      return (session.amount <= 0 ? 0 : session.amount) *
+          parshiyotPerUnit *
+          perParshiya;
+    }
+    return (session.amount <= 0 ? 0 : session.amount) *
+        (linesPerHeadParshiya + linesPerHandParshiya) *
+        parshiyotPerUnit;
+  }
+
+  static int tefillinPhysicalLinesTotal(Iterable<WorkSession> sessions,
+      {bool includeInvalid = false}) {
+    var total = 0;
+    for (final session in sessions) {
+      total += tefillinPhysicalLinesInSession(session,
+          includeInvalid: includeInvalid);
+    }
+    return total;
+  }
+
   /// Parshiyot from a session, but only when the work is *complete*.
   ///
   /// Returns null for a partially written individual parshiya. Used for
@@ -154,6 +248,21 @@ class ProductionCalculator {
   ///
   /// Whole sets and whole head/hand units are always complete by definition.
   static int? completedParshiyotInSession(WorkSession session) {
+    if (TefillinWordRange.isWordRecord(session)) {
+      final words = TefillinWordRange.read(session);
+      if (session.isDeleted ||
+          session.isInvalid ||
+          !session.countsAsOutput ||
+          words == null) {
+        return null;
+      }
+      return words.from == 0 && words.until == words.text.words.length
+          ? 1
+          : null;
+    }
+    if (session.isDeleted || session.isInvalid || !session.countsAsOutput) {
+      return null;
+    }
     if (session.tefillinType == null && session.parshiya == null) {
       return session.amount * parshiyotPerSet;
     }
@@ -184,7 +293,11 @@ class ProductionCalculator {
   static TefillinAverageStats tefillinAverageStats(
       Iterable<WorkSession> sessions) {
     final measured = sessions
-        .where((s) => s.timeRecorded && s.duration > Duration.zero)
+        .where((s) =>
+            !s.isDeleted &&
+            !s.isInvalid &&
+            s.timeRecorded &&
+            s.duration > Duration.zero)
         .toList();
     var count = 0;
     var duration = Duration.zero;
@@ -217,6 +330,10 @@ class ProductionCalculator {
       final covered = List<bool>.filled(maxLines, false);
 
       for (final session in group) {
+        if (!session.countsAsOutput ||
+            TefillinWordRange.isWordRecord(session)) {
+          continue;
+        }
         final from = session.startLine > 0 ? session.startLine : 1;
         final to = session.endLine <= 0 ? maxLines : session.endLine;
         for (var line = from.clamp(1, maxLines);
@@ -226,7 +343,12 @@ class ProductionCalculator {
         }
       }
 
-      if (covered.every((line) => line)) {
+      final wordSessions = group.where(TefillinWordRange.isWordRecord).toList();
+      final wordPosition = TefillinState.wordPosition(wordSessions,
+          legacyFraction: covered.where((v) => v).length / maxLines);
+      if (wordSessions.isNotEmpty
+          ? wordPosition != null && wordPosition.fraction >= 1 - 1e-9
+          : covered.every((line) => line)) {
         count++;
         for (final session in group) {
           duration += session.duration;
@@ -247,8 +369,20 @@ class ProductionCalculator {
   /// Works on any subset of the history, because a session names its own
   /// parshiya and a parshiya's size does not depend on which pair it belongs
   /// to.
-  static double tefillinSeferLines(WorkSession session) {
+  static double tefillinSeferLines(WorkSession session,
+      {bool includeInvalid = false}) {
+    if (session.isDeleted ||
+        !session.countsAsOutput ||
+        (!includeInvalid && session.isInvalid)) {
+      return 0;
+    }
     final count = session.amount <= 0 ? 0 : session.amount;
+    if (TefillinWordRange.isWordRecord(session)) {
+      final words = TefillinWordRange.read(session);
+      return words == null
+          ? 0
+          : words.fractionAdded * TefillinUnits.seferLines[words.parshiya - 1];
+    }
     final type = session.tefillinType;
     final parshiya = session.parshiya;
 
@@ -279,12 +413,90 @@ class ProductionCalculator {
     return count * TefillinUnits.seferLinesPerPair.toDouble();
   }
 
-  static double tefillinSeferLinesTotal(Iterable<WorkSession> sessions) {
+  static double tefillinSeferLinesTotal(Iterable<WorkSession> sessions,
+      {bool includeInvalid = false}) {
     var total = 0.0;
     for (final session in sessions) {
-      total += tefillinSeferLines(session);
+      total += tefillinSeferLines(session, includeInvalid: includeInvalid);
     }
     return total;
+  }
+
+  /// Comparable output in weighted Sefer-line units. This is used only for
+  /// cross-type pace and value comparisons; the ordinary project unit and the
+  /// physical line display remain unchanged.
+  static double comparableLinesInSession(Project project, WorkSession session,
+      {bool includeInvalid = false}) {
+    final raw = switch (project.type) {
+      ProjectType.sefer ||
+      ProjectType.megillah =>
+        seferLinesInSession(session, includeInvalid: includeInvalid).toDouble(),
+      ProjectType.mezuza =>
+        mezuzaLinesInSession(session, includeInvalid: includeInvalid)
+            .toDouble(),
+      ProjectType.tefillin =>
+        tefillinSeferLines(session, includeInvalid: includeInvalid),
+    };
+    return raw * lineWeight(project.type);
+  }
+
+  static double comparableLinesTotal(
+      Project project, Iterable<WorkSession> sessions,
+      {bool includeInvalid = false}) {
+    var total = 0.0;
+    for (final session in sessions) {
+      total += comparableLinesInSession(project, session,
+          includeInvalid: includeInvalid);
+    }
+    return total;
+  }
+
+  /// Weighted Sefer-line count of one quote unit. A Megillah quote unit is the
+  /// whole commission, whose geometry is selected explicitly; a Sefer quote
+  /// unit is one page.
+  static double comparableLinesPerUnit(
+    ProjectType type, {
+    String? megillahFormat,
+    int? seferLinesPerPage,
+    int? megillahPages,
+    int? megillahLinesPerPage,
+  }) {
+    switch (type) {
+      case ProjectType.sefer:
+        return (seferLinesPerPage ?? defaultLinesPerPage).toDouble();
+      case ProjectType.mezuza:
+        return linesPerMezuza * mezuzaLineWeight;
+      case ProjectType.tefillin:
+        return TefillinUnits.seferLinesPerPair * tefillinLineWeight;
+      case ProjectType.megillah:
+        final pages = megillahPages ??
+            (megillahFormat == null
+                ? MegillahFormat.totalPages(MegillahFormat.lines11)
+                : MegillahFormat.totalPages(megillahFormat));
+        final lines = megillahLinesPerPage ??
+            (megillahFormat == null
+                ? MegillahFormat.storedLinesPerPage(MegillahFormat.lines11)
+                : MegillahFormat.storedLinesPerPage(megillahFormat));
+        return pages * lines * lineWeight(type);
+    }
+  }
+
+  /// Weighted lines used only for the money axis. Writing time never calls
+  /// this for a Megillah: its time axis is the physical line count above.
+  static double pricingComparableLinesPerUnit(
+    ProjectType type, {
+    int? seferLinesPerPage,
+  }) {
+    switch (type) {
+      case ProjectType.sefer:
+        return (seferLinesPerPage ?? defaultLinesPerPage).toDouble();
+      case ProjectType.mezuza:
+        return linesPerMezuza * mezuzaLineWeight;
+      case ProjectType.tefillin:
+        return TefillinUnits.seferLinesPerPair * tefillinLineWeight;
+      case ProjectType.megillah:
+        return megillahPricingLines.toDouble();
+    }
   }
 
   /// Work of any kind, measured in sefer torah lines.
@@ -295,13 +507,20 @@ class ProductionCalculator {
   /// and there was nothing to compare it to.
   static double seferEquivalentLines(
       Project project, Iterable<WorkSession> sessions) {
-    switch (project.type) {
-      case ProjectType.sefer:
-        return seferLinesTotal(sessions).toDouble();
-      case ProjectType.mezuza:
-        return mezuzaLinesTotal(sessions).toDouble();
-      case ProjectType.tefillin:
-        return tefillinSeferLinesTotal(sessions);
-    }
+    return comparableLinesTotal(project, sessions);
+  }
+
+  /// Physical units completed for progress and planning. This deliberately
+  /// differs from billing for Megillah: it is priced as one whole commission
+  /// but planned page by page.
+  static double projectUnits(Project project, Iterable<WorkSession> sessions) {
+    return switch (project.type) {
+      ProjectType.sefer ||
+      ProjectType.megillah =>
+        seferPages(sessions, project),
+      ProjectType.mezuza => mezuzaLinesTotal(sessions) / linesPerMezuza,
+      ProjectType.tefillin =>
+        tefillinSeferLinesTotal(sessions) / TefillinUnits.seferLinesPerPair,
+    };
   }
 }

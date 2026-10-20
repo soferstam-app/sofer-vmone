@@ -124,8 +124,8 @@ void main() {
       expect(s.workingDateAtEntry, isNull);
       expect(DateLogic.workingDateOf(s, twoAm), DateTime(2026, 7, 20),
           reason: 'half past midnight belongs to the day before');
-      expect(DateLogic.workingDateOf(s, DayStart.midnight),
-          DateTime(2026, 7, 21));
+      expect(
+          DateLogic.workingDateOf(s, DayStart.midnight), DateTime(2026, 7, 21));
     });
   });
 }

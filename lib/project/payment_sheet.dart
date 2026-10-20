@@ -9,6 +9,7 @@ import '../storage_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/confirm.dart';
 import '../widgets/sofer_widgets.dart';
+import '../l10n/app_localizations.dart';
 
 /// What has come in on this commission, and the way to record more.
 ///
@@ -49,31 +50,31 @@ Future<bool> showPaymentSheet({
           }
           await storage.savePayments(next);
           changed = true;
-          setSheet(() => all = next);
+          if (ctx.mounted) setSheet(() => all = next);
         }
 
         Future<void> edit({Payment? existing}) async {
-          final result = await _showPaymentEditor(
+          await _showPaymentEditor(
             context: ctx,
             project: project,
             existing: existing,
             useGregorianDates: useGregorianDates,
+            onCommit: (result) async {
+              if (result.deleted) {
+                final sure = await confirmAction(ctx,
+                    title:
+                        ctx.l10n.pick(he: 'מחיקת תשלום', en: 'Delete payment'),
+                    message: ctx.l10n.pick(
+                        he: 'התשלום לא ייספר עוד בהכנסות ובדוח השנתי.',
+                        en: 'The payment will no longer be included in income or the annual report.'),
+                    confirmLabel: ctx.l10n.pick(he: 'מחק', en: 'Delete'),
+                    danger: true);
+                if (!sure) return false;
+              }
+              await save(result.payment, delete: result.deleted);
+              return true;
+            },
           );
-          if (result == null) return;
-          if (result.deleted) {
-            if (!ctx.mounted) return;
-            final sure = await confirmAction(
-              ctx,
-              title: "מחיקת תשלום",
-              message: "התשלום לא ייספר עוד בהכנסות ובדוח השנתי.",
-              confirmLabel: "מחק",
-              danger: true,
-            );
-            if (!sure) return;
-            await save(result.payment, delete: true);
-            return;
-          }
-          await save(result.payment);
         }
 
         final outstanding = ledger.outstanding;
@@ -90,33 +91,47 @@ Future<bool> showPaymentSheet({
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text("תשלומים · ${project.name}",
+                Text(
+                    ctx.l10n.pick(
+                        he: "תשלומים · ${project.name}",
+                        en: "Payments · ${project.name}"),
                     style: TextStyle(
                         fontFamily: t.numeralFamily,
                         fontSize: 20,
                         color: t.ink)),
                 const SizedBox(height: 14),
-
-                SoferStatRow("התקבל", ledger.received.format(project.currency)),
-                SoferStatRow("שווי מה שנכתב", ledger.earnedSoFar.format()),
+                SoferStatRow(ctx.l10n.pick(he: "התקבל", en: "Received"),
+                    ledger.received.format(project.currency)),
+                SoferStatRow(
+                    ctx.l10n.pick(he: "שווי מה שנכתב", en: "Value written"),
+                    ledger.earnedSoFar.format()),
                 if (outstanding != null)
-                  SoferStatRow("נותר לתשלום", outstanding.format(),
+                  SoferStatRow(
+                      ctx.l10n.pick(he: "נותר לתשלום", en: "Outstanding"),
+                      outstanding.format(),
                       last: advance == null),
                 if (advance != null)
                   // Paid ahead of the writing, which is ordinary at the start of
                   // a commission and better said than hidden.
-                  SoferStatRow("שולם מראש", advance.format(), last: true),
+                  SoferStatRow(
+                      ctx.l10n.pick(he: "שולם מראש", en: "Paid in advance"),
+                      advance.format(),
+                      last: true),
                 if (outstanding == null && advance == null)
                   SoferStatRow(
-                      "נותר לתשלום", "לא ניתן לחשב — תשלומים בכמה מטבעות",
+                      ctx.l10n.pick(he: "נותר לתשלום", en: "Outstanding"),
+                      ctx.l10n.pick(
+                          he: "לא ניתן לחשב — תשלומים בכמה מטבעות",
+                          en: "Cannot calculate — payments use multiple currencies"),
                       last: true),
-
                 const SizedBox(height: 16),
                 if (ledger.isEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 20),
                     child: Text(
-                      "לא נרשמו תשלומים על העבודה הזו.",
+                      ctx.l10n.pick(
+                          he: "לא נרשמו תשלומים על העבודה הזו.",
+                          en: "No payments recorded for this project."),
                       textAlign: TextAlign.center,
                       style: TextStyle(color: t.inkMuted, fontSize: 14),
                     ),
@@ -134,7 +149,8 @@ Future<bool> showPaymentSheet({
                                 style: TextStyle(
                                     fontFamily: t.numeralFamily, fontSize: 17)),
                             subtitle: Text([
-                              formatDisplayDate(p.receivedAt, useGregorianDates),
+                              formatDisplayDate(p.receivedAt, useGregorianDates,
+                                  english: ctx.l10n.isEnglish),
                               if (p.method.isNotEmpty) p.method,
                               if (p.notes.isNotEmpty) p.notes,
                             ].join(' · ')),
@@ -144,10 +160,12 @@ Future<bool> showPaymentSheet({
                       ],
                     ),
                   ),
-
                 const SizedBox(height: 12),
-                SoferPrimaryButton("רישום תשלום",
-                    icon: Icons.add, expand: true, onPressed: () => edit()),
+                SoferPrimaryButton(
+                    ctx.l10n.pick(he: "רישום תשלום", en: "Record payment"),
+                    icon: Icons.add,
+                    expand: true,
+                    onPressed: () => edit()),
               ],
             ),
           ),
@@ -168,6 +186,7 @@ class _PaymentEdit {
 /// One payment. Three fields that matter and two that do not always.
 Future<_PaymentEdit?> _showPaymentEditor({
   required BuildContext context,
+  Future<bool> Function(_PaymentEdit)? onCommit,
   required Project project,
   required bool useGregorianDates,
   Payment? existing,
@@ -189,108 +208,153 @@ Future<_PaymentEdit?> _showPaymentEditor({
   var receivedAt = record.receivedAt;
   String? amountError;
 
-  final result = await showDialog<_PaymentEdit>(
+  var saving = false;
+  final route = DialogRoute<_PaymentEdit>(
     context: context,
+    barrierDismissible: false,
     builder: (ctx) => StatefulBuilder(
-      builder: (ctx, setDialog) => AlertDialog(
-        title: Text(isEdit ? "עריכת תשלום" : "רישום תשלום"),
-        content: SizedBox(
-          width: 380,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                TextField(
-                  controller: amountCtrl,
-                  autofocus: !isEdit,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  decoration: InputDecoration(
-                    labelText: "סכום (${record.currency.symbol})",
-                    border: const OutlineInputBorder(),
-                    errorText: amountError,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        // The date decides which tax year this belongs to, so it
-                        // is the one field that is never guessed silently.
-                        "התקבל: ${formatDisplayDate(receivedAt, useGregorianDates)}",
-                        style: const TextStyle(fontSize: 14.5),
+      builder: (ctx, setDialog) {
+        Future<void> finish(_PaymentEdit edit) async {
+          if (saving) return;
+          setDialog(() => saving = true);
+          var closing = false;
+          try {
+            final accepted = onCommit == null || await onCommit(edit);
+            if (!ctx.mounted) return;
+            if (accepted) {
+              closing = true;
+              Navigator.pop(ctx, edit);
+            }
+          } catch (error) {
+            if (ctx.mounted) {
+              setDialog(() => amountError = ctx.l10n.pick(
+                  he: 'השמירה נכשלה. אפשר לנסות שוב: $error',
+                  en: 'Save failed. Try again: $error'));
+            }
+          } finally {
+            if (ctx.mounted && !closing) setDialog(() => saving = false);
+          }
+        }
+
+        return PopScope(
+            canPop: !saving,
+            child: AbsorbPointer(
+                absorbing: saving,
+                child: AlertDialog(
+                  title: Text(ctx.l10n.pick(
+                      he: isEdit ? "עריכת תשלום" : "רישום תשלום",
+                      en: isEdit ? "Edit payment" : "Record payment")),
+                  content: SizedBox(
+                    width: 380,
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          TextField(
+                            controller: amountCtrl,
+                            autofocus: !isEdit,
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true),
+                            decoration: InputDecoration(
+                              labelText:
+                                  "${ctx.l10n.pick(he: 'סכום', en: 'Amount')} (${record.currency.symbol})",
+                              border: const OutlineInputBorder(),
+                              errorText: amountError,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  // The date decides which tax year this belongs to, so it
+                                  // is the one field that is never guessed silently.
+                                  "${ctx.l10n.pick(he: 'התקבל', en: 'Received')}: ${formatDisplayDate(receivedAt, useGregorianDates, english: ctx.l10n.isEnglish)}",
+                                  style: const TextStyle(fontSize: 14.5),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () async {
+                                  final d = await showDatePicker(
+                                    context: ctx,
+                                    initialDate: receivedAt,
+                                    firstDate: DateTime(2020),
+                                    lastDate: DateTime.now()
+                                        .add(const Duration(days: 365)),
+                                  );
+                                  if (d != null) {
+                                    setDialog(() => receivedAt = d);
+                                  }
+                                },
+                                child: Text(
+                                    ctx.l10n.pick(he: "בחר", en: "Select")),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: methodCtrl,
+                            decoration: InputDecoration(
+                              labelText: ctx.l10n.pick(
+                                  he: "אופן התשלום", en: "Payment method"),
+                              hintText: ctx.l10n.pick(
+                                  he: "מזומן / העברה / צ׳ק",
+                                  en: "Cash / transfer / check"),
+                              border: const OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: notesCtrl,
+                            decoration: InputDecoration(
+                                labelText:
+                                    ctx.l10n.pick(he: "הערות", en: "Notes"),
+                                border: const OutlineInputBorder()),
+                          ),
+                        ],
                       ),
                     ),
+                  ),
+                  actions: [
+                    if (isEdit)
+                      TextButton(
+                        onPressed: () =>
+                            finish(_PaymentEdit(record, deleted: true)),
+                        child: Text(ctx.l10n.pick(he: "מחק", en: "Delete")),
+                      ),
                     TextButton(
-                      onPressed: () async {
-                        final d = await showDatePicker(
-                          context: ctx,
-                          initialDate: receivedAt,
-                          firstDate: DateTime(2020),
-                          lastDate:
-                              DateTime.now().add(const Duration(days: 365)),
+                        onPressed: () => Navigator.pop(ctx),
+                        child: Text(ctx.l10n.cancel)),
+                    ElevatedButton(
+                      onPressed: () {
+                        // The same reader the rest of the app uses, so 12,000 is twelve
+                        // thousand and not twelve.
+                        final amount = MoneyInput.parse(amountCtrl.text);
+                        if (amount == null || amount <= 0) {
+                          setDialog(() => amountError = ctx.l10n.pick(
+                              he: "יש להזין סכום גדול מאפס",
+                              en: "Enter an amount greater than zero"));
+                          return;
+                        }
+                        finish(
+                          _PaymentEdit(record.copyWith(
+                            amount: amount,
+                            receivedAt: receivedAt,
+                            method: methodCtrl.text.trim(),
+                            notes: notesCtrl.text.trim(),
+                          )),
                         );
-                        if (d != null) setDialog(() => receivedAt = d);
                       },
-                      child: const Text("בחר"),
+                      child: Text(ctx.l10n.pick(he: "שמור", en: "Save")),
                     ),
                   ],
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: methodCtrl,
-                  decoration: const InputDecoration(
-                    labelText: "אופן התשלום",
-                    hintText: "מזומן / העברה / צ׳ק",
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: notesCtrl,
-                  decoration: const InputDecoration(
-                      labelText: "הערות", border: OutlineInputBorder()),
-                ),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          if (isEdit)
-            TextButton(
-              onPressed: () =>
-                  Navigator.pop(ctx, _PaymentEdit(record, deleted: true)),
-              child: const Text("מחק"),
-            ),
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text("ביטול")),
-          ElevatedButton(
-            onPressed: () {
-              // The same reader the rest of the app uses, so 12,000 is twelve
-              // thousand and not twelve.
-              final amount = MoneyInput.parse(amountCtrl.text);
-              if (amount == null || amount <= 0) {
-                setDialog(() => amountError = "יש להזין סכום גדול מאפס");
-                return;
-              }
-              Navigator.pop(
-                ctx,
-                _PaymentEdit(record.copyWith(
-                  amount: amount,
-                  receivedAt: receivedAt,
-                  method: methodCtrl.text.trim(),
-                  notes: notesCtrl.text.trim(),
-                )),
-              );
-            },
-            child: const Text("שמור"),
-          ),
-        ],
-      ),
+                )));
+      },
     ),
   );
+  final result = await Navigator.of(context).push(route);
+  await route.completed;
 
   for (final c in [amountCtrl, methodCtrl, notesCtrl]) {
     c.dispose();

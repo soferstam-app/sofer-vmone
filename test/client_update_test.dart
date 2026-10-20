@@ -87,8 +87,8 @@ void main() {
     });
 
     test('nor for work that is counted rather than paginated', () {
-      final body = compose(
-          p: project(type: ProjectType.mezuza), linesWritten: 100);
+      final body =
+          compose(p: project(type: ProjectType.mezuza), linesWritten: 100);
       expect(body, isNot(contains('• התקדמות:')));
       expect(body, contains('• נכתב עד כה:'));
     });

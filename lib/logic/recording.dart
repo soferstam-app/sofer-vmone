@@ -39,9 +39,8 @@ class Recording {
   /// record has been corrected by hand they need not be, and taking the
   /// furthest is what keeps [worked] from coming out negative and a division
   /// from running backwards through the day.
-  DateTime get end => sessions
-      .map((s) => s.endTime)
-      .reduce((a, b) => a.isAfter(b) ? a : b);
+  DateTime get end =>
+      sessions.map((s) => s.endTime).reduce((a, b) => a.isAfter(b) ? a : b);
 
   /// How long the entry covered, before any of it was divided up.
   Duration get worked => end.difference(start);

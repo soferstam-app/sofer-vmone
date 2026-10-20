@@ -70,8 +70,11 @@ class ReminderPlan {
     required Iterable<WorkSession> history,
     required DateTime day,
     required DayStart dayStart,
+    bool english = false,
   }) {
-    if (project == null || project.targetDaily <= 0) return generalMessage;
+    if (project == null || project.targetDaily <= 0) {
+      return generalMessageFor(english: english);
+    }
 
     final done = DailyGoal.doneOn(
         project: project, history: history, day: day, dayStart: dayStart);
@@ -80,17 +83,25 @@ class ReminderPlan {
 
     // Met already. The caller drops today's reminder entirely in that case, so
     // this is the belt to that pair of braces.
-    if (left <= 0) return generalMessage;
+    if (left <= 0) return generalMessageFor(english: english);
 
     // Lines for a sefer whichever way its goal was set, because that is what
     // DailyGoal counts in: a target given in pages is multiplied out to lines
     // before anything is compared, so the remainder is lines too.
-    final unit = project.type == ProjectType.sefer ? 'שורות' : 'יחידות';
+    final unit = project.type.isPaged
+        ? (english ? 'lines' : 'שורות')
+        : (english ? 'units' : 'יחידות');
 
     // Nothing at all written today reads differently from nearly finished, and
     // saying "3 left" to someone who has not started is simply wrong-footed.
-    if (done <= 0) return 'עוד לא נרשמה כתיבה היום. מתחילים?';
-    return 'נשארו $left $unit להשלמת היעד היומי.';
+    if (done <= 0) {
+      return english
+          ? 'No writing has been recorded today. Ready to start?'
+          : 'עוד לא נרשמה כתיבה היום. מתחילים?';
+    }
+    return english
+        ? '$left $unit remain to complete the daily target.'
+        : 'נשארו $left $unit להשלמת היעד היומי.';
   }
 
   /// What every other day says.
@@ -99,6 +110,10 @@ class ReminderPlan {
   /// asked "did you meet your daily target?" of writers who had met it hours
   /// earlier and of writers who had never set one.
   static const String generalMessage = 'סוף היום — רוצה לרשום מה כתבת?';
+
+  static String generalMessageFor({bool english = false}) => english
+      ? 'End of the day — would you like to record what you wrote?'
+      : generalMessage;
 
   /// The hour a reminder should be booked for.
   ///

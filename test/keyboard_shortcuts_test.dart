@@ -12,8 +12,7 @@ import 'package:sofer_vmone/logic/keyboard_shortcuts.dart';
 void main() {
   ShortcutBinding of(LogicalKeyboardKey k,
           {bool ctrl = false, bool shift = false, bool alt = false}) =>
-      ShortcutBinding(
-          keyId: k.keyId, control: ctrl, shift: shift, alt: alt);
+      ShortcutBinding(keyId: k.keyId, control: ctrl, shift: shift, alt: alt);
 
   KeyEvent down(LogicalKeyboardKey k) => KeyDownEvent(
         physicalKey: PhysicalKeyboardKey.keyA,
@@ -34,6 +33,12 @@ void main() {
     test('a function key may, bare — nothing types one', () {
       expect(of(LogicalKeyboardKey.f2).isUsable, isTrue);
       expect(of(LogicalKeyboardKey.f12).isUsable, isTrue);
+    });
+
+    test('F23 with Ctrl+Shift may be bound for Copilot keyboards', () {
+      final binding = of(LogicalKeyboardKey.f23, ctrl: true, shift: true);
+      expect(binding.isUsable, isTrue);
+      expect(binding.label, 'Ctrl + Shift + F23');
     });
 
     test('a bare digit may not', () {
@@ -59,8 +64,9 @@ void main() {
 
   group('matching an actual key press', () {
     test('the plain key fires when nothing else is held', () {
-      expect(of(LogicalKeyboardKey.f2).matches(down(LogicalKeyboardKey.f2),
-          pressed: {LogicalKeyboardKey.f2}),
+      expect(
+          of(LogicalKeyboardKey.f2).matches(down(LogicalKeyboardKey.f2),
+              pressed: {LogicalKeyboardKey.f2}),
           isTrue);
     });
 
@@ -76,8 +82,10 @@ void main() {
     test('modifiers are matched exactly, not merely present', () {
       final ctrlS = of(LogicalKeyboardKey.keyS, ctrl: true);
       expect(
-          ctrlS.matches(down(LogicalKeyboardKey.keyS),
-              pressed: {LogicalKeyboardKey.keyS, LogicalKeyboardKey.controlLeft}),
+          ctrlS.matches(down(LogicalKeyboardKey.keyS), pressed: {
+            LogicalKeyboardKey.keyS,
+            LogicalKeyboardKey.controlLeft
+          }),
           isTrue);
       expect(
           ctrlS.matches(down(LogicalKeyboardKey.keyS), pressed: {
@@ -134,6 +142,18 @@ void main() {
       expect(action, ShortcutAction.takeBreak);
     });
 
+    test('matches Ctrl+Shift+F23 exactly', () {
+      final binding = of(LogicalKeyboardKey.f23, ctrl: true, shift: true);
+      expect(
+        binding.matches(down(LogicalKeyboardKey.f23), pressed: {
+          LogicalKeyboardKey.f23,
+          LogicalKeyboardKey.controlLeft,
+          LogicalKeyboardKey.shiftLeft,
+        }),
+        isTrue,
+      );
+    });
+
     test('and nothing for a key that means nothing', () {
       expect(
           ShortcutMap.defaults.actionFor(down(LogicalKeyboardKey.keyQ),
@@ -144,8 +164,8 @@ void main() {
 
   group('one combination cannot mean two things', () {
     test('a clash is reported, and names the action it already means', () {
-      final clash = ShortcutMap.defaults
-          .conflictWith(of(LogicalKeyboardKey.f3), except: ShortcutAction.markLine);
+      final clash = ShortcutMap.defaults.conflictWith(of(LogicalKeyboardKey.f3),
+          except: ShortcutAction.markLine);
       expect(clash, ShortcutAction.takeBreak);
     });
 
@@ -170,8 +190,8 @@ void main() {
     });
 
     test('the whole map does', () {
-      final map = ShortcutMap.defaults
-          .withBinding(ShortcutAction.markLine, of(LogicalKeyboardKey.keyL, ctrl: true));
+      final map = ShortcutMap.defaults.withBinding(
+          ShortcutAction.markLine, of(LogicalKeyboardKey.keyL, ctrl: true));
       final back = ShortcutMap.decode(map.encode());
       expect(back[ShortcutAction.markLine], map[ShortcutAction.markLine]);
       expect(back[ShortcutAction.startStop], map[ShortcutAction.startStop]);

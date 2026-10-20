@@ -60,7 +60,10 @@ void main() {
   test('the month it was finished wins where both are recorded', () {
     // The bill lands when the work comes back to the sofer corrected.
     final r = report([
-      batch(cost: 450, returned: DateTime(2026, 5, 20), done: DateTime(2026, 6, 2))
+      batch(
+          cost: 450,
+          returned: DateTime(2026, 5, 20),
+          done: DateTime(2026, 6, 2))
     ]);
     expect(r.months[5].expenses.single(Currency.ils)!.amount, 450);
   });
@@ -90,7 +93,8 @@ void main() {
           currency: const Currency('USD')),
     ]);
     expect(r.expenses.isMixed, isTrue);
-    expect(r.currenciesPresent, containsAll([Currency.ils, const Currency('USD')]));
+    expect(r.currenciesPresent,
+        containsAll([Currency.ils, const Currency('USD')]));
   });
 
   test('a year with no proofreading reads exactly as it did before', () {

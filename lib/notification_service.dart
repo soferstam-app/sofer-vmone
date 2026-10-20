@@ -56,8 +56,8 @@ class NotificationService {
       flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
 
-  /// Asks for the permissions a reminder needs, and reports whether it got the
-  /// one that lets it fire at a chosen minute.
+  /// Asks for the permissions a reminder needs, and reports whether both
+  /// posting a notification and exact scheduling are available.
   ///
   /// Called when the writer turns reminders on, which is the only moment a
   /// permission prompt makes sense: he has just said he wants this.
@@ -73,9 +73,12 @@ class NotificationService {
     final android = _android;
     if (android == null) return false;
 
-    await android.requestNotificationsPermission();
+    // On Android versions before 13 the notification call returns null because
+    // there is no runtime notification permission. Null therefore means
+    // "not applicable", not "denied".
+    final notifications = await android.requestNotificationsPermission();
     final exact = await android.requestExactAlarmsPermission();
-    return exact ?? false;
+    return (notifications ?? true) && (exact ?? true);
   }
 
   /// Whether this device will let the reminder fire at the minute asked for.
@@ -104,6 +107,7 @@ class NotificationService {
     final TimeOfDay time = await _storage.getNotificationTime();
     final smart = await _storage.getSmartReminder();
     final dayStart = await _storage.getDayStart();
+    final english = await _storage.getAppLanguageCode() == 'en';
 
     // Everything the reminder knows, it knows now. Nothing runs when it fires.
     final history =
@@ -147,8 +151,9 @@ class NotificationService {
               history: history,
               day: ReminderPlan.workingDay(moment, dayStart),
               dayStart: dayStart,
+              english: english,
             )
-          : ReminderPlan.generalMessage;
+          : ReminderPlan.generalMessageFor(english: english);
 
       // Nothing to remind him of tonight if he has already done it.
       if (isToday &&
@@ -164,14 +169,16 @@ class NotificationService {
       try {
         await flutterLocalNotificationsPlugin.zonedSchedule(
           ReminderSchedule.idFor(moment),
-          'סופר ומונה',
+          english ? 'Sofer v’Mone' : 'סופר ומונה',
           body,
           tz.TZDateTime.from(moment, tz.local),
-          const NotificationDetails(
+          NotificationDetails(
             android: AndroidNotificationDetails(
-              'daily_reminder_channel',
-              'תזכורות יומיות',
-              channelDescription: 'תזכורת יומית לרישום העבודה',
+              'daily_reminder_channel_${english ? 'en' : 'he'}',
+              english ? 'Daily reminders' : 'תזכורות יומיות',
+              channelDescription: english
+                  ? 'Daily reminder to record your work'
+                  : 'תזכורת יומית לרישום העבודה',
               importance: Importance.max,
               priority: Priority.high,
             ),
@@ -221,6 +228,7 @@ class NotificationService {
   Future<void> scheduleBreakReminder(int minutes) async {
     if (!isSupported || minutes < 1) return;
     cancelBreakReminder();
+    final english = await _storage.getAppLanguageCode() == 'en';
     try {
       // Same fallback as the daily one: a coffee break that ends a few minutes
       // late is a coffee break; one that never ends is a lost sitting.
@@ -232,14 +240,18 @@ class NotificationService {
       );
       await flutterLocalNotificationsPlugin.zonedSchedule(
         1,
-        'סיום הפסקה ☕',
-        'הזמן שהקצבת להפסקה הסתיים – חזור לכתיבה',
+        english ? 'Break finished ☕' : 'סיום הפסקה ☕',
+        english
+            ? 'Your scheduled break has ended — return to writing'
+            : 'הזמן שהקצבת להפסקה הסתיים – חזור לכתיבה',
         when,
-        const NotificationDetails(
+        NotificationDetails(
           android: AndroidNotificationDetails(
-            'break_reminder_channel',
-            'תזכורת הפסקה',
-            channelDescription: 'תזכורת כשזמן ההפסקה שהקצבת הסתיים',
+            'break_reminder_channel_${english ? 'en' : 'he'}',
+            english ? 'Break reminder' : 'תזכורת הפסקה',
+            channelDescription: english
+                ? 'Reminder when your scheduled break ends'
+                : 'תזכורת כשזמן ההפסקה שהקצבת הסתיים',
             importance: Importance.high,
             priority: Priority.high,
           ),
@@ -263,20 +275,25 @@ class NotificationService {
   Future<void> scheduleWritingEndAlert(DateTime when) async {
     if (!isSupported || !when.isAfter(DateTime.now())) return;
     await cancelWritingEndAlert();
+    final english = await _storage.getAppLanguageCode() == 'en';
     try {
       final mode = await canScheduleExactly()
           ? AndroidScheduleMode.exactAllowWhileIdle
           : AndroidScheduleMode.inexactAllowWhileIdle;
       await flutterLocalNotificationsPlugin.zonedSchedule(
         2,
-        'זמן הכתיבה הסתיים',
-        'הגעת לשעת הסיום שקבעת לישיבה',
+        english ? 'Writing time finished' : 'זמן הכתיבה הסתיים',
+        english
+            ? 'You have reached the end time set for this writing session'
+            : 'הגעת לשעת הסיום שקבעת לישיבה',
         tz.TZDateTime.from(when, tz.local),
-        const NotificationDetails(
+        NotificationDetails(
           android: AndroidNotificationDetails(
-            'writing_end_channel',
-            'שעת סיום כתיבה',
-            channelDescription: 'התראה בשעת הסיום שנבחרה לישיבת כתיבה',
+            'writing_end_channel_${english ? 'en' : 'he'}',
+            english ? 'Writing end time' : 'שעת סיום כתיבה',
+            channelDescription: english
+                ? 'Alert at the selected end time for a writing session'
+                : 'התראה בשעת הסיום שנבחרה לישיבת כתיבה',
             importance: Importance.max,
             priority: Priority.high,
           ),

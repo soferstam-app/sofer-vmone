@@ -8,6 +8,8 @@ import 'tefillin_units.dart';
 /// differs by type — this is what the project form states:
 ///
 /// * sefer    → per page      ("כספים (לעמוד)")
+/// * megillah → the agreed price for the whole commission, recognized in
+///               proportion to completed pages
 /// * mezuza   → per mezuza    ("כספים (למזוזה)")
 /// * tefillin → per pair      ("כספים (לזוג)") — head and hand together
 class ProfitCalculator {
@@ -22,23 +24,47 @@ class ProfitCalculator {
   /// finished קדש of a head was credited an eighth of a pair when he had
   /// actually done 16 of its 104 lines. The money followed the same figure, so
   /// it was wrong in the same direction.
-  static double billableUnits(Project project, Iterable<WorkSession> sessions) {
+  static double billableUnits(Project project, Iterable<WorkSession> sessions,
+      {bool includeInvalid = false}) {
     switch (project.type) {
       case ProjectType.sefer:
         // Per-session page size, so editing the project setting does not
         // retroactively change what past work was worth.
-        return ProductionCalculator.seferPages(sessions, project);
+        return ProductionCalculator.seferPages(sessions, project,
+            includeInvalid: includeInvalid);
+      case ProjectType.megillah:
+        final total = project.totalPages ?? 0;
+        if (total <= 0) return 0;
+        return (ProductionCalculator.seferPages(sessions, project,
+                    includeInvalid: includeInvalid) /
+                total)
+            .clamp(0.0, 1.0);
       case ProjectType.mezuza:
-        return ProductionCalculator.mezuzaLinesTotal(sessions) /
+        return ProductionCalculator.mezuzaLinesTotal(sessions,
+                includeInvalid: includeInvalid) /
             ProductionCalculator.linesPerMezuza;
       case ProjectType.tefillin:
-        return ProductionCalculator.tefillinSeferLinesTotal(sessions) /
+        return ProductionCalculator.tefillinSeferLinesTotal(sessions,
+                includeInvalid: includeInvalid) /
             TefillinUnits.seferLinesPerPair;
     }
   }
 
   /// Net value of one billable unit.
   static double netPerUnit(Project project) => project.price - project.expenses;
+
+  /// Net value of one weighted Sefer-line pricing unit. This is the common
+  /// money axis used when one type has to teach the quote calculator about a
+  /// type that has not been measured yet. Megillah is intentionally fixed at
+  /// ten standard Sefer pages here; its physical line count belongs only to
+  /// the time axis.
+  static double netPerComparableLine(Project project) {
+    final lines = ProductionCalculator.pricingComparableLinesPerUnit(
+      project.type,
+      seferLinesPerPage: ProductionCalculator.linesPerPageOf(project),
+    );
+    return lines <= 0 ? 0 : netPerUnit(project) / lines;
+  }
 
   /// Profit earned from [sessions].
   ///

@@ -15,6 +15,7 @@ import '../storage_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/feedback.dart';
 import '../logic/currency.dart';
+import '../l10n/app_localizations.dart';
 
 /// What a Hebrew month came to.
 ///
@@ -35,11 +36,16 @@ Future<void> showMonthlySummary({
   // of the days it is made of cannot disagree at a month boundary.
   final monthSessions = history
       .where((s) =>
-          !s.backlogOnly && DateLogic.sessionIsInMonth(s, month, dayStart))
+          !s.isDeleted &&
+          !s.backlogOnly &&
+          DateLogic.sessionIsInMonth(s, month, dayStart))
       .toList();
 
   if (monthSessions.isEmpty) {
-    showAppError(context, "אין נתונים לחודש זה");
+    showAppError(
+        context,
+        context.l10n
+            .pick(he: "אין נתונים לחודש זה", en: "No data for this month"));
     return;
   }
 
@@ -51,10 +57,7 @@ Future<void> showMonthlySummary({
   final double workDays = _workDaysInJewishMonth(rules, month);
 
   Duration timeForLineAvg = Duration.zero;
-  int totalLinesForAvg = 0;
-
-  Duration timeForParshiyaAvg = Duration.zero;
-  int totalParshiyotForAvg = 0;
+  double totalLinesForAvg = 0;
 
   List<Widget> projectWidgets = [];
 
@@ -81,18 +84,20 @@ Future<void> showMonthlySummary({
     double actualForGoal = 0;
     String projectText = "";
 
-    if (project.type == ProjectType.sefer) {
+    if (project.type.isPaged) {
       int lines = 0;
       // Only the lines that came with time feed the average; every line feeds
       // the total. Both used to feed both, so measured minutes were divided by
       // output that had never been timed.
-      int measuredLines = 0;
+      double measuredLines = 0;
       Duration projTime = Duration.zero;
       for (var s in sessions) {
-        final theseLines = ProductionCalculator.seferLinesInSession(s);
-        lines += theseLines;
+        final outputLines = ProductionCalculator.seferLinesInSession(s);
+        lines += outputLines;
         if (MeasuredWork.countsForTime(s)) {
-          measuredLines += theseLines;
+          measuredLines += ProductionCalculator.comparableLinesInSession(
+              project, s,
+              includeInvalid: true);
           projTime += s.duration;
         }
       }
@@ -101,23 +106,27 @@ Future<void> showMonthlySummary({
       timeForLineAvg += projTime;
 
       final int linesPerPage = ProductionCalculator.linesPerPageOf(project);
-      projectText =
-          "${project.name}: ${lines ~/ linesPerPage} עמודים ו-${lines % linesPerPage} שורות";
+      projectText = context.l10n.pick(
+          he: "${project.name}: ${lines ~/ linesPerPage} עמודים ו-${lines % linesPerPage} שורות",
+          en: "${project.name}: ${lines ~/ linesPerPage} pages and ${lines % linesPerPage} lines");
 
       double pages = lines / linesPerPage.toDouble();
-      projectProfit = ProfitCalculator.profit(project, sessions);
+      projectProfit =
+          ProfitCalculator.profit(project, sessions.where((s) => !s.isInvalid));
       actualForGoal = project.dailyGoalInLines ? lines.toDouble() : pages;
     } else if (project.type == ProjectType.mezuza) {
       double totalMezuzot = 0;
       Duration projTime = Duration.zero;
       int linesForThisProj = 0;
-      int measuredLines = 0;
+      double measuredLines = 0;
 
       for (var s in sessions) {
         final theseLines = ProductionCalculator.mezuzaLinesInSession(s);
         linesForThisProj += theseLines;
         if (MeasuredWork.countsForTime(s)) {
-          measuredLines += theseLines;
+          measuredLines += ProductionCalculator.comparableLinesInSession(
+              project, s,
+              includeInvalid: true);
           projTime += s.duration;
         }
       }
@@ -131,23 +140,44 @@ Future<void> showMonthlySummary({
           ? totalMezuzot.toInt().toString()
           : totalMezuzot.toStringAsFixed(1);
 
-      projectText = "${project.name}: $displayAmount מזוזות";
+      projectText = context.l10n.pick(
+          he: "${project.name}: $displayAmount מזוזות",
+          en: "${project.name}: $displayAmount Mezuzot");
 
-      projectProfit = ProfitCalculator.profit(project, sessions);
+      projectProfit =
+          ProfitCalculator.profit(project, sessions.where((s) => !s.isInvalid));
       actualForGoal = totalMezuzot;
     } else if (project.type == ProjectType.tefillin) {
-      String tefillinText = TefillinSummary.describe(sessions);
-      projectText = "${project.name}: $tefillinText";
+      final outputSessions = sessions.where((s) => !s.isInvalid).toList();
+      final tefillinText = TefillinSummary.describe(outputSessions,
+          english: context.l10n.isEnglish);
+      final physicalLines =
+          ProductionCalculator.tefillinPhysicalLinesTotal(outputSessions);
+      final comparableOutput =
+          ProductionCalculator.tefillinSeferLinesTotal(outputSessions);
+      final comparableText = comparableOutput % 1 == 0
+          ? comparableOutput.toInt().toString()
+          : comparableOutput.toStringAsFixed(1);
+      projectText = context.l10n.pick(
+        he: "${project.name}: $physicalLines ($comparableText) שורות · $tefillinText",
+        en: "${project.name}: $physicalLines ($comparableText) lines · $tefillinText",
+      );
 
-      final average = ProductionCalculator.tefillinAverageStats(sessions);
-      timeForParshiyaAvg += average.duration;
-      totalParshiyotForAvg += average.parshiyot;
+      // Tefillin time is measured on the same comparable Sefer-line axis as
+      // every other project. Invalid lines remain in the time denominator but
+      // never in the displayed output above.
+      for (final s in sessions) {
+        if (!MeasuredWork.countsForTime(s)) continue;
+        totalLinesForAvg +=
+            ProductionCalculator.tefillinSeferLines(s, includeInvalid: true);
+        timeForLineAvg += s.duration;
+      }
 
       int totalUnits = 0;
-      for (var s in sessions) {
+      for (var s in outputSessions) {
         totalUnits += s.amount;
       }
-      projectProfit = ProfitCalculator.profit(project, sessions);
+      projectProfit = ProfitCalculator.profit(project, outputSessions);
       actualForGoal = totalUnits.toDouble();
     }
 
@@ -164,8 +194,11 @@ Future<void> showMonthlySummary({
     if (target > 0) {
       double progressPercent = actualForGoal / target;
       double remaining = target - actualForGoal;
-      String remainingText =
-          remaining <= 0 ? "הושלם!" : "נותרו ${remaining.toStringAsFixed(1)}";
+      String remainingText = remaining <= 0
+          ? context.l10n.pick(he: "הושלם!", en: "Complete!")
+          : context.l10n.pick(
+              he: "נותרו ${remaining.toStringAsFixed(1)}",
+              en: "${remaining.toStringAsFixed(1)} remaining");
 
       goalWidget = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -181,7 +214,9 @@ Future<void> showMonthlySummary({
           ),
           const SizedBox(height: 2),
           Text(
-            "יעד: ${actualForGoal.toStringAsFixed(1)} / ${target.toStringAsFixed(1)} ($remainingText)",
+            context.l10n.pick(
+                he: "יעד: ${actualForGoal.toStringAsFixed(1)} / ${target.toStringAsFixed(1)} ($remainingText)",
+                en: "Target: ${actualForGoal.toStringAsFixed(1)} / ${target.toStringAsFixed(1)} ($remainingText)"),
             style: TextStyle(
               fontSize: 12,
               color: remaining <= 0
@@ -232,7 +267,7 @@ Future<void> showMonthlySummary({
   showDialog(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: const Text("סיכום חודשי"),
+      title: Text(context.l10n.pick(he: "סיכום חודשי", en: "Monthly summary")),
       // A stated width, and the reason is not taste.
       //
       // AlertDialog sizes itself by asking its content how wide it wants to be,
@@ -251,66 +286,86 @@ Future<void> showMonthlySummary({
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text("סה\"כ זמן: ${formatClock(totalMonthTime, seconds: false)}",
+              Text(
+                  context.l10n.pick(
+                      he: "סה\"כ זמן: ${formatClock(totalMonthTime, seconds: false)}",
+                      en: "Total time: ${formatClock(totalMonthTime, seconds: false)}"),
                   style: const TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
               Text(
-                  "הכנסות כתיבה (חודש): ${earned.format(currency, decimals: 2)}",
+                  context.l10n.pick(
+                      he: "הכנסות כתיבה (חודש): ${earned.format(currency, decimals: 2)}",
+                      en: "Writing income (month): ${earned.format(currency, decimals: 2)}"),
                   style: const TextStyle(fontWeight: FontWeight.bold)),
               if (totalMonthTime.inSeconds > 0 && earnedOne != null)
                 Text(
-                    "שכר לשעה (חודש): ${formatMoney(earnedOne.amount / (totalMonthTime.inSeconds / 3600), earnedOne.currency)}",
+                    context.l10n.pick(
+                        he:
+                            "שכר לשעה (חודש): ${formatMoney(earnedOne.amount / (totalMonthTime.inSeconds / 3600), earnedOne.currency)}",
+                        en:
+                            "Hourly earnings (month): ${formatMoney(earnedOne.amount / (totalMonthTime.inSeconds / 3600), earnedOne.currency)}"),
                     style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: SoferTokens.of(ctx).accent)),
-              Text("הוצאות (חודש): ${spent.format(currency, decimals: 2)}",
+              Text(
+                  context.l10n.pick(
+                      he: "הוצאות (חודש): ${spent.format(currency, decimals: 2)}",
+                      en: "Expenses (month): ${spent.format(currency, decimals: 2)}"),
                   style: const TextStyle(fontWeight: FontWeight.bold)),
               if (net != null)
-                Text("נטו (לאחר הוצאות): ${net.format(decimals: 2)}",
+                Text(
+                    context.l10n.pick(
+                        he: "נטו (לאחר הוצאות): ${net.format(decimals: 2)}",
+                        en: "Net (after expenses): ${net.format(decimals: 2)}"),
                     style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: net.amount >= 0
                             ? SoferTokens.of(ctx).positive
                             : SoferTokens.of(ctx).danger))
               else
-                Text("נטו: לא ניתן לחשב — החודש כולל יותר ממטבע אחד",
+                Text(
+                    context.l10n.pick(
+                        he: "נטו: לא ניתן לחשב — החודש כולל יותר ממטבע אחד",
+                        en:
+                            "Net: cannot calculate — this month includes more than one currency"),
                     style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: SoferTokens.of(ctx).caution)),
               const Divider(),
               SizedBox(
                 height: 200,
-                child: _monthlyChart(monthSessions, month, dayStart),
+                child: _monthlyChart(context, monthSessions, month, dayStart),
               ),
               const Divider(),
               ...projectWidgets,
               const Divider(),
-              const Text("ממוצעים:",
-                  style: TextStyle(
+              Text(context.l10n.pick(he: "ממוצעים:", en: "Averages:"),
+                  style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       decoration: TextDecoration.underline)),
               if (totalLinesForAvg > 0)
-                Text(
-                    "ממוצע לשורה (ספר/מזוזה): ${(timeForLineAvg.inMinutes / totalLinesForAvg).toStringAsFixed(2)} דקות"),
-              if (totalParshiyotForAvg > 0)
-                Text(
-                    "ממוצע לפרשייה (תפילין): ${(timeForParshiyaAvg.inMinutes / totalParshiyotForAvg).toStringAsFixed(2)} דקות"),
-              if (totalLinesForAvg == 0 && totalParshiyotForAvg == 0)
-                const Text("אין מספיק נתונים לחישוב ממוצעים"),
+                Text(context.l10n.pick(
+                    he: "ממוצע לשורת השוואה (ספר/מזוזה/מגילה): ${(minutesWithSeconds(timeForLineAvg) / totalLinesForAvg).toStringAsFixed(2)} דקות",
+                    en: "Average per comparable line (Sefer/Mezuzah/Megillah): ${(minutesWithSeconds(timeForLineAvg) / totalLinesForAvg).toStringAsFixed(2)} minutes")),
+              if (totalLinesForAvg == 0)
+                Text(context.l10n.pick(
+                    he: "אין מספיק נתונים לחישוב ממוצעים",
+                    en: "Not enough data to calculate averages")),
             ],
           ),
         ),
       ),
       actions: [
         TextButton(
-            onPressed: () => Navigator.pop(ctx), child: const Text("סגור")),
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(context.l10n.pick(he: "סגור", en: "Close"))),
       ],
     ),
   );
 }
 
-Widget _monthlyChart(
-    List<WorkSession> sessions, DateTime month, DayStart dayStart) {
+Widget _monthlyChart(BuildContext context, List<WorkSession> sessions,
+    DateTime month, DayStart dayStart) {
   Map<int, Duration> dailyTotals = {};
   // Hebrew days, to match the month the summary is of. Indexed by Gregorian day
   // it drew a 31-column chart of a 29-day month, with the work landing on
@@ -326,15 +381,19 @@ Widget _monthlyChart(
 
   double maxMinutes = 0;
   dailyTotals.forEach((key, value) {
-    if (value.inMinutes > maxMinutes) maxMinutes = value.inMinutes.toDouble();
+    if (minutesWithSeconds(value) > maxMinutes) {
+      maxMinutes = minutesWithSeconds(value);
+    }
   });
 
   if (maxMinutes == 0) maxMinutes = 60;
 
   return Column(
     children: [
-      const Text("התקדמות יומית (דקות)",
-          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+      Text(
+          context.l10n
+              .pick(he: "התקדמות יומית (דקות)", en: "Daily progress (minutes)"),
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
       const SizedBox(height: 5),
       Expanded(
         child: LayoutBuilder(
@@ -350,7 +409,9 @@ Widget _monthlyChart(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: List.generate(daysCount, (index) {
                 int day = index + 1;
-                double minutes = dailyTotals[day]?.inMinutes.toDouble() ?? 0;
+                double minutes = dailyTotals[day] == null
+                    ? 0
+                    : minutesWithSeconds(dailyTotals[day]!);
                 double heightFactor = minutes / maxMinutes;
 
                 return SizedBox(
@@ -363,7 +424,9 @@ Widget _monthlyChart(
                           // Built once, not rebuilt on every animation frame:
                           // thirty of these re-created sixty times a second is
                           // work nobody asked for.
-                          message: "יום $day: ${minutes.toInt()} דקות",
+                          message: context.l10n.pick(
+                              he: "יום $day: ${minutes.toInt()} דקות",
+                              en: "Day $day: ${minutes.toInt()} minutes"),
                           child: TweenAnimationBuilder<double>(
                             // Room for the bounce to bounce into. elasticOut
                             // overshoots past 1.0, so a full-height bar grew

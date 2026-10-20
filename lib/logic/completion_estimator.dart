@@ -3,7 +3,6 @@ import 'date_logic.dart';
 import 'hebrew_clock.dart';
 import 'hebrew_work_calendar.dart';
 import 'production_calculator.dart';
-import 'profit_calculator.dart';
 
 /// How much work is left on a project, and when it will be finished.
 class CompletionEstimate {
@@ -51,8 +50,9 @@ class CompletionEstimator {
   /// Units of [project] already written, counting backlog entries — they are
   /// real work even though they carry no timing.
   static double doneUnits(Project project, Iterable<WorkSession> history) {
-    final sessions = history.where((s) => s.projectId == project.id && !s.isDeleted);
-    return ProfitCalculator.billableUnits(project, sessions);
+    final sessions = history.where(
+        (s) => s.projectId == project.id && !s.isDeleted && !s.isInvalid);
+    return ProductionCalculator.projectUnits(project, sessions);
   }
 
   /// What the writer gets done on a day he actually writes.
@@ -81,11 +81,14 @@ class CompletionEstimator {
   }) {
     final sessions = history
         .where((s) =>
-            s.projectId == project.id && !s.isDeleted && !s.backlogOnly)
+            s.projectId == project.id &&
+            !s.isDeleted &&
+            !s.isInvalid &&
+            !s.backlogOnly)
         .toList();
     if (sessions.isEmpty) return null;
 
-    final units = ProfitCalculator.billableUnits(project, sessions);
+    final units = ProductionCalculator.projectUnits(project, sessions);
     if (units <= 0) return null;
 
     // The working day each session was filed under, so two sittings either side
@@ -107,7 +110,7 @@ class CompletionEstimator {
   /// always counted in whole units.
   static double? targetPace(Project project) {
     if (project.targetDaily <= 0) return null;
-    if (project.type == ProjectType.sefer && project.dailyGoalInLines) {
+    if (project.type.isPaged && project.dailyGoalInLines) {
       return project.targetDaily / ProductionCalculator.linesPerPageOf(project);
     }
     return project.targetDaily.toDouble();
@@ -138,6 +141,7 @@ class CompletionEstimator {
       from: from ?? DateTime.now(),
       workDaysNeeded: remaining / pace,
       rules: rules,
+      overrides: project.planOverrides,
     );
     if (plan == null) return null;
 
@@ -160,12 +164,14 @@ class CompletionEstimator {
     required DateTime deadline,
     required WorkCalendarRules rules,
     DateTime? from,
+    Map<DateTime, double> overrides = const {},
   }) {
     if (remainingUnits <= 0) return null;
     final start = from ?? DateTime.now();
     if (!deadline.isAfter(start)) return null;
 
-    final workDays = HebrewWorkCalendar.countWorkDays(start, deadline, rules);
+    final workDays = HebrewWorkCalendar.countWorkDays(start, deadline, rules,
+        overrides: overrides);
     if (workDays <= 0) return null;
     return remainingUnits / workDays;
   }

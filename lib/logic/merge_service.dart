@@ -24,11 +24,13 @@ class MergeOutcome {
   final List<Expense> expenses;
   final List<Proofread> proofreads;
   final List<Payment> payments;
+  final List<Order> orders;
   final MergeStats projectStats;
   final MergeStats historyStats;
   final MergeStats expenseStats;
   final MergeStats proofreadStats;
   final MergeStats paymentStats;
+  final MergeStats orderStats;
 
   const MergeOutcome({
     required this.projects,
@@ -41,6 +43,8 @@ class MergeOutcome {
     required this.expenseStats,
     required this.proofreadStats,
     required this.paymentStats,
+    this.orders = const [],
+    this.orderStats = const MergeStats(),
   });
 
   bool get changedAnything =>
@@ -48,7 +52,8 @@ class MergeOutcome {
       historyStats.changedAnything ||
       expenseStats.changedAnything ||
       proofreadStats.changedAnything ||
-      paymentStats.changedAnything;
+      paymentStats.changedAnything ||
+      orderStats.changedAnything;
 }
 
 /// Combines two sets of records without losing either.
@@ -135,12 +140,15 @@ class MergeService {
     List<Proofread> incomingProofreads = const [],
     List<Payment> localPayments = const [],
     List<Payment> incomingPayments = const [],
+    List<Order> localOrders = const [],
+    List<Order> incomingOrders = const [],
   }) {
     final p = mergeById<Project>(localProjects, incomingProjects);
     final h = mergeById<WorkSession>(localHistory, incomingHistory);
     final x = mergeById<Expense>(localExpenses, incomingExpenses);
     final r = mergeById<Proofread>(localProofreads, incomingProofreads);
     final y = mergeById<Payment>(localPayments, incomingPayments);
+    final o = mergeById<Order>(localOrders, incomingOrders);
 
     return MergeOutcome(
       projects: p.merged,
@@ -153,6 +161,8 @@ class MergeService {
       expenseStats: x.stats,
       proofreadStats: r.stats,
       paymentStats: y.stats,
+      orders: o.merged,
+      orderStats: o.stats,
     );
   }
 }

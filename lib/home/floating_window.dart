@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../format.dart';
 import '../logic/timer_controller.dart';
 import '../theme/app_theme.dart';
+import '../l10n/app_localizations.dart';
 
 /// The timer as a small always-on-top window, for writing at a desk.
 ///
@@ -28,6 +29,8 @@ class FloatingTimerWindow extends StatelessWidget {
   final VoidCallback onLap;
   final VoidCallback onRestore;
   final bool lineSaving;
+  final String lineActionTooltip;
+  final Duration? lineElapsed;
 
   const FloatingTimerWindow({
     super.key,
@@ -38,6 +41,8 @@ class FloatingTimerWindow extends StatelessWidget {
     required this.onLap,
     required this.onRestore,
     this.lineSaving = false,
+    this.lineActionTooltip = "סיום שורה",
+    this.lineElapsed,
   });
 
   Widget _button({
@@ -72,7 +77,8 @@ class FloatingTimerWindow extends StatelessWidget {
               Row(
                 children: [
                   _FloatingClock(
-                    label: 'זמן כתיבה',
+                    label:
+                        context.l10n.pick(he: 'זמן כתיבה', en: 'Writing time'),
                     value: formatClock(clock.elapsed),
                   ),
                   Container(
@@ -82,8 +88,8 @@ class FloatingTimerWindow extends StatelessWidget {
                     color: t.rule,
                   ),
                   _FloatingClock(
-                    label: 'זמן השורה',
-                    value: formatClock(clock.sinceLastLap),
+                    label: context.l10n.pick(he: 'זמן השורה', en: 'Line time'),
+                    value: formatClock(lineElapsed ?? clock.sinceLastLap),
                   ),
                 ],
               ),
@@ -99,14 +105,19 @@ class FloatingTimerWindow extends StatelessWidget {
                             ? onStart
                             : onPause,
                     icon: clock.isPaused ? Icons.play_arrow : Icons.pause,
-                    tooltip: clock.isPaused ? "המשך" : "הפסקה",
+                    tooltip: clock.isPaused
+                        ? context.l10n.pick(he: "המשך", en: "Resume")
+                        : context.l10n.pick(he: "הפסקה", en: "Break"),
                     background: t.caution,
                     foreground: t.paper,
                   ),
                   _button(
-                    onPressed: lineSaving ? null : onStop,
+                    // The main screen queues stop behind a line checkpoint;
+                    // keeping this enabled prevents a quick second tap from
+                    // disappearing in the floating window too.
+                    onPressed: onStop,
                     icon: Icons.stop,
-                    tooltip: "סיום",
+                    tooltip: context.l10n.pick(he: "סיום", en: "Finish"),
                     background: t.danger,
                     foreground: t.paper,
                   ),
@@ -116,14 +127,15 @@ class FloatingTimerWindow extends StatelessWidget {
                     _button(
                       onPressed: lineSaving ? null : onLap,
                       icon: Icons.flag,
-                      tooltip: "סיום שורה",
+                      tooltip: lineActionTooltip,
                       background: t.accent,
                       foreground: t.paper,
                     ),
                   _button(
                     onPressed: onRestore,
                     icon: Icons.open_in_full,
-                    tooltip: "החזר חלון",
+                    tooltip: context.l10n
+                        .pick(he: "החזר חלון", en: "Restore window"),
                     // The way out, not an action on the sitting — drawn as part
                     // of the surface rather than as a fourth coloured button.
                     background: t.rule,

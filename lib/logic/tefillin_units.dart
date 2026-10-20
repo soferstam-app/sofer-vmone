@@ -99,6 +99,10 @@ class TefillinSlot {
   /// Real ruled lines written, for [SlotState.partial] only.
   final int linesWritten;
 
+  /// Canonical boundary and fraction, independent of physical ruled lines.
+  final int? wordBoundary;
+  final double? wordFraction;
+
   /// The day writing of this parshiya began — the earliest session recorded
   /// against the slot.
   ///
@@ -113,15 +117,20 @@ class TefillinSlot {
     required this.parshiya,
     this.state = SlotState.empty,
     this.linesWritten = 0,
+    this.wordBoundary,
+    this.wordFraction,
     this.startedOn,
   });
+
+  String get parshiyaName => TefillinUnits.names[parshiya - 1];
 
   /// How much of this parshiya is written, 0–1.
   double get fraction => switch (state) {
         SlotState.done => 1,
-        SlotState.partial => (linesWritten / TefillinUnits.linesIn(side))
-            .clamp(0.0, 1.0)
-            .toDouble(),
+        SlotState.partial => wordFraction ??
+            (linesWritten / TefillinUnits.linesIn(side))
+                .clamp(0.0, 1.0)
+                .toDouble(),
         _ => 0,
       };
 

@@ -62,7 +62,8 @@ void main() {
   group('a target set in pages', () {
     test('is counted in lines, because that is what sessions carry', () {
       // Two pages of ten lines is twenty lines, and a session records lines.
-      expect(DailyGoal.targetFor(project(targetDaily: 2, linesPerPage: 10)), 20);
+      expect(
+          DailyGoal.targetFor(project(targetDaily: 2, linesPerPage: 10)), 20);
     });
 
     test('is not met by one page of two', () {

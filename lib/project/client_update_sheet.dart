@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../theme/app_theme.dart';
 import '../widgets/feedback.dart';
+import '../l10n/app_localizations.dart';
 
 /// Shows the progress update, and then offers to send it.
 ///
@@ -28,7 +29,8 @@ Future<void> showClientUpdate({
     builder: (ctx) {
       final t = SoferTokens.of(ctx);
       return AlertDialog(
-        title: const Text('עדכון ללקוח'),
+        title: Text(
+            ctx.l10n.pick(he: 'עדכון ללקוח', en: 'Client progress update')),
         content: SizedBox(
           width: 520,
           child: SingleChildScrollView(
@@ -39,7 +41,7 @@ Future<void> showClientUpdate({
                 if (to != null && to.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
-                    child: Text('אל: $to',
+                    child: Text('${ctx.l10n.pick(he: 'אל', en: 'To')}: $to',
                         style: TextStyle(
                             fontFamily: t.labelFamily,
                             fontSize: 12,
@@ -55,7 +57,8 @@ Future<void> showClientUpdate({
                   // Selectable, so he can take part of it if that is all he
                   // wants. The copy button is for the whole thing.
                   child: SelectableText(body,
-                      style: TextStyle(fontSize: 13, height: 1.6, color: t.ink)),
+                      style:
+                          TextStyle(fontSize: 13, height: 1.6, color: t.ink)),
                 ),
               ],
             ),
@@ -64,22 +67,23 @@ Future<void> showClientUpdate({
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('סגור'),
+            child: Text(ctx.l10n.pick(he: 'סגור', en: 'Close')),
           ),
           TextButton.icon(
             icon: const Icon(Icons.copy, size: 18),
-            label: const Text('העתק'),
+            label: Text(ctx.l10n.pick(he: 'העתק', en: 'Copy')),
             onPressed: () async {
               await Clipboard.setData(ClipboardData(text: body));
               if (!ctx.mounted) return;
               Navigator.pop(ctx);
-              showAppSuccess(context, 'העדכון הועתק');
+              showAppSuccess(context,
+                  context.l10n.pick(he: 'העדכון הועתק', en: 'Update copied'));
             },
           ),
           if (to != null && to.isNotEmpty)
             ElevatedButton.icon(
               icon: const Icon(Icons.email, size: 18),
-              label: const Text('פתח במייל'),
+              label: Text(ctx.l10n.pick(he: 'פתח במייל', en: 'Open email')),
               onPressed: () async {
                 Navigator.pop(ctx);
                 // Subject only. The body goes on the clipboard instead of into
@@ -99,9 +103,16 @@ Future<void> showClientUpdate({
                 if (!context.mounted) return;
                 opened
                     ? showAppSuccess(
-                        context, 'נפתח מייל — הטקסט הועתק, הדבק אותו בגוף')
-                    : showAppError(context,
-                        'לא נמצאה תוכנת מייל. הטקסט הועתק — אפשר להדביק אותו בכל מקום');
+                        context,
+                        context.l10n.pick(
+                            he: 'נפתח מייל — הטקסט הועתק, הדבק אותו בגוף',
+                            en:
+                                'Email opened. The text was copied; paste it into the message body.'))
+                    : showAppError(
+                        context,
+                        context.l10n.pick(
+                            he: 'לא נמצאה תוכנת מייל. הטקסט הועתק — אפשר להדביק אותו בכל מקום',
+                            en: 'No email app was found. The text was copied and can be pasted anywhere.'));
               },
             ),
         ],

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 import 'logic/date_logic.dart';
@@ -17,18 +19,28 @@ import 'summary/history_editor.dart';
 import 'summary/monthly_summary.dart';
 import 'logic/tefillin_summary.dart';
 import 'logic/currency.dart';
+import 'l10n/app_localizations.dart';
 
 class SummaryScreen extends StatefulWidget {
   final List<Project> projects;
+  final FutureOr<void> Function(List<Project>, List<WorkSession>)?
+      onWorkCommitted;
   final List<WorkSession> history;
-  final Function(List<WorkSession>) onHistoryUpdated;
+  final FutureOr<void> Function(List<WorkSession>) onHistoryUpdated;
+  final Future<Project?> Function(Project project)? onEditProject;
+  final Future<bool> Function(Project project)? onDeleteProject;
+  final ValueChanged<Project>? onProjectUpdated;
   final bool useGregorianDates;
 
   const SummaryScreen({
     super.key,
     required this.projects,
+    this.onWorkCommitted,
     required this.history,
     required this.onHistoryUpdated,
+    this.onEditProject,
+    this.onDeleteProject,
+    this.onProjectUpdated,
     this.useGregorianDates = false,
   });
 
@@ -37,6 +49,8 @@ class SummaryScreen extends StatefulWidget {
 }
 
 class _SummaryScreenState extends State<SummaryScreen> {
+  late List<Project> _projects;
+  late List<WorkSession> _history;
   DateTime _selectedDate = DateTime.now();
   bool _viewByMonth = false;
   final StorageService _storage = StorageService();
@@ -56,6 +70,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
   @override
   void initState() {
     super.initState();
+    _projects = [...widget.projects];
+    _history = [...widget.history];
     _storage.getDayStart().then((d) {
       if (mounted) setState(() => _dayStart = d);
     });
@@ -67,9 +83,18 @@ class _SummaryScreenState extends State<SummaryScreen> {
     });
   }
 
+  Future<void> _historyUpdated(List<WorkSession> next) async {
+    await widget.onHistoryUpdated(next);
+    if (mounted) {
+      setState(() => _history = next.where((s) => !s.isDeleted).toList());
+    }
+  }
+
   List<WorkSession> _getSessionsForDate(DateTime date) {
-    return widget.history.where((session) {
-      if (session.backlogOnly) return false;
+    return _history.where((session) {
+      if (session.backlogOnly || session.isDeleted) {
+        return false;
+      }
       if (_viewByMonth) {
         return DateLogic.sessionIsInMonth(session, date, _dayStart);
       }
@@ -96,12 +121,12 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("סיכומים"),
+        title: Text(context.l10n.pick(he: "סיכומים", en: "Summary")),
         centerTitle: true,
         actions: [
           IconButton(
             icon: const Icon(Icons.edit_note),
-            tooltip: "עריכת רשומות",
+            tooltip: context.l10n.pick(he: "עריכת רשומות", en: "Edit records"),
             onPressed: _showHistoryEditor,
           ),
         ],
@@ -123,11 +148,14 @@ class _SummaryScreenState extends State<SummaryScreen> {
                     // sittings showing an empty list and no explanation, so
                     // the group is shown and named instead.
                     children: groupedSessions.entries.map((entry) {
-                      final project = widget.projects.firstWhere(
+                      final project = _projects.firstWhere(
                         (p) => p.id == entry.key,
                         orElse: () => Project(
                           id: entry.key,
-                          name: 'פרויקט שנמחק',
+                          name: context.l10n.pick(
+                            he: 'פרויקט שנמחק',
+                            en: 'Deleted project',
+                          ),
                           type: ProjectType.sefer,
                           price: 0,
                           expenses: 0,
@@ -174,7 +202,10 @@ class _SummaryScreenState extends State<SummaryScreen> {
             // Both layouts get the same way in. See the ruled header.
             TextButton(
               onPressed: () => setState(() => _viewByMonth = !_viewByMonth),
-              child: Text(_viewByMonth ? "חודש ▾" : "יום ▾",
+              child: Text(
+                  _viewByMonth
+                      ? context.l10n.pick(he: "חודש ▾", en: "Month ▾")
+                      : context.l10n.pick(he: "יום ▾", en: "Day ▾"),
                   style: TextStyle(fontSize: 13, color: t.accent)),
             ),
           ],
@@ -200,7 +231,10 @@ class _SummaryScreenState extends State<SummaryScreen> {
           // is exactly what it does when nobody can find the switch.
           TextButton(
             onPressed: () => setState(() => _viewByMonth = !_viewByMonth),
-            child: Text(_viewByMonth ? "חודש ▾" : "יום ▾",
+            child: Text(
+                _viewByMonth
+                    ? context.l10n.pick(he: "חודש ▾", en: "Month ▾")
+                    : context.l10n.pick(he: "יום ▾", en: "Day ▾"),
                 style: TextStyle(
                     fontFamily: t.labelFamily,
                     fontSize: 12,
@@ -229,7 +263,10 @@ class _SummaryScreenState extends State<SummaryScreen> {
           ),
           const SizedBox(height: 20),
           Text(
-            "כל זמן שהנר דולק אפשר לכתוב",
+            context.l10n.pick(
+              he: "כל זמן שהנר דולק אפשר לכתוב",
+              en: "While the candle is burning, there is still time to write",
+            ),
             style: TextStyle(
                 fontSize: 18,
                 fontStyle: FontStyle.italic,
@@ -291,18 +328,26 @@ class _SummaryScreenState extends State<SummaryScreen> {
                   height: 1.15,
                   color: t.ink)),
           const SizedBox(height: 12),
-          SoferStatRow("זמן עבודה", workedLabel(worked, someWithoutTime)),
-          if (avgTimeText.isNotEmpty) SoferStatRow("ממוצע", avgTimeText),
-          SoferStatRow("רווח נקי", formatMoneyExact(profit, project.currency)),
+          SoferStatRow(context.l10n.pick(he: "זמן עבודה", en: "Writing time"),
+              workedLabel(worked, someWithoutTime)),
+          if (avgTimeText.isNotEmpty)
+            SoferStatRow(
+                context.l10n.pick(he: "ממוצע", en: "Average"), avgTimeText),
+          SoferStatRow(context.l10n.pick(he: "רווח נקי", en: "Net profit"),
+              formatMoneyExact(profit, project.currency)),
           if (hourlyRate != null)
-            SoferStatRow("שכר לשעה", formatMoney(hourlyRate, project.currency),
+            SoferStatRow(context.l10n.pick(he: "שכר לשעה", en: "Hourly rate"),
+                formatMoney(hourlyRate, project.currency),
                 emphasise: true, last: !hasTarget),
           if (hasTarget) ...[
             const SizedBox(height: 14),
             SoferProgress(progressPercent),
             const SizedBox(height: 6),
             Text(
-              "יעד יומי · $remainingText",
+              context.l10n.pick(
+                he: "יעד יומי · $remainingText",
+                en: "Daily target · $remainingText",
+              ),
               style: TextStyle(
                 fontFamily: t.labelFamily,
                 fontSize: 12,
@@ -317,43 +362,39 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
   Widget _buildProjectSummaryCard(Project project, List<WorkSession> sessions) {
     final sessionsForStats = sessions.where((s) => !s.backlogOnly).toList();
-    Duration totalDuration = Duration.zero;
-    int totalLinesWritten = 0;
-    int totalMezuzaLines = 0;
-
-    for (var s in sessions) {
-      if (project.type == ProjectType.sefer) {
-        totalLinesWritten += ProductionCalculator.seferLinesInSession(s);
-      } else if (project.type == ProjectType.mezuza) {
-        totalMezuzaLines += ProductionCalculator.mezuzaLinesInSession(s);
-      }
-    }
+    final validOutputSessions =
+        sessionsForStats.where((s) => !s.isInvalid).toList();
+    final totalLinesWritten = project.type.isPaged
+        ? ProductionCalculator.seferLinesTotal(validOutputSessions)
+        : 0;
+    final totalMezuzaLines = project.type == ProjectType.mezuza
+        ? ProductionCalculator.mezuzaLinesTotal(validOutputSessions)
+        : 0;
     // The records a ratio may use — see [MeasuredWork]. Time was already taken
     // only from these; the output below it was not, so measured minutes were
     // divided by lines that had never been timed.
     final measured = MeasuredWork.only(sessionsForStats);
-    totalDuration = MeasuredWork.time(measured);
-    final tefillinAverage = project.type == ProjectType.tefillin
-        ? ProductionCalculator.tefillinAverageStats(measured)
-        : null;
-
+    final totalDuration = MeasuredWork.time(measured);
     // Plenty of sofrim record what they wrote and never how long it took. The
     // total is then true but incomplete, and saying so is the difference
     // between a figure that is partial and a figure that is wrong.
     final bool someWithoutTime = MeasuredWork.anyUntimed(sessionsForStats);
 
-    int linesForStats = 0;
+    final linesForStats = project.type.isPaged
+        ? ProductionCalculator.seferLinesTotal(validOutputSessions)
+        : 0;
+    final comparableLinesForStats = project.type == ProjectType.tefillin
+        ? ProductionCalculator.tefillinSeferLinesTotal(measured,
+            includeInvalid: true)
+        : ProductionCalculator.comparableLinesTotal(project, measured,
+            includeInvalid: true);
     int unitsForStats = 0;
-    final int parshiyotForStats = tefillinAverage?.parshiyot ?? 0;
-    int mezuzaLinesForStats = 0;
-    for (var s in measured) {
-      if (project.type == ProjectType.sefer) {
-        linesForStats += ProductionCalculator.seferLinesInSession(s);
-      } else {
+    final mezuzaLinesForStats = project.type == ProjectType.mezuza
+        ? ProductionCalculator.mezuzaLinesTotal(validOutputSessions)
+        : 0;
+    for (var s in validOutputSessions) {
+      if (!project.type.isPaged) {
         unitsForStats += s.amount;
-        if (project.type == ProjectType.mezuza) {
-          mezuzaLinesForStats += ProductionCalculator.mezuzaLinesInSession(s);
-        }
       }
     }
 
@@ -369,19 +410,26 @@ class _SummaryScreenState extends State<SummaryScreen> {
     final hourlyRate =
         ProfitCalculator.profitPerHour(project, measured, totalDuration);
 
-    if (project.type == ProjectType.sefer) {
+    if (project.type.isPaged) {
       final int linesPerPage = ProductionCalculator.linesPerPageOf(project);
 
       int pages = totalLinesWritten ~/ linesPerPage;
       int lines = totalLinesWritten % linesPerPage;
 
-      outputText = "$pages עמודים ו-$lines שורות";
+      outputText = context.l10n.pick(
+        he: "$pages עמודים ו-$lines שורות",
+        en: "$pages pages and $lines lines",
+      );
 
-      profit = ProfitCalculator.profit(project, sessionsForStats);
+      profit = ProfitCalculator.profit(project, validOutputSessions);
 
-      if (linesForStats > 0 && totalDuration.inSeconds > 0) {
-        double avgMinutes = totalDuration.inMinutes / linesForStats;
-        avgTimeText = "${avgMinutes.toStringAsFixed(2)} דקות לשורה";
+      if (comparableLinesForStats > 0 && totalDuration.inSeconds > 0) {
+        double avgMinutes =
+            minutesWithSeconds(totalDuration) / comparableLinesForStats;
+        avgTimeText = context.l10n.pick(
+          he: "${avgMinutes.toStringAsFixed(2)} דקות לשורה",
+          en: "${avgMinutes.toStringAsFixed(2)} minutes per line",
+        );
       }
 
       int targetLines = project.dailyGoalInLines
@@ -391,39 +439,73 @@ class _SummaryScreenState extends State<SummaryScreen> {
         progressPercent = linesForStats / targetLines;
         int linesLeft = targetLines - linesForStats;
         if (linesLeft > 0) {
-          remainingText = "נותרו $linesLeft שורות ליעד";
+          remainingText = context.l10n.pick(
+            he: "נותרו $linesLeft שורות ליעד",
+            en: "$linesLeft lines remaining",
+          );
         } else {
-          remainingText = "היעד הושלם!";
+          remainingText = context.l10n.pick(
+            he: "היעד הושלם!",
+            en: "Target reached!",
+          );
         }
       }
     } else {
       if (project.type == ProjectType.mezuza) {
-        profit = ProfitCalculator.profit(project, sessionsForStats);
+        profit = ProfitCalculator.profit(project, validOutputSessions);
         double displayAmount =
             totalMezuzaLines / ProductionCalculator.linesPerMezuza;
         outputText = displayAmount % 1 == 0
-            ? "${displayAmount.toInt()} מזוזות"
-            : "${displayAmount.toStringAsFixed(1)} מזוזות";
+            ? context.l10n.pick(
+                he: "${displayAmount.toInt()} מזוזות",
+                en: "${displayAmount.toInt()} Mezuzot",
+              )
+            : context.l10n.pick(
+                he: "${displayAmount.toStringAsFixed(1)} מזוזות",
+                en: "${displayAmount.toStringAsFixed(1)} Mezuzot",
+              );
       } else {
-        profit = ProfitCalculator.profit(project, sessionsForStats);
-        outputText = TefillinSummary.describe(sessions);
+        profit = ProfitCalculator.profit(project, validOutputSessions);
+        final description = TefillinSummary.describe(validOutputSessions,
+            english: context.l10n.isEnglish);
+        final physical = ProductionCalculator.tefillinPhysicalLinesTotal(
+            validOutputSessions);
+        final comparable =
+            ProductionCalculator.tefillinSeferLinesTotal(validOutputSessions);
+        final comparableText = comparable % 1 == 0
+            ? comparable.toInt().toString()
+            : comparable.toStringAsFixed(1);
+        outputText = context.l10n.pick(
+          he: "$physical ($comparableText) שורות · $description",
+          en: "$physical ($comparableText) lines · $description",
+        );
       }
 
       if (project.type == ProjectType.tefillin) {
-        final averageTime = tefillinAverage?.duration ?? Duration.zero;
-        if (parshiyotForStats > 0 && averageTime.inSeconds > 0) {
-          double avgMinutes = averageTime.inMinutes / parshiyotForStats;
-          avgTimeText = "${avgMinutes.toStringAsFixed(2)} דקות לפרשייה";
+        if (comparableLinesForStats > 0 && totalDuration.inSeconds > 0) {
+          double avgMinutes =
+              minutesWithSeconds(totalDuration) / comparableLinesForStats;
+          avgTimeText = context.l10n.pick(
+            he: "${avgMinutes.toStringAsFixed(2)} דקות לשורה",
+            en: "${avgMinutes.toStringAsFixed(2)} minutes per line",
+          );
         }
       } else if (project.type == ProjectType.mezuza) {
-        if (mezuzaLinesForStats > 0 && totalDuration.inSeconds > 0) {
-          double avgMinutes = totalDuration.inMinutes / mezuzaLinesForStats;
-          avgTimeText = "${avgMinutes.toStringAsFixed(2)} דקות לשורה";
+        if (comparableLinesForStats > 0 && totalDuration.inSeconds > 0) {
+          double avgMinutes =
+              minutesWithSeconds(totalDuration) / comparableLinesForStats;
+          avgTimeText = context.l10n.pick(
+            he: "${avgMinutes.toStringAsFixed(2)} דקות לשורה",
+            en: "${avgMinutes.toStringAsFixed(2)} minutes per line",
+          );
         }
       } else {
         if (unitsForStats > 0 && totalDuration.inSeconds > 0) {
-          double avgMinutes = totalDuration.inMinutes / unitsForStats;
-          avgTimeText = "${avgMinutes.toStringAsFixed(2)} דקות ליחידה";
+          double avgMinutes = minutesWithSeconds(totalDuration) / unitsForStats;
+          avgTimeText = context.l10n.pick(
+            he: "${avgMinutes.toStringAsFixed(2)} דקות ליחידה",
+            en: "${avgMinutes.toStringAsFixed(2)} minutes per unit",
+          );
         }
       }
 
@@ -438,7 +520,15 @@ class _SummaryScreenState extends State<SummaryScreen> {
         double left = project.targetDaily - currentAmount;
         String leftStr =
             left % 1 == 0 ? left.toInt().toString() : left.toStringAsFixed(1);
-        remainingText = left > 0 ? "נותרו $leftStr ליעד" : "היעד הושלם!";
+        remainingText = left > 0
+            ? context.l10n.pick(
+                he: "נותרו $leftStr ליעד",
+                en: "$leftStr remaining",
+              )
+            : context.l10n.pick(
+                he: "היעד הושלם!",
+                en: "Target reached!",
+              );
       }
     }
 
@@ -470,18 +560,31 @@ class _SummaryScreenState extends State<SummaryScreen> {
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const Divider(),
-            _buildInfoRow(Icons.edit_note, "הספק:", outputText),
-            _buildInfoRow(Icons.timer, "זמן עבודה:",
+            _buildInfoRow(Icons.edit_note,
+                context.l10n.pick(he: "הספק:", en: "Output:"), outputText),
+            _buildInfoRow(
+                Icons.timer,
+                context.l10n.pick(he: "זמן עבודה:", en: "Writing time:"),
                 workedLabel(totalDuration, someWithoutTime)),
             if (avgTimeText.isNotEmpty)
-              _buildInfoRow(Icons.speed, "ממוצע:", avgTimeText),
-            _buildInfoRow(Icons.monetization_on, "רווח נקי:",
+              _buildInfoRow(Icons.speed,
+                  context.l10n.pick(he: "ממוצע:", en: "Average:"), avgTimeText),
+            _buildInfoRow(
+                Icons.monetization_on,
+                context.l10n.pick(he: "רווח נקי:", en: "Net profit:"),
                 formatMoneyExact(profit, project.currency)),
             if (hourlyRate != null)
-              _buildInfoRow(Icons.trending_up, "שכר לשעה:",
-                  "${formatMoney(hourlyRate, project.currency)} לשעה"),
+              _buildInfoRow(
+                  Icons.trending_up,
+                  context.l10n.pick(he: "שכר לשעה:", en: "Hourly rate:"),
+                  context.l10n.pick(
+                    he: "${formatMoney(hourlyRate, project.currency)} לשעה",
+                    en: "${formatMoney(hourlyRate, project.currency)} per hour",
+                  )),
             const SizedBox(height: 10),
-            const Text("עמידה ביעד יומי:",
+            Text(
+                context.l10n
+                    .pick(he: "עמידה ביעד יומי:", en: "Daily target progress:"),
                 style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 5),
             LinearProgressIndicator(
@@ -496,7 +599,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
             Text(
               remainingText,
               style: TextStyle(
-                color: remainingText.contains("הושלם")
+                color: progressPercent >= 1
                     ? SoferTokens.of(context).positive
                     : SoferTokens.of(context).danger,
                 fontWeight: FontWeight.bold,
@@ -533,20 +636,43 @@ class _SummaryScreenState extends State<SummaryScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             _buildActionButton(
-              "סיכום חודשי",
+              context.l10n.pick(he: "סיכום חודשי", en: "Monthly summary"),
               Icons.calendar_view_month,
               _showMonthlySummary,
             ),
-            _buildActionButton("סיכום פרויקט", Icons.folder_special, () {
+            _buildActionButton(
+                context.l10n.pick(he: "סיכום פרויקט", en: "Project summary"),
+                Icons.folder_special, () {
               Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (context) => ProjectSummaryScreen(
-                      projects: widget.projects, history: widget.history),
+                    projects: _projects,
+                    history: _history,
+                    onWorkCommitted: (nextProjects, nextHistory) async {
+                      await widget.onWorkCommitted
+                          ?.call(nextProjects, nextHistory);
+                      if (mounted) {
+                        setState(() {
+                          _projects =
+                              nextProjects.where((p) => !p.isDeleted).toList();
+                          _history =
+                              nextHistory.where((s) => !s.isDeleted).toList();
+                        });
+                      }
+                    },
+                    onEditProject: widget.onEditProject,
+                    onDeleteProject: widget.onDeleteProject,
+                    onProjectUpdated: widget.onProjectUpdated,
+                    onHistoryUpdated: _historyUpdated,
+                  ),
                 ),
               );
             }),
-            _buildActionButton("בחירת תאריך", Icons.date_range, _pickDate),
+            _buildActionButton(
+                context.l10n.pick(he: "בחירת תאריך", en: "Choose date"),
+                Icons.date_range,
+                _pickDate),
           ],
         ),
       ),
@@ -606,14 +732,20 @@ class _SummaryScreenState extends State<SummaryScreen> {
             List<int> days = List.generate(daysInMonth, (i) => i + 1);
 
             return AlertDialog(
-              title: const Text("בחר תאריך עברי"),
+              title: Text(context.l10n.pick(
+                he: "בחר תאריך עברי",
+                en: "Choose a Hebrew date",
+              )),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text("הצג חודש שלם"),
+                      Text(context.l10n.pick(
+                        he: "הצג חודש שלם",
+                        en: "Show full month",
+                      )),
                       Switch(
                         value: tempViewByMonth,
                         onChanged: (val) =>
@@ -626,7 +758,10 @@ class _SummaryScreenState extends State<SummaryScreen> {
                     value: years.contains(currentYear) ? currentYear : years[0],
                     items: years.map((y) {
                       return DropdownMenuItem(
-                          value: y, child: Text(formatHebrewYear(y)));
+                          value: y,
+                          child: Text(context.l10n.isEnglish
+                              ? y.toString()
+                              : formatHebrewYear(y)));
                     }).toList(),
                     onChanged: (val) {
                       if (val != null) {
@@ -640,7 +775,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
                     items: months.map((m) {
                       return DropdownMenuItem(
                         value: m,
-                        child: Text(getHebrewMonthName(m, isLeap)),
+                        child: Text(context.l10n.isEnglish
+                            ? _englishMonthName(m, currentYear)
+                            : getHebrewMonthName(m, isLeap)),
                       );
                     }).toList(),
                     onChanged: (val) {
@@ -655,7 +792,10 @@ class _SummaryScreenState extends State<SummaryScreen> {
                       value: days.contains(currentDay) ? currentDay : 1,
                       items: days.map((d) {
                         return DropdownMenuItem(
-                            value: d, child: Text(formatHebrewNumber(d)));
+                            value: d,
+                            child: Text(context.l10n.isEnglish
+                                ? d.toString()
+                                : formatHebrewNumber(d)));
                       }).toList(),
                       onChanged: (val) {
                         if (val != null) {
@@ -670,7 +810,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text("ביטול"),
+                  child: Text(context.l10n.cancel),
                 ),
                 ElevatedButton(
                   onPressed: () {
@@ -680,7 +820,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                     });
                     Navigator.pop(context);
                   },
-                  child: const Text("בחר"),
+                  child: Text(context.l10n.pick(he: "בחר", en: "Select")),
                 ),
               ],
             );
@@ -690,6 +830,12 @@ class _SummaryScreenState extends State<SummaryScreen> {
     );
   }
 
+  String _englishMonthName(int month, int year) {
+    final date = JewishDate()..setJewishDate(year, month, 1);
+    final formatter = HebrewDateFormatter()..hebrewFormat = false;
+    return formatter.format(date, pattern: 'MM');
+  }
+
   String _getHebrewDate(DateTime date, [bool monthOnly = false]) {
     if (widget.useGregorianDates) {
       return monthOnly
@@ -697,18 +843,21 @@ class _SummaryScreenState extends State<SummaryScreen> {
           : formatDisplayDate(date, true);
     }
     final jewishDate = JewishDate.fromDateTime(date);
-    final formatter = HebrewDateFormatter()..hebrewFormat = true;
+    final formatter = HebrewDateFormatter()
+      ..hebrewFormat = !context.l10n.isEnglish;
     if (monthOnly) {
       // Manually construct month year string or use formatter and strip day
-      return "${getHebrewMonthName(jewishDate.getJewishMonth(), jewishDate.isJewishLeapYear())} ${formatHebrewYear(jewishDate.getJewishYear())}";
+      return context.l10n.isEnglish
+          ? formatter.format(jewishDate, pattern: 'MM yy')
+          : "${getHebrewMonthName(jewishDate.getJewishMonth(), jewishDate.isJewishLeapYear())} ${formatHebrewYear(jewishDate.getJewishYear())}";
     }
     return formatter.format(jewishDate);
   }
 
   void _showMonthlySummary() => showMonthlySummary(
         context: context,
-        projects: widget.projects,
-        history: widget.history,
+        projects: _projects,
+        history: _history,
         month: _selectedDate,
         dayStart: _dayStart,
         rules: _rules,
@@ -721,15 +870,15 @@ class _SummaryScreenState extends State<SummaryScreen> {
   void _showHistoryEditor() {
     showHistoryEditor(
       context: context,
-      projects: widget.projects,
-      history: widget.history,
+      projects: _projects,
+      history: _history,
       day: _selectedDate,
       dayLabel: widget.useGregorianDates
           ? formatDisplayDate(_selectedDate, true)
           : _getHebrewDate(_selectedDate),
       dayStart: _dayStart,
       useGregorianDates: widget.useGregorianDates,
-      onHistoryUpdated: widget.onHistoryUpdated,
+      onHistoryUpdated: _historyUpdated,
     );
   }
 }

@@ -31,6 +31,11 @@ String formatMoney(num amount, Currency currency) => currency.format(amount);
 String formatMoneyExact(num amount, Currency currency) =>
     currency.format(amount, decimals: 2);
 
+/// Full minutes for averages and charts. `Duration.inMinutes` truncates the
+/// seconds before division, making every measured line look slightly faster.
+double minutesWithSeconds(Duration duration) =>
+    duration.inMicroseconds / Duration.microsecondsPerMinute;
+
 /// `01:14:32`, or `01:14` — a stretch of time read as a clock.
 ///
 /// Hours are not wrapped at 24: a sitting of thirty hours is a thing that
@@ -42,7 +47,15 @@ String formatClock(Duration d, {bool seconds = true}) {
 }
 
 /// `1 שע' 14 דק'` — a stretch of time read as a sentence would say it.
-String formatSpan(Duration d) {
+String formatSpan(Duration d, {bool english = false}) {
+  if (english) {
+    final hours = d.inHours;
+    final minutes = d.inMinutes.remainder(60);
+    if (hours > 0) {
+      return minutes > 0 ? '${hours}h ${minutes}m' : '${hours}h';
+    }
+    return '${d.inMinutes}m';
+  }
   if (d.inHours > 0) {
     final minutes = d.inMinutes.remainder(60);
     return minutes > 0 ? "${d.inHours} שע' $minutes דק'" : "${d.inHours} שע'";
@@ -56,9 +69,20 @@ String formatSpan(Duration d) {
 /// the question by never spelling the noun. Spelled out there is nowhere to
 /// hide: this used to read "1 שעות ו-1 דקות", and to announce "0 שעות" for
 /// three quarters of an hour.
-String formatSpanLong(Duration d) {
+String formatSpanLong(Duration d, {bool english = false}) {
   final hours = d.inHours;
   final minutes = d.inMinutes.remainder(60);
+
+  if (english) {
+    final parts = [
+      if (hours > 0) '$hours ${hours == 1 ? 'hour' : 'hours'}',
+      if (minutes > 0) '$minutes ${minutes == 1 ? 'minute' : 'minutes'}',
+    ];
+    if (parts.isEmpty) {
+      return d > Duration.zero ? 'less than a minute' : 'no time';
+    }
+    return parts.join(' and ');
+  }
 
   final parts = [
     if (hours > 0) hebrewCount(hours, one: 'שעה', two: 'שעתיים', many: 'שעות'),
@@ -90,8 +114,9 @@ bool _startsWithDigit(String s) =>
 ///
 /// A record with no time used to print as `00:00`, which reads as "wrote for no
 /// time at all" rather than "did not say".
-String sessionTimeLabel(WorkSession s) =>
-    s.timeRecorded ? formatClock(s.duration, seconds: false) : "ללא זמן";
+String sessionTimeLabel(WorkSession s, {bool english = false}) => s.timeRecorded
+    ? formatClock(s.duration, seconds: false)
+    : (english ? 'No time' : "ללא זמן");
 
 /// A total, said to be partial when part of the work carries no time.
 ///

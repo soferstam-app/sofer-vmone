@@ -13,7 +13,8 @@ void main() {
     test('two in the same minute do not collide', () {
       // The stamp claimed never to collide and stopped at minutes.
       final name = BackupService.instance.suggestedFileName();
-      expect(name, matches(r'sofer-vmone-backup-\d{4}-\d{2}-\d{2}_\d{6}\.json'));
+      expect(
+          name, matches(r'sofer-vmone-backup-\d{4}-\d{2}-\d{2}_\d{6}\.json'));
     });
 
     test('and it still sorts chronologically', () {

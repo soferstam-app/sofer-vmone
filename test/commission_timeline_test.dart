@@ -37,8 +37,7 @@ void main() {
 
     test('starts today when no work has been recorded yet', () {
       final run = TimelineRun.of(started: null, estimatedEnd: estimated);
-      expect(run.from.difference(DateTime.now()).inMinutes.abs(),
-          lessThan(2));
+      expect(run.from.difference(DateTime.now()).inMinutes.abs(), lessThan(2));
     });
   });
 
@@ -82,8 +81,7 @@ void main() {
 
     test('today is the one drawn in the accent, and carries no date', () {
       final run = TimelineRun.of(started: begun, estimatedEnd: estimated);
-      final today =
-          run.marks(estimatedEnd: estimated, formatDate: date)[1];
+      final today = run.marks(estimatedEnd: estimated, formatDate: date)[1];
 
       expect(today.current, isTrue);
       expect(today.value, isEmpty,
@@ -94,8 +92,8 @@ void main() {
       final target = DateTime(2026, 11, 1);
       final run = TimelineRun.of(
           started: begun, estimatedEnd: estimated, target: target);
-      final marks = run.marks(
-          estimatedEnd: estimated, target: target, formatDate: date);
+      final marks =
+          run.marks(estimatedEnd: estimated, target: target, formatDate: date);
 
       expect(marks, hasLength(4));
       expect(marks.last.caption, 'תאריך יעד');
@@ -135,8 +133,7 @@ void main() {
     test('counts in Hebrew, which has a dual', () {
       // "2 שבועות" and "ב-שבועיים" are both what a program writes and nobody
       // says. One week, two weeks and many weeks are three different words.
-      expect(verdict(DateTime(2027, 1, 7), estimated)!.text,
-          endsWith('בשבוע'));
+      expect(verdict(DateTime(2027, 1, 7), estimated)!.text, endsWith('בשבוע'));
       expect(verdict(DateTime(2027, 1, 14), estimated)!.text,
           endsWith('בשבועיים'));
       expect(verdict(DateTime(2027, 1, 21), estimated)!.text,
@@ -144,8 +141,8 @@ void main() {
     });
 
     test('and in days when it is under a week', () {
-      expect(verdict(DateTime(2027, 1, 4), estimated)!.text,
-          endsWith('ב-4 ימים'));
+      expect(
+          verdict(DateTime(2027, 1, 4), estimated)!.text, endsWith('ב-4 ימים'));
     });
   });
 }

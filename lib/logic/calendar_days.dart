@@ -66,5 +66,6 @@ class CalendarDays {
 
   /// The same calendar date, read as UTC. UTC has no daylight saving, so
   /// subtracting two of these gives whole days every time.
-  static DateTime _utcMidnight(DateTime d) => DateTime.utc(d.year, d.month, d.day);
+  static DateTime _utcMidnight(DateTime d) =>
+      DateTime.utc(d.year, d.month, d.day);
 }

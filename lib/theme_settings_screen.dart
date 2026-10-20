@@ -4,6 +4,7 @@ import 'logic/hebrew_clock.dart';
 import 'main.dart' show themeController;
 import 'theme/app_theme.dart';
 import 'widgets/sofer_widgets.dart';
+import 'l10n/app_localizations.dart';
 
 /// Picking the app's look, and whether it changes itself after dark.
 ///
@@ -22,12 +23,14 @@ class ThemeSettingsScreen extends StatelessWidget {
         final choice = themeController.choice;
 
         return Scaffold(
-          appBar: AppBar(title: const Text("עיצוב"), centerTitle: true),
+          appBar: AppBar(
+              title: Text(context.l10n.pick(he: "עיצוב", en: "Appearance")),
+              centerTitle: true),
           body: SoferPage(
             maxWidth: 720,
             child: ListView(
               children: [
-                const SoferSectionTitle("ערכה"),
+                SoferSectionTitle(context.l10n.pick(he: "ערכה", en: "Theme")),
                 for (final option in AppTheme.values)
                   _ThemeOption(
                     theme: option,
@@ -36,20 +39,25 @@ class ThemeSettingsScreen extends StatelessWidget {
                   ),
                 const SizedBox(height: 8),
                 const SoferRule(),
-                const SoferSectionTitle("אחרי החשכה"),
+                SoferSectionTitle(
+                    context.l10n.pick(he: "אחרי החשכה", en: "After dark")),
                 SwitchListTile(
                   value: themeController.autoNight,
                   onChanged: themeController.setAutoNight,
                   secondary: Icon(Icons.nightlight_round, color: t.accent),
-                  title: const Text("מעבר אוטומטי לערכת לילה"),
-                  subtitle: Text(_nightSubtitle()),
+                  title: Text(context.l10n.pick(
+                      he: "מעבר אוטומטי לערכת לילה",
+                      en: "Automatically switch to the night theme")),
+                  subtitle: Text(_nightSubtitle(context)),
                 ),
                 if (themeController.nightByClock)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
                     child: Text(
-                      "כרגע ערכת לילה פעילה בגלל השעה. הבחירה שלך "
-                      "(${choice.label}) תחזור עם עלות השחר.",
+                      context.l10n.pick(
+                        he: "כרגע ערכת לילה פעילה בגלל השעה. הבחירה שלך (${choice.label}) תחזור עם עלות השחר.",
+                        en: "The night theme is active because of the time. Your selected theme (${_themeLabel(context, choice)}) returns at dawn.",
+                      ),
                       style: TextStyle(fontSize: 12, color: t.accent),
                     ),
                   ),
@@ -64,17 +72,30 @@ class ThemeSettingsScreen extends StatelessWidget {
 
   /// States the actual times rather than the idea of them, so the setting can
   /// be judged before it is switched on.
-  String _nightSubtitle() {
+  String _nightSubtitle(BuildContext context) {
     final now = DateTime.now();
     final nightfall = HebrewClock.nightfall(now);
     final dawn = HebrewClock.dawn(now);
     if (nightfall == null || dawn == null) {
-      return "מצאת הכוכבים עד עלות השחר";
+      return context.l10n.pick(
+          he: "מצאת הכוכבים עד עלות השחר", en: "From nightfall until dawn");
     }
     String hm(DateTime d) =>
         "${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}";
-    return "היום: מ-${hm(nightfall)} עד ${hm(dawn)} · לפי ממוצע ארץ ישראל";
+    return context.l10n.pick(
+      he: "היום: מ-${hm(nightfall)} עד ${hm(dawn)} · לפי ממוצע ארץ ישראל",
+      en: "Today: ${hm(nightfall)} to ${hm(dawn)} · using the Israel average",
+    );
   }
+
+  String _themeLabel(BuildContext context, AppTheme theme) =>
+      context.l10n.isEnglish
+          ? switch (theme) {
+              AppTheme.modern => 'Modern',
+              AppTheme.klaf => 'Parchment',
+              AppTheme.layla => 'Night',
+            }
+          : theme.label;
 }
 
 /// One look, shown as itself.
@@ -96,8 +117,7 @@ class _ThemeOption extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = SoferTokens.of(context);
-    final preview =
-        AppThemeBuilder.build(theme).extension<SoferTokens>()!;
+    final preview = AppThemeBuilder.build(theme).extension<SoferTokens>()!;
 
     return InkWell(
       onTap: onTap,
@@ -114,14 +134,31 @@ class _ThemeOption extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(theme.label,
+                  Text(
+                      context.l10n.isEnglish
+                          ? switch (theme) {
+                              AppTheme.modern => 'Modern',
+                              AppTheme.klaf => 'Parchment',
+                              AppTheme.layla => 'Night',
+                            }
+                          : theme.label,
                       style: TextStyle(
                         fontFamily: t.numeralFamily,
                         fontSize: 17,
                         color: t.ink,
                       )),
                   const SizedBox(height: 2),
-                  Text(theme.description,
+                  Text(
+                      context.l10n.isEnglish
+                          ? switch (theme) {
+                              AppTheme.modern =>
+                                'Cards, color, and system dark mode',
+                              AppTheme.klaf =>
+                                'Warm paper, ruling lines, and no cards',
+                              AppTheme.layla =>
+                                'Charcoal and brass for writing at night',
+                            }
+                          : theme.description,
                       style: TextStyle(
                         fontFamily: t.labelFamily,
                         fontSize: 12,

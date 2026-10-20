@@ -7,8 +7,10 @@ import 'models.dart';
 import 'storage_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/sofer_widgets.dart';
+import 'widgets/feedback.dart';
 import 'format.dart';
 import 'logic/currency.dart';
+import 'l10n/app_localizations.dart';
 
 class ExpensesScreen extends StatefulWidget {
   /// Needed so an expense can be charged to the work it belongs to.
@@ -51,7 +53,15 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     }
   }
 
-  Future<void> _save() async => _storage.saveExpenses(_all);
+  Future<void> _storeExpense(Expense expense) async {
+    final next = [
+      for (final e in _all)
+        if (e.id != expense.id) e,
+      expense
+    ];
+    await _storage.saveExpenses(next);
+    if (mounted) setState(() => _all = next);
+  }
 
   /// Every expense, kept apart by currency.
   ///
@@ -67,7 +77,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     for (final p in widget.projects) {
       if (p.id == id) return p.name;
     }
-    return 'פרויקט שנמחק';
+    return context.l10n.pick(he: 'פרויקט שנמחק', en: 'Deleted project');
   }
 
   /// One line describing where this expense lands, so the list is readable
@@ -75,15 +85,24 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   String _allocationSummary(Expense e) {
     switch (e.allocation) {
       case ExpenseAllocation.project:
-        if (e.projectIds.isEmpty) return '⚠ לא שויך לפרויקט';
+        if (e.projectIds.isEmpty) {
+          return context.l10n
+              .pick(he: '⚠ לא שויך לפרויקט', en: '⚠ Not assigned to a project');
+        }
         if (e.projectIds.length == 1) return _projectName(e.projectIds.first);
-        return '${e.projectIds.length} פרויקטים (${formatMoney(e.amountPerProject, e.currency)} כל אחד)';
+        return context.l10n.pick(
+          he: '${e.projectIds.length} פרויקטים (${formatMoney(e.amountPerProject, e.currency)} כל אחד)',
+          en: '${e.projectIds.length} projects (${formatMoney(e.amountPerProject, e.currency)} each)',
+        );
       case ExpenseAllocation.period:
         final s = e.periodStart, en = e.periodEnd;
-        if (s == null || en == null) return 'תקופה לא הוגדרה';
-        return '${formatDisplayDate(s, _useGregorianDates)} – ${formatDisplayDate(en, _useGregorianDates)}';
+        if (s == null || en == null) {
+          return context.l10n
+              .pick(he: 'תקופה לא הוגדרה', en: 'Period not defined');
+        }
+        return '${formatDisplayDate(s, _useGregorianDates, english: context.l10n.isEnglish)} – ${formatDisplayDate(en, _useGregorianDates, english: context.l10n.isEnglish)}';
       case ExpenseAllocation.month:
-        return 'חודשי';
+        return context.l10n.pick(he: 'חודשי', en: 'Monthly');
     }
   }
 
@@ -93,56 +112,58 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   /// can use the very same one. This method only decides what a result means for
   /// the stored list.
   Future<void> _showAddOrEdit([Expense? existing]) async {
-    final edit = await showExpenseEditor(
+    await showExpenseEditor(
       context: context,
       existing: existing,
       projects: widget.projects,
       useGregorianDates: _useGregorianDates,
       currency: _currency,
+      onCommit: (edit) async {
+        await _storeExpense(edit.deleted
+            ? edit.expense.copyWith(isDeleted: true)
+            : edit.expense);
+        return true;
+      },
     );
-    if (edit == null || !mounted) return;
-
-    if (edit.deleted) {
-      await _softDelete(edit.expense);
-      return;
-    }
-
-    final idx = _all.indexWhere((x) => x.id == edit.expense.id);
-    if (idx >= 0) {
-      _all[idx] = edit.expense;
-    } else {
-      _all.add(edit.expense);
-    }
-    await _save();
-    if (mounted) setState(() {});
   }
 
   /// Marked deleted rather than dropped from the list, so the removal survives a
   /// merge against a device still holding the row.
   Future<void> _softDelete(Expense e) async {
-    final idx = _all.indexWhere((x) => x.id == e.id);
-    if (idx >= 0) _all[idx] = _all[idx].copyWith(isDeleted: true);
-    await _save();
-    if (mounted) setState(() {});
+    try {
+      await _storeExpense(e.copyWith(isDeleted: true));
+    } catch (error) {
+      if (mounted) {
+        showAppError(
+            context,
+            context.l10n.pick(
+                he: 'מחיקת ההוצאה נכשלה: $error',
+                en: 'Expense deletion failed: $error'));
+      }
+    }
   }
 
   void _confirmDelete(Expense e) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("מחיקת הוצאה"),
-        content:
-            Text("למחוק \"${e.product}\" (${formatMoneyExact(e.amount, e.currency)})?"),
+        title: Text(context.l10n.pick(he: "מחיקת הוצאה", en: "Delete expense")),
+        content: Text(context.l10n.pick(
+          he: "למחוק \"${e.product}\" (${formatMoneyExact(e.amount, e.currency)})?",
+          en: "Delete \"${context.l10n.expenseCategory(e.product)}\" (${formatMoneyExact(e.amount, e.currency)})?",
+        )),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text("ביטול")),
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(context.l10n.cancel)),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: SoferTokens.of(ctx).danger),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: SoferTokens.of(ctx).danger),
             onPressed: () {
               Navigator.pop(ctx);
               _softDelete(e);
             },
-            child: const Text("מחק"),
+            child: Text(context.l10n.pick(he: "מחק", en: "Delete")),
           ),
         ],
       ),
@@ -167,18 +188,24 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     final groups = <({ExpenseAllocation kind, String title, String note})>[
       (
         kind: ExpenseAllocation.project,
-        title: "לפי פרויקט",
-        note: "נכנס לחישוב הרווח של העבודה שהוא נצרך בה"
+        title: context.l10n.pick(he: "לפי פרויקט", en: "By Project"),
+        note: context.l10n.pick(
+            he: "נכנס לחישוב הרווח של העבודה שהוא נצרך בה",
+            en: "Included in the profit calculation of the project that used it")
       ),
       (
         kind: ExpenseAllocation.period,
-        title: "לפי תקופה",
-        note: "מתפרס על פני הימים שבין שני התאריכים"
+        title: context.l10n.pick(he: "לפי תקופה", en: "By Period"),
+        note: context.l10n.pick(
+            he: "מתפרס על פני הימים שבין שני התאריכים",
+            en: "Spread across the days between the two dates")
       ),
       (
         kind: ExpenseAllocation.month,
-        title: "לפי חודש",
-        note: "נכנס במלואו לחודש שבו הוא שולם"
+        title: context.l10n.pick(he: "לפי חודש", en: "By Month"),
+        note: context.l10n.pick(
+            he: "נכנס במלואו לחודש שבו הוא שולם",
+            en: "Included in full in the month in which it was paid")
       ),
     ];
 
@@ -191,7 +218,8 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
             textBaseline: TextBaseline.alphabetic,
             children: [
               Expanded(
-                child: Text("סך ההוצאות",
+                child: Text(
+                    context.l10n.pick(he: "סך ההוצאות", en: "Total expenses"),
                     style: TextStyle(
                         fontFamily: t.labelFamily,
                         fontSize: 12,
@@ -200,9 +228,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
               ),
               Text(_totalExpenses.format(_currency),
                   style: TextStyle(
-                      fontFamily: t.numeralFamily,
-                      fontSize: 34,
-                      color: t.ink)),
+                      fontFamily: t.numeralFamily, fontSize: 34, color: t.ink)),
             ],
           ),
         ),
@@ -211,12 +237,14 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
             margin: const EdgeInsets.fromLTRB(20, 0, 20, 16),
             padding: const EdgeInsetsDirectional.fromSTEB(12, 8, 0, 8),
             decoration: BoxDecoration(
-              border: BorderDirectional(
-                  end: BorderSide(color: t.danger, width: 2)),
+              border:
+                  BorderDirectional(end: BorderSide(color: t.danger, width: 2)),
             ),
             child: Text(
-              "${unassigned.length} הוצאות מסומנות 'לפי פרויקט' בלי פרויקט, "
-              "ולכן אינן נכנסות לחישוב של אף עבודה.",
+              context.l10n.pick(
+                he: "${unassigned.length} הוצאות מסומנות 'לפי פרויקט' בלי פרויקט, ולכן אינן נכנסות לחישוב של אף עבודה.",
+                en: "${unassigned.length} expenses are marked 'By Project' without a project, so they are not included in any project's calculation.",
+              ),
               style: TextStyle(
                   fontFamily: t.labelFamily,
                   fontSize: 13,
@@ -228,7 +256,9 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
         if (_expenses.isEmpty)
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
-            child: Text("אין עוד הוצאות רשומות",
+            child: Text(
+                context.l10n.pick(
+                    he: "אין עוד הוצאות רשומות", en: "No expenses recorded"),
                 style: TextStyle(
                     fontFamily: t.numeralFamily,
                     fontSize: 19,
@@ -290,7 +320,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(e.product,
+                  Text(context.l10n.expenseCategory(e.product),
                       style: TextStyle(
                           fontFamily: t.numeralFamily,
                           fontSize: 16,
@@ -329,7 +359,8 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
 
     if (SoferTokens.of(context).isRules) {
       return Scaffold(
-        appBar: AppBar(title: const Text("הוצאות")),
+        appBar: AppBar(
+            title: Text(context.l10n.pick(he: "הוצאות", en: "Expenses"))),
         body: SoferPage(maxWidth: 760, child: _ruledLedger(unassigned)),
         floatingActionButton: FloatingActionButton(
           onPressed: () => _showAddOrEdit(),
@@ -339,7 +370,9 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text("הוצאות"), centerTitle: true),
+      appBar: AppBar(
+          title: Text(context.l10n.pick(he: "הוצאות", en: "Expenses")),
+          centerTitle: true),
       body: Column(
         children: [
           Padding(
@@ -351,8 +384,10 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text("סה\"כ הוצאות",
-                        style: TextStyle(
+                    Text(
+                        context.l10n
+                            .pick(he: "סה\"כ הוצאות", en: "Total expenses"),
+                        style: const TextStyle(
                             fontSize: 20, fontWeight: FontWeight.bold)),
                     Text(_totalExpenses.format(_currency, decimals: 2),
                         style: TextStyle(
@@ -370,12 +405,19 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
               child: Card(
                 color: SoferTokens.of(context).paper,
                 child: ListTile(
-                  leading: Icon(Icons.warning_amber, color: SoferTokens.of(context).danger),
+                  leading: Icon(Icons.warning_amber,
+                      color: SoferTokens.of(context).danger),
                   title: Text(
-                      "${unassigned.length} הוצאות מסומנות 'לפי פרויקט' ללא פרויקט",
+                      context.l10n.pick(
+                        he: "${unassigned.length} הוצאות מסומנות 'לפי פרויקט' ללא פרויקט",
+                        en: "${unassigned.length} expenses marked 'By Project' have no project",
+                      ),
                       style: const TextStyle(fontSize: 13)),
-                  subtitle: const Text("הן לא נכללות בחישוב של אף פרויקט",
-                      style: TextStyle(fontSize: 12)),
+                  subtitle: Text(
+                      context.l10n.pick(
+                          he: "הן לא נכללות בחישוב של אף פרויקט",
+                          en: "They are not included in any project's calculation"),
+                      style: const TextStyle(fontSize: 12)),
                 ),
               ),
             ),
@@ -388,14 +430,19 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                         Icon(Icons.receipt_long,
                             size: 64, color: SoferTokens.of(context).inkFaint),
                         const SizedBox(height: 16),
-                        Text("אין הוצאות עדיין",
+                        Text(
+                            context.l10n.pick(
+                                he: "אין הוצאות עדיין", en: "No expenses yet"),
                             style: TextStyle(
-                                fontSize: 18, color: SoferTokens.of(context).inkMuted)),
+                                fontSize: 18,
+                                color: SoferTokens.of(context).inkMuted)),
                         const SizedBox(height: 8),
                         TextButton.icon(
                           onPressed: () => _showAddOrEdit(),
                           icon: const Icon(Icons.add),
-                          label: const Text("הוסף הוצאה ראשונה"),
+                          label: Text(context.l10n.pick(
+                              he: "הוסף הוצאה ראשונה",
+                              en: "Add first expense")),
                         ),
                       ],
                     ),
@@ -411,11 +458,12 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                           leading: CircleAvatar(
                             backgroundColor: SoferTokens.of(context).paper,
                             child: Icon(_allocationIcon(e.allocation),
-                                color: SoferTokens.of(context).caution, size: 20),
+                                color: SoferTokens.of(context).caution,
+                                size: 20),
                           ),
-                          title: Text(e.product),
+                          title: Text(context.l10n.expenseCategory(e.product)),
                           subtitle: Text(
-                            "${formatDisplayDate(e.date, _useGregorianDates)} · ${_allocationSummary(e)}",
+                            "${formatDisplayDate(e.date, _useGregorianDates, english: context.l10n.isEnglish)} · ${_allocationSummary(e)}",
                             style: const TextStyle(fontSize: 12),
                           ),
                           trailing: Row(
@@ -431,7 +479,8 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                               ),
                               IconButton(
                                 icon: Icon(Icons.delete,
-                                    size: 20, color: SoferTokens.of(context).danger),
+                                    size: 20,
+                                    color: SoferTokens.of(context).danger),
                                 onPressed: () => _confirmDelete(e),
                               ),
                             ],
@@ -446,7 +495,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
       floatingActionButton: _expenses.isNotEmpty
           ? FloatingActionButton(
               onPressed: () => _showAddOrEdit(),
-              tooltip: "הוסף הוצאה",
+              tooltip: context.l10n.pick(he: "הוסף הוצאה", en: "Add expense"),
               child: const Icon(Icons.add),
             )
           : null,

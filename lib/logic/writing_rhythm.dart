@@ -35,8 +35,7 @@ class WritingRhythm {
   /// Weekday 1–7, Sunday first, which is how the week is counted here.
   static List<RhythmSlot> byDayOfWeek(
           Project project, Iterable<WorkSession> sessions, DayStart dayStart) =>
-      _measure(project, sessions, dayStart,
-          (s, day) => day.weekday % 7 + 1);
+      _measure(project, sessions, dayStart, (s, day) => day.weekday % 7 + 1);
 
   /// The slot with the best pace, out of those measured often enough to mean
   /// anything. Null when nothing has been measured often enough — which is the
@@ -68,7 +67,7 @@ class WritingRhythm {
       // counting it made "your best hour" a fact about a default.
       if (!s.timeOfDayKnown) continue;
 
-      final written = project.type == ProjectType.sefer
+      final written = project.type.isPaged
           ? ProductionCalculator.seferLinesInSession(s)
           : ProductionCalculator.mezuzaLinesInSession(s);
       if (written <= 0) continue;

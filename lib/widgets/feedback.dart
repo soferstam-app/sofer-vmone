@@ -36,8 +36,8 @@ void showAppSuccess(BuildContext context, String message) {
       // Read from the theme rather than assumed. White was hardcoded here, and
       // on the parchment theme it sits on a light green that it cannot be read
       // against.
-      content: Text(message,
-          style: TextStyle(color: SoferTokens.of(context).paper)),
+      content:
+          Text(message, style: TextStyle(color: SoferTokens.of(context).paper)),
       backgroundColor: SoferTokens.of(context).positive,
       duration: _readingTime(message),
     ),
@@ -48,8 +48,8 @@ void showAppSuccess(BuildContext context, String message) {
 void showAppError(BuildContext context, String message) {
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
-      content: Text(message,
-          style: TextStyle(color: SoferTokens.of(context).paper)),
+      content:
+          Text(message, style: TextStyle(color: SoferTokens.of(context).paper)),
       backgroundColor: SoferTokens.of(context).danger,
       duration: _readingTime(message),
     ),
@@ -64,8 +64,8 @@ void showAppError(BuildContext context, String message) {
 void showAppNote(BuildContext context, String message) {
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
-      content: Text(message,
-          style: TextStyle(color: SoferTokens.of(context).paper)),
+      content:
+          Text(message, style: TextStyle(color: SoferTokens.of(context).paper)),
       backgroundColor: SoferTokens.of(context).inkMuted,
       duration: const Duration(seconds: 2),
       behavior: SnackBarBehavior.floating,

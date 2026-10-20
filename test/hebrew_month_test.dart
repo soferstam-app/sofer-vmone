@@ -34,9 +34,9 @@ void main() {
 
   /// The Gregorian date of a Hebrew day, so the tests read in the calendar the
   /// app actually works in.
-  DateTime hebrew(int year, int month, int day) =>
-      JewishDate.initDate(jewishYear: year, jewishMonth: month, jewishDayOfMonth: day)
-          .getGregorianCalendar();
+  DateTime hebrew(int year, int month, int day) => JewishDate.initDate(
+          jewishYear: year, jewishMonth: month, jewishDayOfMonth: day)
+      .getGregorianCalendar();
 
   bool inMonth(WorkSession s, DateTime month) =>
       DateLogic.sessionIsInMonth(s, month, dayStart);
@@ -77,8 +77,7 @@ void main() {
       // 1 Av 5786 falls in July. Under the old rule every July session counted
       // as Av, including the days of Tammuz that share the month.
       final firstOfAv = hebrew(5786, JewishDate.AV, 1);
-      final tammuzInTheSameGregorianMonth =
-          hebrew(5786, JewishDate.TAMMUZ, 20);
+      final tammuzInTheSameGregorianMonth = hebrew(5786, JewishDate.TAMMUZ, 20);
 
       expect(tammuzInTheSameGregorianMonth.month, firstOfAv.month,
           reason: 'the two share a Gregorian month, which is what misled it');
@@ -100,8 +99,10 @@ void main() {
       final pastMidnight = WorkSession(
         id: 'late',
         projectId: 'p',
-        startTime: DateTime(tenthOfAv.year, tenthOfAv.month, tenthOfAv.day + 1, 0, 30),
-        endTime: DateTime(tenthOfAv.year, tenthOfAv.month, tenthOfAv.day + 1, 1, 30),
+        startTime:
+            DateTime(tenthOfAv.year, tenthOfAv.month, tenthOfAv.day + 1, 0, 30),
+        endTime:
+            DateTime(tenthOfAv.year, tenthOfAv.month, tenthOfAv.day + 1, 1, 30),
         amount: 1,
         startLine: 1,
         endLine: 10,

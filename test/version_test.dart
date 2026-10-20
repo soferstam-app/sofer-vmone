@@ -11,7 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sofer_vmone/version.dart';
 
 void main() {
-  /// `version: 0.5.0+5` → ('0.5.0', 5)
+  /// `version: 0.7.0+8` → ('0.7.0', 8)
   ({String name, int code}) declaredInPubspec() {
     final line = File('pubspec.yaml')
         .readAsLinesSync()
@@ -36,9 +36,9 @@ void main() {
     // Android refuses to install an update whose versionCode has not
     // increased — INSTALL_FAILED_VERSION_DOWNGRADE — and the writer sees only
     // "cannot install". The published APKs were read to get this number:
-    // 0.3.0 shipped as 1 and 0.3.1 as 2, so anything at or below 2 cannot
-    // reach a single existing user.
-    expect(declaredInPubspec().code, greaterThan(2),
-        reason: '0.3.1 is already installed as build 2');
+    // The 0.6.0 beta is build 7. The next release must also upgrade devices
+    // that installed that beta, in addition to the 0.5.1 hotfix (build 6).
+    expect(declaredInPubspec().code, greaterThan(7),
+        reason: '0.6.0 beta uses build 7');
   });
 }

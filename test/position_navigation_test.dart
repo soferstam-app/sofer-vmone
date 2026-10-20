@@ -182,6 +182,40 @@ void main() {
       expect(
           removed.firstWhere((s) => s.id == 'other-pair').isDeleted, isFalse);
     });
+
+    test('forward position follows the furthest touched physical slot', () {
+      WorkSession part(String id, int pair, String side, int parshiya,
+              int endLine) =>
+          WorkSession(
+            id: id,
+            projectId: 'p',
+            startTime: DateTime(2026, 8, 1, 9),
+            endTime: DateTime(2026, 8, 1, 10),
+            amount: 1,
+            startLine: endLine > 0 ? 1 : 0,
+            endLine: endLine,
+            tefillinType: side,
+            parshiya: parshiya,
+            pairIndex: pair,
+            description: '',
+            isManual: true,
+          );
+
+      expect(
+        TefillinState.nextWritingPosition(
+          project(ProjectType.tefillin),
+          [part('p1', 1, 'head', 1, 4)],
+        ),
+        (page: 2, line: 1),
+      );
+      expect(
+        TefillinState.nextWritingPosition(
+          project(ProjectType.tefillin),
+          [part('p2', 1, 'head', 2, 2)],
+        ),
+        (page: 2, line: 3),
+      );
+    });
   });
 
   test('new position identities survive JSON and ordinary edits', () {

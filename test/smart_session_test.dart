@@ -23,6 +23,7 @@ void main() {
         expenses: 0,
         targetDaily: 1,
         targetMonthly: 20,
+        totalPages: type == ProjectType.sefer ? 245 : null,
         linesPerPage: type == ProjectType.sefer ? linesPerPage : null,
       );
 
@@ -361,6 +362,52 @@ void main() {
           isFalse);
       expect(const SmartPosition(5, 10).isAfter(const SmartPosition(5, 10)),
           isFalse);
+    });
+
+    test('skips a fully written next page', () {
+      final pageEight = WorkSession(
+        id: 'page-eight',
+        projectId: 'p',
+        startTime: endedAt.subtract(const Duration(hours: 1)),
+        endTime: endedAt,
+        amount: 8,
+        startLine: 1,
+        endLine: 42,
+        description: '',
+        isManual: true,
+      );
+
+      final next = SmartSessionBuilder.nextWritablePosition(
+        project: project(ProjectType.sefer),
+        from: const SmartPosition(8, 1),
+        history: [pageEight],
+      );
+
+      expect(next.page, 9);
+      expect(next.line, 1);
+    });
+
+    test('resumes at the first gap in a partially written page', () {
+      final pageEight = WorkSession(
+        id: 'page-eight-part',
+        projectId: 'p',
+        startTime: endedAt.subtract(const Duration(hours: 1)),
+        endTime: endedAt,
+        amount: 8,
+        startLine: 1,
+        endLine: 10,
+        description: '',
+        isManual: true,
+      );
+
+      final next = SmartSessionBuilder.nextWritablePosition(
+        project: project(ProjectType.sefer),
+        from: const SmartPosition(8, 1),
+        history: [pageEight],
+      );
+
+      expect(next.page, 8);
+      expect(next.line, 11);
     });
   });
 

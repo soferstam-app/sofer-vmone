@@ -44,7 +44,8 @@ void main() {
       );
 
   /// One full page written on [day].
-  WorkSession page(DateTime day, {String projectId = 'p', bool backlog = false}) =>
+  WorkSession page(DateTime day,
+          {String projectId = 'p', bool backlog = false}) =>
       WorkSession(
         id: 'w${seq++}',
         projectId: projectId,
@@ -59,7 +60,8 @@ void main() {
         linesPerPageAtEntry: 10,
       );
 
-  Expense expense(DateTime date, double amount, {Currency? currency}) => Expense(
+  Expense expense(DateTime date, double amount, {Currency? currency}) =>
+      Expense(
         id: 'e${seq++}',
         product: 'קלף',
         date: date,
@@ -194,7 +196,10 @@ void main() {
     test('has no single net, and says which currencies it holds', () {
       final r = report(
         projects: [project(), project(id: 'q', currency: usd)],
-        history: [page(DateTime(2026, 5, 4)), page(DateTime(2026, 5, 4), projectId: 'q')],
+        history: [
+          page(DateTime(2026, 5, 4)),
+          page(DateTime(2026, 5, 4), projectId: 'q')
+        ],
       );
       expect(r.currenciesPresent, containsAll([Currency.ils, usd]));
       expect(r.workValue.isMixed, isTrue);

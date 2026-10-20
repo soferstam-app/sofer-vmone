@@ -5,6 +5,7 @@ import '../logic/writing_rhythm.dart';
 import '../models.dart';
 import '../theme/app_theme.dart';
 import '../widgets/sofer_widgets.dart';
+import '../l10n/app_localizations.dart';
 
 /// When this writer writes fastest.
 ///
@@ -39,11 +40,21 @@ class RhythmPanel extends StatelessWidget {
     'שבת',
   ];
 
-  static String _hourLabel(int hour) =>
-      '${hour.toString().padLeft(2, '0')}:00';
+  static String _hourLabel(int hour) => '${hour.toString().padLeft(2, '0')}:00';
 
-  static String _dayLabel(int weekday) =>
-      weekday >= 1 && weekday <= 7 ? _weekdays[weekday - 1] : '';
+  static String _dayLabel(BuildContext context, int weekday) {
+    if (weekday < 1 || weekday > 7) return '';
+    if (!context.l10n.isEnglish) return _weekdays[weekday - 1];
+    return const [
+      'Sunday',
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Shabbat',
+    ][weekday - 1];
+  }
 
   /// The hours, drawn to scale against the best of them.
   ///
@@ -52,7 +63,8 @@ class RhythmPanel extends StatelessWidget {
   /// seeing, and a gap would read as "slow" instead of "untested".
   Widget _hourBars(BuildContext context, List<RhythmSlot> hours) {
     final t = SoferTokens.of(context);
-    final top = hours.map((h) => h.linesPerHour).reduce((a, b) => a > b ? a : b);
+    final top =
+        hours.map((h) => h.linesPerHour).reduce((a, b) => a > b ? a : b);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -73,15 +85,18 @@ class RhythmPanel extends StatelessWidget {
                 Expanded(
                   child: Opacity(
                     opacity: hour.isReliable ? 1 : 0.35,
-                    child: SoferProgress(
-                        top <= 0 ? 0 : (hour.linesPerHour / top).clamp(0.0, 1.0)),
+                    child: SoferProgress(top <= 0
+                        ? 0
+                        : (hour.linesPerHour / top).clamp(0.0, 1.0)),
                   ),
                 ),
                 const SizedBox(width: 10),
                 SizedBox(
                   width: 76,
                   child: Text(
-                    '${hour.linesPerHour.toStringAsFixed(1)} שו׳/שעה',
+                    context.l10n.pick(
+                        he: '${hour.linesPerHour.toStringAsFixed(1)} שו׳/שעה',
+                        en: '${hour.linesPerHour.toStringAsFixed(1)} lines/hr'),
                     textAlign: TextAlign.end,
                     style: TextStyle(
                         fontFamily: t.labelFamily,
@@ -120,22 +135,32 @@ class RhythmPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SoferSectionTitle("מתי אתה כותב מהר", padding: EdgeInsets.zero),
+          SoferSectionTitle(
+              context.l10n
+                  .pick(he: "מתי אתה כותב מהר", en: "When you write fastest"),
+              padding: EdgeInsets.zero),
           const SizedBox(height: 8),
           Text.rich(
             TextSpan(children: [
-              const TextSpan(text: 'הקצב הטוב שלך הוא סביב '),
+              TextSpan(
+                  text: context.l10n.pick(
+                      he: 'הקצב הטוב שלך הוא סביב ',
+                      en: 'Your best pace is around ')),
               TextSpan(
                   text: _hourLabel(bestHour.slot),
-                  style: TextStyle(
-                      color: t.accent, fontWeight: FontWeight.bold)),
+                  style:
+                      TextStyle(color: t.accent, fontWeight: FontWeight.bold)),
               TextSpan(
-                  text: ' — ${bestHour.linesPerHour.toStringAsFixed(1)} '
-                      'שורות לשעה'),
+                  text: context.l10n.pick(
+                      he: ' — ${bestHour.linesPerHour.toStringAsFixed(1)} שורות לשעה',
+                      en: ' — ${bestHour.linesPerHour.toStringAsFixed(1)} lines per hour')),
               if (bestDay != null) ...[
-                const TextSpan(text: ', והיום החזק שלך הוא '),
                 TextSpan(
-                    text: _dayLabel(bestDay.slot),
+                    text: context.l10n.pick(
+                        he: ', והיום החזק שלך הוא ',
+                        en: ', and your strongest day is ')),
+                TextSpan(
+                    text: _dayLabel(context, bestDay.slot),
                     style: TextStyle(
                         color: t.accent, fontWeight: FontWeight.bold)),
               ],
@@ -151,9 +176,9 @@ class RhythmPanel extends StatelessWidget {
           _hourBars(context, hours),
           const SizedBox(height: 8),
           Text(
-            'המידה היא שורות לשעה — כמה נכתב חלקי הזמן שנמדד. '
-            'שעות שנמדדו פחות מ-${WritingRhythm.minSittings} פעמים מוצגות בהיר, '
-            'כי ישיבה אחת טובה אינה עובדה על אותה שעה.',
+            context.l10n.pick(
+                he: 'המידה היא שורות לשעה — כמה נכתב חלקי הזמן שנמדד. שעות שנמדדו פחות מ-${WritingRhythm.minSittings} פעמים מוצגות בהיר, כי ישיבה אחת טובה אינה עובדה על אותה שעה.',
+                en: 'The measure is lines per hour: output divided by measured time. Hours measured fewer than ${WritingRhythm.minSittings} times appear faint because one good session is not yet reliable evidence about that hour.'),
             style: TextStyle(
                 fontFamily: t.labelFamily,
                 fontSize: 11,

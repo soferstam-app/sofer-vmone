@@ -63,7 +63,10 @@ void main() {
     });
 
     test('an inverted range is empty rather than negative', () {
-      expect(CalendarDays.inclusiveLength(DateTime(2026, 5, 2), DateTime(2026, 5, 1)), 0);
+      expect(
+          CalendarDays.inclusiveLength(
+              DateTime(2026, 5, 2), DateTime(2026, 5, 1)),
+          0);
     });
 
     test('day numbers rise by exactly one a day', () {
@@ -95,7 +98,8 @@ void main() {
     test('the same slot comes round again a week later', () {
       for (final d in everyDay) {
         expect(
-          ReminderSchedule.idFor(CalendarDays.addDays(d, ReminderSchedule.days)),
+          ReminderSchedule.idFor(
+              CalendarDays.addDays(d, ReminderSchedule.days)),
           ReminderSchedule.idFor(d),
         );
       }
@@ -110,7 +114,9 @@ void main() {
     test('the hour asked for is the hour scheduled, every day of the week', () {
       for (final from in everyDay) {
         final moments = ReminderSchedule.upcoming(
-            from: DateTime(from.year, from.month, from.day, 20), hour: 8, minute: 0);
+            from: DateTime(from.year, from.month, from.day, 20),
+            hour: 8,
+            minute: 0);
         expect(moments, hasLength(ReminderSchedule.days));
         for (final m in moments) {
           expect(m.hour, 8, reason: 'from $from produced $m');
@@ -142,7 +148,8 @@ void main() {
       const rule = DayStart(boundary: DayBoundary.fixedHour, hour: 2);
       for (final d in everyDay) {
         final moment = DateTime(d.year, d.month, d.day, 9);
-        expect(DateLogic.effectiveDate(moment, rule), CalendarDays.midnight(moment));
+        expect(DateLogic.effectiveDate(moment, rule),
+            CalendarDays.midnight(moment));
       }
     });
 
@@ -165,7 +172,8 @@ void main() {
           endHour: 1,
           endMinute: 0,
         );
-        expect(range.end.hour, 1, reason: 'on $d the sitting ended at ${range.end}');
+        expect(range.end.hour, 1,
+            reason: 'on $d the sitting ended at ${range.end}');
         expect(CalendarDays.between(range.start, range.end), 1);
         expect(range.end.isAfter(range.start), isTrue);
       }
@@ -178,7 +186,8 @@ void main() {
       for (final d in everyDay) {
         // Not the working total — the range walked. A week that came out six
         // days long dropped whichever day fell off the end.
-        final off = HebrewWorkCalendar.daysOff(d, CalendarDays.addDays(d, 6), rules);
+        final off =
+            HebrewWorkCalendar.daysOff(d, CalendarDays.addDays(d, 6), rules);
         final work = HebrewWorkCalendar.countWorkDays(
             d, CalendarDays.addDays(d, 6), rules);
         // Every one of the seven is either counted as work or listed as off.
@@ -193,7 +202,8 @@ void main() {
       for (final d in everyDay) {
         final work = HebrewWorkCalendar.countWorkDays(d, d, rules);
         final off = HebrewWorkCalendar.daysOff(d, d, rules);
-        expect(work > 0 || off.isNotEmpty, isTrue, reason: '$d counted as nothing');
+        expect(work > 0 || off.isNotEmpty, isTrue,
+            reason: '$d counted as nothing');
       }
     });
   });
@@ -272,7 +282,8 @@ void main() {
           now: anchor,
         );
         for (final day in plan.days) {
-          expect(day.hebrewDay, JewishDate.fromDateTime(day.date).getJewishDayOfMonth(),
+          expect(day.hebrewDay,
+              JewishDate.fromDateTime(day.date).getJewishDayOfMonth(),
               reason: '${day.date} was labelled ${day.hebrewDay}');
         }
       }
@@ -294,7 +305,8 @@ void main() {
       }
     });
 
-    test('today is found, and counted as today rather than as still to come', () {
+    test('today is found, and counted as today rather than as still to come',
+        () {
       // The day the writer is standing on decides what "behind" means. When the
       // dates carried an hour, nothing matched it and the plan quietly had no
       // today at all.

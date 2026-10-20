@@ -84,6 +84,33 @@ void main() {
   });
 
   group('what a day comes to', () {
+    test('day and month averages retain measured seconds', () {
+      final date = hebrew(3);
+      final start = DateTime(date.year, date.month, date.day, 9);
+      final session = WorkSession(
+        id: 'seconds',
+        projectId: 'p',
+        startTime: start,
+        endTime: start.add(const Duration(minutes: 1, seconds: 30)),
+        amount: 1,
+        startLine: 1,
+        endLine: 1,
+        description: '',
+        isManual: true,
+        linesPerPageAtEntry: 10,
+      );
+      final result = report([session]);
+      final day = result.days.firstWhere((d) => d.hebrewDay == 3);
+
+      expect(day.minutesPerLine, 1.5);
+      expect(result.minutesPerLine, 1.5);
+      final table = result.toExportTable(
+        currency: Currency.ils,
+        useGregorianDates: false,
+      );
+      expect(table.rows.any((row) => row.cells.contains('1.5')), isTrue);
+    });
+
     test('lines, time and sittings', () {
       final r = report([sitting(3, lines: 10, minutes: 60)]);
       final day = r.days.firstWhere((d) => d.hebrewDay == 3);
@@ -168,8 +195,8 @@ void main() {
 
   group('as a table', () {
     test('has a row per day and a total at the foot', () {
-      final t = report([sitting(3)]).toExportTable(
-          currency: Currency.ils, useGregorianDates: false);
+      final t = report([sitting(3)])
+          .toExportTable(currency: Currency.ils, useGregorianDates: false);
 
       expect(t.rows, hasLength(iyar.getDaysInJewishMonth() + 1));
       expect(t.rows.last.cells.first, 'סה״כ');
@@ -177,24 +204,24 @@ void main() {
     });
 
     test('names the commission and the month', () {
-      final t = report(const []).toExportTable(
-          currency: Currency.ils, useGregorianDates: false);
+      final t = report(const [])
+          .toExportTable(currency: Currency.ils, useGregorianDates: false);
       expect(t.title, contains('ספר'));
     });
 
     test('a day with no work is muted and blank, not zeroed', () {
       // A column of zeros reads as "I wrote nothing", which is a claim. A blank
       // is the absence of one.
-      final t = report([sitting(3)]).toExportTable(
-          currency: Currency.ils, useGregorianDates: false);
+      final t = report([sitting(3)])
+          .toExportTable(currency: Currency.ils, useGregorianDates: false);
       final idle = t.rows[3];
       expect(idle.muted, isTrue);
       expect(idle.cells[2], isEmpty);
     });
 
     test('says why a figure may be missing', () {
-      final t = report(const []).toExportTable(
-          currency: Currency.ils, useGregorianDates: false);
+      final t = report(const [])
+          .toExportTable(currency: Currency.ils, useGregorianDates: false);
       expect(t.note, contains('בלי זמן'));
     });
 
@@ -204,6 +231,20 @@ void main() {
           .toCsv();
       expect(csv.codeUnitAt(0), 0xFEFF);
       expect(csv, contains('דק׳ לשורה'));
+    });
+
+    test('English export is LTR and uses English headings and day digits', () {
+      final t = report([sitting(3)]).toExportTable(
+        currency: Currency.ils,
+        useGregorianDates: false,
+        english: true,
+      );
+
+      expect(t.rtl, isFalse);
+      expect(t.headings, containsAll(['Date', 'Lines', 'Min/line']));
+      expect(t.rows.firstWhere((row) => row.cells[2] == '10').cells.first,
+          startsWith('3 '));
+      expect(t.rows.last.cells.first, 'Total');
     });
   });
 
@@ -224,5 +265,48 @@ void main() {
       expect(r.totalLines, 20);
       expect(r.days.firstWhere((d) => d.hebrewDay == 3).sittings, 2);
     });
+  });
+
+  test('a tefillin report prints physical lines with comparable lines', () {
+    final tefillin = Project(
+      id: 't',
+      name: 'תפילין',
+      type: ProjectType.tefillin,
+      price: 100,
+      expenses: 0,
+      targetDaily: 1,
+      targetMonthly: 20,
+      targetUnits: 1,
+    );
+    final d = hebrew(3);
+    final start = DateTime(d.year, d.month, d.day, 9);
+    final s = WorkSession(
+      id: 'tefillin-report',
+      projectId: 't',
+      startTime: start,
+      endTime: start.add(const Duration(minutes: 30)),
+      amount: 1,
+      startLine: 1,
+      endLine: 2,
+      tefillinType: 'hand',
+      parshiya: 1,
+      pairIndex: 1,
+      description: 'קדש',
+      isManual: true,
+    );
+    final r = MonthlyReport.forMonth(
+      project: tefillin,
+      history: [s],
+      projects: [tefillin],
+      anyDayInMonth: hebrew(1),
+      dayStart: dayStart,
+    );
+    final table = r.toExportTable(
+      currency: Currency.ils,
+      useGregorianDates: false,
+    );
+    final row = table.rows.firstWhere((row) => row.cells[2].startsWith('2'));
+    expect(row.cells[2], contains('('));
+    expect(row.cells[2], isNot(contains('שורות')));
   });
 }

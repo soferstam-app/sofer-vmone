@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../hebrew_utils.dart';
+import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
 
 /// Asking the writer before doing something they cannot take back.
@@ -21,7 +22,7 @@ Future<bool> confirmAction(
   required String title,
   required String message,
   required String confirmLabel,
-  String cancelLabel = 'ביטול',
+  String? cancelLabel,
   bool danger = false,
 }) async =>
     await showDialog<bool>(
@@ -32,7 +33,8 @@ Future<bool> confirmAction(
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text(cancelLabel),
+            child: Text(
+                cancelLabel ?? context.l10n.pick(he: 'ביטול', en: 'Cancel')),
           ),
           // Destructive answers are set apart and coloured. The writer should
           // not have to read the label twice to know which button undoes work.
@@ -68,15 +70,22 @@ Future<bool> confirmOverlap(
   List<int> pages = const [],
   bool range = false,
 }) {
-  final where = switch (pages.length) {
-    0 => range ? 'בטווח העמודים' : 'בעמוד זה',
-    1 => 'בעמוד ${formatHebrewNumber(pages.first)}',
-    _ => 'בעמודים ${pages.map(formatHebrewNumber).join(', ')}',
+  final english = context.l10n.isEnglish;
+  final where = switch ((english, pages.length)) {
+    (true, 0) => range ? 'in this page range' : 'on this page',
+    (true, 1) => 'on page ${formatHebrewNumber(pages.first)}',
+    (true, _) => 'on pages ${pages.map(formatHebrewNumber).join(', ')}',
+    (false, 0) => range ? 'בטווח העמודים' : 'בעמוד זה',
+    (false, 1) => 'בעמוד ${formatHebrewNumber(pages.first)}',
+    (false, _) => 'בעמודים ${pages.map(formatHebrewNumber).join(', ')}',
   };
   return confirmAction(
     context,
-    title: 'שים לב: כפילות',
-    message: 'חלק מהשורות $where כבר נכתבו בעבר. לשמור בכל זאת?',
-    confirmLabel: 'שמור בכל זאת',
+    title: context.l10n.pick(he: 'שים לב: כפילות', en: 'Possible duplicate'),
+    message: context.l10n.pick(
+      he: 'חלק מהשורות $where כבר נכתבו בעבר. לשמור בכל זאת?',
+      en: 'Some lines $where were already recorded. Save anyway?',
+    ),
+    confirmLabel: context.l10n.pick(he: 'שמור בכל זאת', en: 'Save anyway'),
   );
 }

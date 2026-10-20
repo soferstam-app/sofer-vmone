@@ -3,11 +3,12 @@
 ///
 /// ## Why everything here runs on the Hebrew calendar
 ///
-/// Every day a sofer does not write is defined by the Hebrew calendar: Shabbat,
+/// Recurring days a sofer does not write follow the Hebrew calendar: Shabbat,
 /// Yom Tov, Chol HaMoed, the fasts, the days between Yom Kippur and Sukkot, the
 /// week before Pesach. None of them has a fixed Gregorian date. Asking "is
-/// 12 April a working day" is not a question that can be answered; asking "is
-/// 14 Nisan a working day" always can.
+/// 12 April a working day" requires its year; asking "is 14 Nisan a working
+/// day" identifies the recurring rule. Personal exceptions use an exact civil
+/// date and year, whether chosen using a Hebrew or Gregorian date picker.
 ///
 /// ## How the conversion is kept to a minimum
 ///
@@ -40,6 +41,7 @@ library;
 import 'package:kosher_dart/kosher_dart.dart';
 
 import 'calendar_days.dart';
+import 'json_compat.dart';
 
 /// How much of a day is spent writing.
 enum DayWeight {
@@ -60,7 +62,8 @@ enum DayWeight {
       };
 
   static DayWeight fromName(String? name, DayWeight fallback) =>
-      DayWeight.values.firstWhere((w) => w.name == name, orElse: () => fallback);
+      DayWeight.values
+          .firstWhere((w) => w.name == name, orElse: () => fallback);
 }
 
 /// Why a day is not a full working day.
@@ -85,7 +88,8 @@ enum NonWorkReason {
   lagBaomer,
   isruChag,
   beforePesach,
-  betweenYomKippurAndSukkot;
+  betweenYomKippurAndSukkot,
+  personal;
 
   String get label => switch (this) {
         NonWorkReason.shabbat => 'שבת',
@@ -106,10 +110,31 @@ enum NonWorkReason {
         NonWorkReason.isruChag => 'איסרו חג',
         NonWorkReason.beforePesach => 'לפני פסח',
         NonWorkReason.betweenYomKippurAndSukkot => 'בין כיפור לסוכות',
+        NonWorkReason.personal => 'יום חופש אישי',
       };
 
   /// Whether the writer can change how this day is counted.
   bool get isConfigurable => index >= NonWorkReason.friday.index;
+}
+
+/// A one-off reduction in availability, stored by exact civil date and year.
+class WorkDayException {
+  final DayWeight weight;
+  final String note;
+
+  const WorkDayException({required this.weight, this.note = ''});
+
+  Map<String, dynamic> toJson() => {'weight': weight.name, 'note': note};
+
+  static WorkDayException? fromJson(dynamic value) {
+    if (value is! Map || !const ['none', 'half'].contains(value['weight'])) {
+      return null;
+    }
+    return WorkDayException(
+      weight: value['weight'] == 'half' ? DayWeight.half : DayWeight.none,
+      note: value['note'] is String ? (value['note'] as String).trim() : '',
+    );
+  }
 }
 
 /// Which days the writer treats as time off.
@@ -122,7 +147,7 @@ enum NonWorkReason {
 class WorkCalendarRules {
   /// Bumped whenever the stored shape changes. [fromJson] migrates anything
   /// older, so a settings file written by any past version still opens.
-  static const int currentSchemaVersion = 2;
+  static const int currentSchemaVersion = 3;
 
   /// Israel keeps one day of Yom Tov, the diaspora two. This changes the
   /// festival days themselves, where Chol HaMoed begins, and when Isru Chag
@@ -158,6 +183,17 @@ class WorkCalendarRules {
   /// 11–14 Tishrei. The fourteenth is Erev Sukkot and is off regardless.
   final DayWeight betweenYomKippurAndSukkot;
 
+  /// YYYY-MM-DD keys have no time zone or time-of-day boundary. Hebrew dates
+  /// are converted once by the editor; the selected year is never recurrent.
+  final Map<String, WorkDayException> exceptions;
+
+  static String dateKey(DateTime date) =>
+      '${date.year.toString().padLeft(4, '0')}-'
+      '${date.month.toString().padLeft(2, '0')}-'
+      '${date.day.toString().padLeft(2, '0')}';
+
+  WorkDayException? exceptionOn(DateTime date) => exceptions[dateKey(date)];
+
   const WorkCalendarRules({
     this.inIsrael = true,
     this.friday = DayWeight.none,
@@ -172,6 +208,7 @@ class WorkCalendarRules {
     this.daysBeforePesach = 7,
     this.beforePesach = DayWeight.none,
     this.betweenYomKippurAndSukkot = DayWeight.none,
+    this.exceptions = const {},
   });
 
   /// The defaults, named for readability at call sites.
@@ -199,6 +236,7 @@ class WorkCalendarRules {
     int? daysBeforePesach,
     DayWeight? beforePesach,
     DayWeight? betweenYomKippurAndSukkot,
+    Map<String, WorkDayException>? exceptions,
   }) =>
       WorkCalendarRules(
         inIsrael: inIsrael ?? this.inIsrael,
@@ -215,6 +253,7 @@ class WorkCalendarRules {
         beforePesach: beforePesach ?? this.beforePesach,
         betweenYomKippurAndSukkot:
             betweenYomKippurAndSukkot ?? this.betweenYomKippurAndSukkot,
+        exceptions: exceptions ?? this.exceptions,
       );
 
   Map<String, dynamic> toJson() => {
@@ -232,6 +271,10 @@ class WorkCalendarRules {
         'daysBeforePesach': daysBeforePesach,
         'beforePesach': beforePesach.name,
         'betweenYomKippurAndSukkot': betweenYomKippurAndSukkot.name,
+        'exceptions': {
+          for (final entry in exceptions.entries)
+            entry.key: entry.value.toJson(),
+        },
       };
 
   /// Reads a stored settings blob of any version this app has ever written.
@@ -249,7 +292,7 @@ class WorkCalendarRules {
     if (version < 2) return _fromV1(json);
 
     DayWeight weight(String key, [DayWeight fallback = DayWeight.none]) =>
-        DayWeight.fromName(json[key] as String?, fallback);
+        DayWeight.fromName(JsonCompat.string(json[key]), fallback);
 
     /// Friday and motzei Shabbat are never full days; a stored `full` — from a
     /// hand-edited file or an older shape — is clamped rather than honoured.
@@ -273,7 +316,25 @@ class WorkCalendarRules {
           json['daysBeforePesach'] is int ? json['daysBeforePesach'] as int : 7,
       beforePesach: weight('beforePesach'),
       betweenYomKippurAndSukkot: weight('betweenYomKippurAndSukkot'),
+      exceptions: _readExceptions(json['exceptions']),
     );
+  }
+
+  static Map<String, WorkDayException> _readExceptions(dynamic raw) {
+    final result = <String, WorkDayException>{};
+    if (raw is! Map) return result;
+    for (final entry in raw.entries) {
+      final key = entry.key;
+      if (key is! String || !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(key)) {
+        continue;
+      }
+      final date = DateTime.tryParse(key);
+      final exception = WorkDayException.fromJson(entry.value);
+      if (date != null && dateKey(date) == key && exception != null) {
+        result[key] = exception;
+      }
+    }
+    return result;
   }
 
   /// Migration from the first stored shape.
@@ -290,8 +351,7 @@ class WorkCalendarRules {
 
     // Version 1 offered a full Friday; it is no longer an option, so it lands
     // on "not a working day" — the default nobody had to choose.
-    final v1Friday =
-        json['friday'] == 'half' ? DayWeight.half : DayWeight.none;
+    final v1Friday = json['friday'] == 'half' ? DayWeight.half : DayWeight.none;
     final oldMotzei = json['motzeiShabbatHalfDay'] == true;
     final fasts = fromSkip('skipFasts');
 
@@ -391,20 +451,40 @@ class HebrewWorkCalendar {
     int jewishYear,
     int jewishMonth,
     int jewishDayOfMonth,
-    WorkCalendarRules rules,
-  ) =>
+    WorkCalendarRules rules, {
+    double? override,
+  }) =>
       classify(
         JewishCalendar.initDate(jewishYear, jewishMonth, jewishDayOfMonth,
             inIsrael: rules.inIsrael),
         rules,
+        override: override,
       );
 
   /// Classifies the day [jc] is currently positioned on.
   ///
-  /// The days that are never writing days are settled first and short-circuit
-  /// everything else. Only then do the configurable categories apply, and where
-  /// several of them cover the same day the most restrictive one decides.
-  static WorkDay classify(JewishCalendar jc, WorkCalendarRules rules) {
+  /// Calendar rules settle fixed closures before configurable categories.
+  /// An explicit per-project override replaces that calendar availability,
+  /// as in the production planner. Personal exceptions then cap either result.
+  static WorkDay classify(JewishCalendar jc, WorkCalendarRules rules,
+      {double? override}) {
+    final calendar = _classifyCalendar(jc, rules);
+    final value = override ?? calendar.value;
+    var day = WorkDay(
+        value,
+        override == null || value == calendar.value
+            ? calendar.reason
+            : value > 0
+                ? null
+                : calendar.reason ?? NonWorkReason.personal);
+    final exception = rules.exceptionOn(jc.getGregorianCalendar());
+    if (exception != null && exception.weight.value < day.value) {
+      day = WorkDay(exception.weight.value, NonWorkReason.personal);
+    }
+    return day;
+  }
+
+  static WorkDay _classifyCalendar(JewishCalendar jc, WorkCalendarRules rules) {
     final fixed = fixedReason(jc, rules.inIsrael);
     if (fixed != null) return WorkDay(0, fixed);
 
@@ -515,8 +595,9 @@ class HebrewWorkCalendar {
   static double countWorkDays(
     DateTime from,
     DateTime to,
-    WorkCalendarRules rules,
-  ) {
+    WorkCalendarRules rules, {
+    Map<DateTime, double> overrides = const {},
+  }) {
     final start = DateTime(from.year, from.month, from.day);
     final end = DateTime(to.year, to.month, to.day);
     if (end.isBefore(start)) return 0;
@@ -529,7 +610,9 @@ class HebrewWorkCalendar {
 
     var total = 0.0;
     for (var i = 0; i < days; i++) {
-      total += classify(jc, rules).value;
+      total += classify(jc, rules,
+              override: overrides[CalendarDays.addDays(start, i)])
+          .value;
       if (i < days - 1) jc.forward();
     }
     return total;
@@ -553,6 +636,7 @@ class HebrewWorkCalendar {
     required DateTime from,
     required double workDaysNeeded,
     required WorkCalendarRules rules,
+    Map<DateTime, double> overrides = const {},
   }) {
     if (workDaysNeeded <= 0 ||
         workDaysNeeded.isNaN ||
@@ -565,7 +649,9 @@ class HebrewWorkCalendar {
 
     var done = 0.0;
     for (var elapsed = 0; elapsed < _maxDays; elapsed++) {
-      final today = classify(jc, rules);
+      final today = classify(jc, rules,
+          override: overrides[CalendarDays.addDays(
+              DateTime(from.year, from.month, from.day), elapsed)]);
       if (today.isOff) {
         final reason = today.reason;
         if (reason != null) skipped[reason] = (skipped[reason] ?? 0) + 1;

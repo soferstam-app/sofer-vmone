@@ -57,12 +57,14 @@ void main() {
 
   group('which records a rate may use', () {
     test('one without time is refused', () {
-      expect(MeasuredWork.countsForTime(sitting(lines: 10, timeRecorded: false)),
+      expect(
+          MeasuredWork.countsForTime(sitting(lines: 10, timeRecorded: false)),
           isFalse);
     });
 
     test('so is one whose length is zero', () {
-      expect(MeasuredWork.countsForTime(sitting(lines: 10, minutes: 0)), isFalse);
+      expect(
+          MeasuredWork.countsForTime(sitting(lines: 10, minutes: 0)), isFalse);
     });
 
     test('a measured one is not', () {

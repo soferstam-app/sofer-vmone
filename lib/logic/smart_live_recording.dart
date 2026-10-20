@@ -1,6 +1,7 @@
 import '../models.dart';
 import 'date_logic.dart';
 import 'production_calculator.dart';
+import 'tefillin_text.dart';
 
 /// Folds smart-mode checkpoints into the records of the sitting under way.
 ///
@@ -36,7 +37,13 @@ class SmartLiveRecording {
 
   static bool _canExtend(WorkSession existing, WorkSession next) {
     if (existing.projectId != next.projectId) return false;
+    if (existing.isPartialLine || next.isPartialLine) return false;
     if (!_sameWorkingDay(existing, next)) return false;
+    if (TefillinWordRange.isWordRecord(existing) ||
+        TefillinWordRange.isWordRecord(next)) {
+      // Word checkpoints keep their exact contribution and audit boundary.
+      return false;
+    }
 
     if (existing.mezuzaIndex != null || next.mezuzaIndex != null) {
       return existing.mezuzaIndex != null &&

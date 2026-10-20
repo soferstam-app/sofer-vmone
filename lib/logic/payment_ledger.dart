@@ -46,8 +46,8 @@ class PaymentLedger {
 
     // Backlog entries record work done before the app existed and were never
     // billed through it, so they are not part of what this commission owes.
-    final billable = history.where((s) =>
-        s.projectId == project.id && !s.isDeleted && !s.backlogOnly);
+    final billable = history.where(
+        (s) => s.projectId == project.id && !s.isDeleted && !s.backlogOnly);
     final units = ProfitCalculator.billableUnits(project, billable);
 
     return PaymentLedger._(

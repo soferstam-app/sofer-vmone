@@ -138,8 +138,11 @@ void main() {
   group('two devices', () {
     test('a record only one side has is kept', () {
       final out = MergeService.mergeBackup(
-        localProjects: const [], localHistory: const [], localExpenses: const [],
-        incomingProjects: const [], incomingHistory: const [],
+        localProjects: const [],
+        localHistory: const [],
+        localExpenses: const [],
+        incomingProjects: const [],
+        incomingHistory: const [],
         incomingExpenses: const [],
         localProofreads: [sample()],
         incomingProofreads: [
@@ -152,8 +155,11 @@ void main() {
     test('the later edit wins the payload', () {
       final newer = sample().copyWith(proofreader: 'ר׳ שמעון');
       final out = MergeService.mergeBackup(
-        localProjects: const [], localHistory: const [], localExpenses: const [],
-        incomingProjects: const [], incomingHistory: const [],
+        localProjects: const [],
+        localHistory: const [],
+        localExpenses: const [],
+        incomingProjects: const [],
+        incomingHistory: const [],
         incomingExpenses: const [],
         localProofreads: [sample()],
         incomingProofreads: [newer],
@@ -166,8 +172,11 @@ void main() {
       final editedElsewhere =
           sample().copyWith(notes: 'נערך במכשיר שלא סונכרן');
       final out = MergeService.mergeBackup(
-        localProjects: const [], localHistory: const [], localExpenses: const [],
-        incomingProjects: const [], incomingHistory: const [],
+        localProjects: const [],
+        localHistory: const [],
+        localExpenses: const [],
+        incomingProjects: const [],
+        incomingHistory: const [],
         incomingExpenses: const [],
         localProofreads: [deleted],
         incomingProofreads: [editedElsewhere],

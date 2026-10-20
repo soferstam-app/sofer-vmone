@@ -88,6 +88,61 @@ final class SmartRecorded extends SmartOutcome {
 class SmartSessionBuilder {
   const SmartSessionBuilder._();
 
+  /// Finds the first line at or after [from] that has not already been
+  /// recorded on a paged project.
+  ///
+  /// Smart mode normally advances one line at a time.  A writer can,
+  /// however, finish page 7 while page 8 was entered earlier by hand.  In
+  /// that case the next position must not point at page 8 line 1 and wait for
+  /// an overlap dialog on the next click; complete pages are skipped and a
+  /// partially filled page resumes at its first gap.  The same rule is used
+  /// for sefer and megillah, whose `amount` field is the page number.
+  static SmartPosition nextWritablePosition({
+    required Project project,
+    required SmartPosition from,
+    required Iterable<WorkSession> history,
+  }) {
+    if (!project.type.isPaged) return from;
+
+    final linesPerPage = ProductionCalculator.linesPerPageOf(project);
+    final maxPages = project.totalPages ?? 245;
+    var page = from.page < 1 ? 1 : from.page;
+    var firstLine = from.line.clamp(1, linesPerPage).toInt();
+
+    while (page <= maxPages) {
+      for (var line = firstLine; line <= linesPerPage; line++) {
+        var written = false;
+        for (final session in history) {
+          if (session.isDeleted ||
+              !session.countsAsOutput ||
+              session.projectId != project.id) {
+            continue;
+          }
+          if (session.amount != page) continue;
+
+          // Older whole-page entries have no line range.  Treat them as a
+          // complete page so they are not silently written a second time.
+          final start = session.startLine <= 0 ? 1 : session.startLine;
+          final end = session.endLine <= 0
+              ? linesPerPage
+              : session.endLine.clamp(1, linesPerPage).toInt();
+          if (line >= start && line <= end) {
+            written = true;
+            break;
+          }
+        }
+        if (!written) return SmartPosition(page, line);
+      }
+      page++;
+      firstLine = 1;
+    }
+
+    // A completed project has no writable position.  Keep the requested
+    // destination so the existing completion/validation path can report it;
+    // importantly, do not invent a page beyond the project's geometry.
+    return from;
+  }
+
   static SmartOutcome build({
     required Project project,
     required SmartPosition from,

@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.5.0+5
+version: 0.7.0+8
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -31,13 +31,14 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # The following adds the Cupertino Icons font to your application.
-  # Use with the CupertinoIcons class for iOS style icons.
-  cupertino_icons: ^1.0.8
   flutter_localizations:
     sdk: flutter
   shared_preferences: ^2.2.2
   path_provider: ^2.1.5
+  # The updater verifies every release asset before it is allowed to run, and
+  # stages the portable Windows ZIP outside the live installation directory.
+  archive: ^3.6.1
+  crypto: ^3.0.7
   kosher_dart:
     path: ./packages/kosher_dart
   url_launcher: ^6.2.5
@@ -54,10 +55,14 @@ dependencies:
   # Printing and PDF for the production table. `printing` brings its own copy
   # of `pdf`, and gives preview, print and save-as-PDF through one mechanism.
   pdf: ^3.11.0
-  printing: ^5.13.0
+  # Local upstream 5.14.3 with a verified, pinned Windows PDFium download.
+  printing:
+    path: ./packages/printing
   excel: ^4.0.6
 
 dev_dependencies:
+  # Tests exercise platform acknowledgements and cache reload after a failed write.
+  shared_preferences_platform_interface: 2.4.1
   flutter_test:
     sdk: flutter
 
@@ -89,14 +94,28 @@ flutter:
     - family: Heebo
       fonts:
         - asset: assets/fonts/Heebo-var.ttf
+    - family: StamBeitYosef
+      fonts:
+        - asset: assets/fonts/stam/beit-yosef.otf
+    - family: StamAri
+      fonts:
+        - asset: assets/fonts/stam/ari.otf
+    - family: StamSephardi
+      fonts:
+        - asset: assets/fonts/stam/StamVaalish-Regular.ttf
+    - family: StamChabad
+      fonts:
+        - asset: assets/fonts/stam/chabad-book-alphabet.otf
 
   # The OFL requires the licence to travel with the fonts, so it is bundled
   # rather than merely sitting in the repository — a licence that is not in the
   # APK has not accompanied anything. main.dart registers both with
   # LicenseRegistry, which is what puts them in front of a user.
   assets:
+    - assets/fonts/stam/README.md
     - assets/fonts/OFL-Heebo.txt
     - assets/fonts/OFL-FrankRuhlLibre.txt
+    - docs/help/FAQ.he.json
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

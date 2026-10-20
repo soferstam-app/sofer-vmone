@@ -29,7 +29,7 @@ void main() {
   );
 
   Payment paid(double amount, DateTime on,
-          {Currency currency = Currency.ils, bool deleted = false}) {
+      {Currency currency = Currency.ils, bool deleted = false}) {
     final p = Payment(
       id: 'y${amount.toInt()}${on.month}',
       projectId: 'p1',
@@ -80,11 +80,18 @@ void main() {
 
     test('two devices keep both, and the deletion stands', () {
       final out = MergeService.mergeBackup(
-        localProjects: const [], localHistory: const [], localExpenses: const [],
-        incomingProjects: const [], incomingHistory: const [],
+        localProjects: const [],
+        localHistory: const [],
+        localExpenses: const [],
+        incomingProjects: const [],
+        incomingHistory: const [],
         incomingExpenses: const [],
-        localPayments: [paid(500, DateTime(2026, 5, 3)).copyWith(isDeleted: true)],
-        incomingPayments: [paid(500, DateTime(2026, 5, 3)).copyWith(notes: 'x')],
+        localPayments: [
+          paid(500, DateTime(2026, 5, 3)).copyWith(isDeleted: true)
+        ],
+        incomingPayments: [
+          paid(500, DateTime(2026, 5, 3)).copyWith(notes: 'x')
+        ],
       );
       expect(out.payments.single.isDeleted, isTrue);
     });

@@ -59,12 +59,16 @@ void main() {
   });
 
   group('what the writer is told', () {
+    String digest(String character) =>
+        List<String>.filled(64, character).join();
+
     Map<String, dynamic> release({
       String tag = '0.5.0',
       bool draft = false,
       bool prerelease = false,
       String url = 'https://example.invalid/releases/tag/0.5.0',
       String? published = '2026-08-01T10:00:00Z',
+      List<Map<String, Object?>>? assets,
     }) =>
         {
           'tag_name': tag,
@@ -72,10 +76,28 @@ void main() {
           'prerelease': prerelease,
           'html_url': url,
           'published_at': published,
+          'assets': assets ??
+              [
+                {
+                  'name': 'sofer-vmone-0.5.0-windows.zip',
+                  'size': 12345,
+                  'digest': 'sha256:${digest('a')}',
+                  'browser_download_url':
+                      'https://example.invalid/sofer-vmone-0.5.0-windows.zip',
+                },
+              ],
         };
 
-    UpdateStatus read(Map<String, dynamic> json, String running) =>
-        readLatestRelease(json: json, running: Version.tryParse(running)!);
+    UpdateStatus read(
+      Map<String, dynamic> json,
+      String running, {
+      UpdatePlatform platform = UpdatePlatform.windows,
+    }) =>
+        readLatestRelease(
+          json: json,
+          running: Version.tryParse(running)!,
+          platform: platform,
+        );
 
     test('a newer release, with somewhere to read about it', () {
       final status = read(release(), '0.4.0');
@@ -84,6 +106,9 @@ void main() {
       expect(available.version, const Version(0, 5, 0));
       expect(available.pageUrl, contains('0.5.0'));
       expect(available.publishedAt, DateTime.utc(2026, 8, 1, 10));
+      expect(available.asset.name, endsWith('-windows.zip'));
+      expect(available.asset.size, 12345);
+      expect(available.asset.sha256Hex, digest('a'));
     });
 
     test('the same version means up to date', () {
@@ -126,6 +151,73 @@ void main() {
           read(release(published: 'not a date'), '0.4.0') as UpdateAvailable;
       expect(status.publishedAt, isNull);
       expect(status.version, const Version(0, 5, 0));
+    });
+
+    test('Android receives the APK rather than the Windows package', () {
+      final json = release(assets: [
+        {
+          'name': 'sofer-vmone-0.5.0-windows.zip',
+          'size': 100,
+          'digest': 'sha256:${digest('b')}',
+          'browser_download_url': 'https://example.invalid/windows.zip',
+        },
+        {
+          'name': 'sofer-vmone-0.5.0-android.apk',
+          'size': 200,
+          'digest': 'sha256:${digest('c')}',
+          'browser_download_url': 'https://example.invalid/android.apk',
+        },
+      ]);
+      final status = read(
+        json,
+        '0.4.0',
+        platform: UpdatePlatform.android,
+      ) as UpdateAvailable;
+      expect(status.asset.name, endsWith('-android.apk'));
+      expect(status.asset.size, 200);
+      expect(status.asset.sha256Hex, digest('c'));
+    });
+
+    test('a release without this platform package is not installable', () {
+      final status = read(
+        release(assets: const []),
+        '0.4.0',
+        platform: UpdatePlatform.android,
+      );
+      expect(status, isA<UpdateCheckFailed>());
+      expect((status as UpdateCheckFailed).reason, contains('Android'));
+    });
+
+    test('an artifact without a valid digest is refused', () {
+      final status = read(
+        release(assets: [
+          {
+            'name': 'sofer-vmone-0.5.0-windows.zip',
+            'size': 123,
+            'digest': 'sha256:not-a-digest',
+            'browser_download_url': 'https://example.invalid/windows.zip',
+          },
+        ]),
+        '0.4.0',
+      );
+      expect(status, isA<UpdateCheckFailed>());
+      expect((status as UpdateCheckFailed).reason, contains('SHA-256'));
+    });
+
+    test('an insecure artifact URL is refused', () {
+      final status = read(
+        release(assets: [
+          {
+            'name': 'sofer-vmone-0.5.0-windows.zip',
+            'size': 123,
+            'digest': 'sha256:${digest('d')}',
+            'browser_download_url': 'http://example.invalid/windows.zip',
+          },
+        ]),
+        '0.4.0',
+      );
+      expect(status, isA<UpdateCheckFailed>());
+      expect((status as UpdateCheckFailed).reason, contains('מאובטח'));
     });
   });
 }

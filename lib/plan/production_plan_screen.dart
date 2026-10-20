@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 
@@ -16,6 +18,7 @@ import 'package:printing/printing.dart';
 import '../logic/plan_table.dart';
 import '../widgets/feedback.dart';
 import 'plan_export.dart';
+import '../l10n/app_localizations.dart';
 
 /// The month as a calendar, saying which page each day asks for.
 ///
@@ -35,7 +38,7 @@ class ProductionPlanScreen extends StatefulWidget {
 
   /// Told when a day is overruled, so the change reaches the rest of the app
   /// rather than living only on this screen.
-  final void Function(Project updated)? onProjectUpdated;
+  final FutureOr<void> Function(Project updated)? onProjectUpdated;
 
   const ProductionPlanScreen({
     super.key,
@@ -129,9 +132,13 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
 
   /// What the stretch is called at the top of the screen.
   String _periodLabel(ProductionPlan plan) {
-    if (!_weekly) return formatDisplayDateMonth(_anchor, false);
-    return 'שבוע: ${formatDisplayDate(plan.from, false)} – '
-        '${formatDisplayDate(plan.to, false)}';
+    if (!_weekly) {
+      return formatDisplayDateMonth(_anchor, false,
+          english: context.l10n.isEnglish);
+    }
+    return context.l10n.pick(
+        he: 'שבוע: ${formatDisplayDate(plan.from, false)} – ${formatDisplayDate(plan.to, false)}',
+        en: 'Week: ${formatDisplayDate(plan.from, false, english: true)} – ${formatDisplayDate(plan.to, false, english: true)}');
   }
 
   /// The plan the screen is showing. The grid and the export buttons go
@@ -161,6 +168,7 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
         plan: plan,
         periodLabel: _periodLabel(plan),
         useGregorianDates: _useGregorianDates,
+        english: context.l10n.isEnglish,
       );
 
   /// Preview, print, or save as PDF — all three are one dialog on every
@@ -168,13 +176,18 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
   Future<void> _print(Project project, ProductionPlan plan) async {
     final table = _table(project, plan);
     try {
-      final out = table.toExportTable();
+      final out = table.toExportTable(english: context.l10n.isEnglish);
       await Printing.layoutPdf(
         name: PlanExport.fileName(out, 'pdf'),
         onLayout: (_) => PlanExport.toPdf(out),
       );
     } catch (e) {
-      if (mounted) showAppError(context, 'ההדפסה נכשלה: $e');
+      if (mounted) {
+        showAppError(
+            context,
+            context.l10n
+                .pick(he: 'ההדפסה נכשלה: $e', en: 'Printing failed: $e'));
+      }
     }
   }
 
@@ -183,11 +196,12 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
   Future<void> _exportXlsx(Project project, ProductionPlan plan) async {
     final table = _table(project, plan);
     try {
-      final out = table.toExportTable();
+      final out = table.toExportTable(english: context.l10n.isEnglish);
       final bytes = await PlanExport.toXlsx(out);
       if (!mounted) return;
       final path = await FilePicker.platform.saveFile(
-        dialogTitle: 'שמירת טבלת הספקים',
+        dialogTitle:
+            context.l10n.pick(he: 'שמירת טבלת הספקים', en: 'Save output plan'),
         fileName: PlanExport.fileName(out, 'xlsx'),
         bytes: bytes,
       );
@@ -198,9 +212,15 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
       if (!Platform.isAndroid && !Platform.isIOS) {
         await File(path).writeAsBytes(bytes, flush: true);
       }
-      if (mounted) showAppSuccess(context, 'נשמר: $path');
+      if (mounted) {
+        showAppSuccess(
+            context, context.l10n.pick(he: 'נשמר: $path', en: 'Saved: $path'));
+      }
     } catch (e) {
-      if (mounted) showAppError(context, 'הייצוא נכשל: $e');
+      if (mounted) {
+        showAppError(context,
+            context.l10n.pick(he: 'הייצוא נכשל: $e', en: 'Export failed: $e'));
+      }
     }
   }
 
@@ -213,38 +233,52 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
   /// Everything after the day moves, because the plan is a cumulative line and
   /// not a fixed one. That is the whole reason it was built that way.
   Future<void> _editDay(Project project, PlannedDay day) async {
+    final personal = _rules.exceptionOn(day.date);
     final chosen = await showDialog<double>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('יום ${formatHebrewNumber(day.hebrewDay)}'),
+        title: Text(context.l10n.pick(
+            he: 'יום ${formatHebrewNumber(day.hebrewDay)}',
+            en: 'Day ${day.hebrewDay}')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'כמה אתה כותב ביום הזה? כל מה שאחריו יזוז בהתאם.',
-              style: TextStyle(fontSize: 13, height: 1.5),
+            Text(
+              context.l10n.pick(
+                  he: 'כמה אתה כותב ביום הזה? כל מה שאחריו יזוז בהתאם.',
+                  en: 'How much will you write on this day? Every later target will move accordingly.'),
+              style: const TextStyle(fontSize: 13, height: 1.5),
             ),
             const SizedBox(height: 12),
-            for (final option in const [
-              (1.0, 'יום מלא'),
-              (0.5, 'חצי יום'),
-              (0.0, 'לא כותב'),
+            if (personal != null)
+              Text(context.l10n.pick(
+                he: 'בהגדרות ימי עבודה התאריך מוגדר כ${personal.weight == DayWeight.none ? "יום חופש" : "חצי יום"}${personal.note.isEmpty ? "" : " — ${personal.note}"}. ניתן לשנות זאת שם.',
+                en: 'Workday settings limit this date to ${personal.weight == DayWeight.none ? "a day off" : "a half day"}${personal.note.isEmpty ? "" : " — ${personal.note}"}. Change that limit in settings.',
+              )),
+            for (final option in [
+              (1.0, context.l10n.pick(he: 'יום מלא', en: 'Full day')),
+              (0.5, context.l10n.pick(he: 'חצי יום', en: 'Half day')),
+              (0.0, context.l10n.pick(he: 'לא כותב', en: 'Not writing')),
             ])
               ListTile(
+                enabled: personal == null || option.$1 <= personal.weight.value,
                 contentPadding: EdgeInsets.zero,
                 title: Text(option.$2),
                 trailing: day.weight == option.$1
                     ? Icon(Icons.check, color: SoferTokens.of(ctx).accent)
                     : null,
-                onTap: () => Navigator.pop(ctx, option.$1),
+                onTap: personal != null && option.$1 > personal.weight.value
+                    ? null
+                    : () => Navigator.pop(ctx, option.$1),
               ),
             if (day.isOverridden)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: TextButton.icon(
                   icon: const Icon(Icons.undo, size: 18),
-                  label: const Text('חזור ללוח'),
+                  label: Text(context.l10n
+                      .pick(he: 'חזור ללוח', en: 'Use calendar setting')),
                   onPressed: () => Navigator.pop(ctx, -1.0),
                 ),
               ),
@@ -252,7 +286,8 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('ביטול')),
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(context.l10n.cancel)),
         ],
       ),
     );
@@ -268,7 +303,7 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
     await _storage.saveProjects([updated]);
     if (!mounted) return;
     setState(() => _project = updated);
-    widget.onProjectUpdated?.call(updated);
+    await widget.onProjectUpdated?.call(updated);
   }
 
   /// A position as a sofer says it — "עמוד יד", "מזוזה 3".
@@ -278,9 +313,13 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
     final n = units <= 0 ? 0 : units.ceil();
     if (n <= 0) return '—';
     return switch (project.type) {
-      ProjectType.sefer => 'עמוד ${formatHebrewNumber(n)}',
-      ProjectType.mezuza => 'מזוזה $n',
-      ProjectType.tefillin => 'זוג $n',
+      ProjectType.sefer =>
+        '${context.l10n.pick(he: 'עמוד', en: 'Page')} ${formatHebrewNumber(n)}',
+      ProjectType.megillah =>
+        '${context.l10n.pick(he: 'עמוד', en: 'Page')} ${formatHebrewNumber(n)}',
+      ProjectType.mezuza =>
+        '${context.l10n.pick(he: 'מזוזה', en: 'Mezuzah')} $n',
+      ProjectType.tefillin => '${context.l10n.pick(he: 'זוג', en: 'Set')} $n',
     };
   }
 
@@ -295,10 +334,14 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
         children: [
           Text(
             behind == null
-                ? 'אתה בקצב. עד סוף החודש: ${_position(project, plan.closingTarget)}.'
-                : 'אתה מפגר ב-${behind.ceil()} '
-                    '${project.type == ProjectType.sefer ? "עמודים" : "יחידות"}. '
-                    'עד הסוף: ${_position(project, plan.closingTarget)}.',
+                ? context.l10n.pick(
+                    he:
+                        'אתה בקצב. עד סוף החודש: ${_position(project, plan.closingTarget)}.',
+                    en:
+                        'You are on pace. End-of-period target: ${_position(project, plan.closingTarget)}.')
+                : context.l10n.pick(
+                    he: 'אתה מפגר ב-${behind.ceil()} ${project.type.isPaged ? "עמודים" : "יחידות"}. עד הסוף: ${_position(project, plan.closingTarget)}.',
+                    en: 'You are ${behind.ceil()} ${project.type.isPaged ? "pages" : "units"} behind. End-of-period target: ${_position(project, plan.closingTarget)}.'),
             style: TextStyle(
               fontFamily: t.labelFamily,
               fontSize: 15,
@@ -308,8 +351,9 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            'כל יום מראה לאן צריך להגיע עד סופו. הפיגור מתחלק על הימים שנותרו, '
-            'לכן יום שכבר עבר שומר על היעד שנמדד מולו.',
+            context.l10n.pick(
+                he: 'כל יום מראה לאן צריך להגיע עד סופו. הפיגור מתחלק על הימים שנותרו, לכן יום שכבר עבר שומר על היעד שנמדד מולו.',
+                en: 'Each day shows the position to reach by its end. Any shortfall is spread across the remaining days, while past days keep the target against which they were measured.'),
             style: TextStyle(
                 fontFamily: t.labelFamily,
                 fontSize: 11,
@@ -339,67 +383,74 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
     return InkWell(
       onTap: () => _editDay(project, day),
       child: Container(
-      decoration: BoxDecoration(
-        color: background,
-        border: Border.all(
-            color: day.isOverridden
-                ? t.caution
-                : (day.isToday ? t.accent : t.rule),
-            width: day.isToday || day.isOverridden ? 1.5 : 0.5),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            formatHebrewNumber(day.hebrewDay),
-            style: TextStyle(
-                fontFamily: t.numeralFamily,
-                fontSize: 12,
-                color: day.isWorkingDay ? t.ink : t.inkFaint),
-          ),
-          const SizedBox(height: 2),
-          if (!day.isWorkingDay)
+        decoration: BoxDecoration(
+          color: background,
+          border: Border.all(
+              color: day.isOverridden
+                  ? t.caution
+                  : (day.isToday ? t.accent : t.rule),
+              width: day.isToday || day.isOverridden ? 1.5 : 0.5),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
             Text(
-              day.closedReason?.label ?? '',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                  fontFamily: t.labelFamily, fontSize: 9, color: t.inkFaint),
-            )
-          else ...[
-            // The target for the day: the adjusted one where it still matters,
-            // the original where the day has already been judged.
-            Text(
-              _position(project,
-                  day.isFuture || day.isToday ? day.adjustedTarget : day.plannedTarget),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+              context.l10n.isEnglish
+                  ? '${day.hebrewDay}'
+                  : formatHebrewNumber(day.hebrewDay),
               style: TextStyle(
                   fontFamily: t.numeralFamily,
-                  fontSize: 11,
-                  color: day.isBehind ? t.danger : t.ink),
+                  fontSize: 12,
+                  color: day.isWorkingDay ? t.ink : t.inkFaint),
             ),
-            if (day.isHalfDay)
-              Text('חצי יום',
-                  style: TextStyle(
-                      fontFamily: t.labelFamily,
-                      fontSize: 8,
-                      color: t.inkFaint)),
-            if (day.actual != null && !day.isFuture)
+            const SizedBox(height: 2),
+            if (!day.isWorkingDay)
               Text(
-                'בפועל ${_position(project, day.actual!)}',
+                context.l10n.nonWorkReason(day.closedReason?.label ?? ''),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontFamily: t.labelFamily, fontSize: 9, color: t.inkFaint),
+              )
+            else ...[
+              // The target for the day: the adjusted one where it still matters,
+              // the original where the day has already been judged.
+              Text(
+                _position(
+                    project,
+                    day.isFuture || day.isToday
+                        ? day.adjustedTarget
+                        : day.plannedTarget),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                    fontFamily: t.labelFamily,
-                    fontSize: 9,
-                    color: day.isBehind ? t.danger : t.inkMuted),
+                    fontFamily: t.numeralFamily,
+                    fontSize: 11,
+                    color: day.isBehind ? t.danger : t.ink),
               ),
+              if (day.isHalfDay)
+                Text(context.l10n.pick(he: 'חצי יום', en: 'Half day'),
+                    style: TextStyle(
+                        fontFamily: t.labelFamily,
+                        fontSize: 8,
+                        color: t.inkFaint)),
+              if (day.actual != null && !day.isFuture)
+                Text(
+                  context.l10n.pick(
+                      he: 'בפועל ${_position(project, day.actual!)}',
+                      en: 'Actual ${_position(project, day.actual!)}'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontFamily: t.labelFamily,
+                      fontSize: 9,
+                      color: day.isBehind ? t.danger : t.inkMuted),
+                ),
+            ],
           ],
-        ],
-      ),
+        ),
       ),
     );
   }
@@ -407,7 +458,9 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
   /// The month as weeks, Sunday first, with the leading blanks a calendar needs.
   Widget _grid(BuildContext context, ProductionPlan plan, Project project) {
     final t = SoferTokens.of(context);
-    const names = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
+    final names = context.l10n.isEnglish
+        ? const ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+        : const ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
 
     // weekday: Monday is 1 in Dart, and the Hebrew week starts on Sunday.
     int column(DateTime d) => d.weekday % 7;
@@ -454,17 +507,19 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('לוח הספקים'),
+        title: Text(context.l10n.pick(he: 'לוח הספקים', en: 'Output plan')),
         actions: [
           if (_loaded && project != null && project.targetDaily > 0) ...[
             IconButton(
               icon: const Icon(Icons.print),
-              tooltip: 'הדפסה או שמירה כ-PDF',
+              tooltip: context.l10n
+                  .pick(he: 'הדפסה או שמירה כ-PDF', en: 'Print or save as PDF'),
               onPressed: () => _print(project, _currentPlan(project)),
             ),
             IconButton(
               icon: const Icon(Icons.table_view),
-              tooltip: 'ייצוא לאקסל',
+              tooltip:
+                  context.l10n.pick(he: 'ייצוא לאקסל', en: 'Export to Excel'),
               onPressed: () => _exportXlsx(project, _currentPlan(project)),
             ),
           ],
@@ -473,7 +528,9 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
       body: !_loaded
           ? const Center(child: CircularProgressIndicator())
           : project == null
-              ? const Center(child: Text('אין פרויקטים לתכנן'))
+              ? Center(
+                  child: Text(context.l10n.pick(
+                      he: 'אין פרויקטים לתכנן', en: 'No projects to plan')))
               : SoferPage(
                   maxWidth: 760,
                   child: ListView(
@@ -483,9 +540,10 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
                           padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
                           child: DropdownButtonFormField<Project>(
                             initialValue: project,
-                            decoration: const InputDecoration(
-                              labelText: 'פרויקט',
-                              border: OutlineInputBorder(),
+                            decoration: InputDecoration(
+                              labelText: context.l10n
+                                  .pick(he: 'פרויקט', en: 'Project'),
+                              border: const OutlineInputBorder(),
                               isDense: true,
                             ),
                             items: widget.projects
@@ -498,9 +556,15 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
                       Padding(
                         padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
                         child: SegmentedButton<bool>(
-                          segments: const [
-                            ButtonSegment(value: false, label: Text('חודש')),
-                            ButtonSegment(value: true, label: Text('שבוע')),
+                          segments: [
+                            ButtonSegment(
+                                value: false,
+                                label: Text(context.l10n
+                                    .pick(he: 'חודש', en: 'Month'))),
+                            ButtonSegment(
+                                value: true,
+                                label: Text(
+                                    context.l10n.pick(he: 'שבוע', en: 'Week'))),
                           ],
                           selected: {_weekly},
                           onSelectionChanged: (v) =>
@@ -512,8 +576,9 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
                           return Padding(
                             padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
                             child: Text(
-                              'לפרויקט הזה אין יעד יומי, ולכן אין מה לתכנן. '
-                              'אפשר להגדיר אותו במסך הפרויקטים.',
+                              context.l10n.pick(
+                                  he: 'לפרויקט הזה אין יעד יומי, ולכן אין מה לתכנן. אפשר להגדיר אותו במסך הפרויקטים.',
+                                  en: 'This project has no daily target, so there is nothing to plan. Set one on the Projects screen.'),
                               style: TextStyle(
                                   fontFamily: t.labelFamily,
                                   fontSize: 14,
@@ -527,15 +592,19 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
                         return Column(
                           children: [
                             Padding(
-                              padding:
-                                  const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                              padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
                               child: Row(
                                 children: [
                                   IconButton(
                                     onPressed: () => _shift(-1),
                                     icon: const Icon(Icons.chevron_right),
-                                    tooltip:
-                                        _weekly ? 'שבוע קודם' : 'חודש קודם',
+                                    tooltip: _weekly
+                                        ? context.l10n.pick(
+                                            he: 'שבוע קודם',
+                                            en: 'Previous week')
+                                        : context.l10n.pick(
+                                            he: 'חודש קודם',
+                                            en: 'Previous month'),
                                   ),
                                   Expanded(
                                     child: Text(
@@ -550,7 +619,11 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
                                   IconButton(
                                     onPressed: () => _shift(1),
                                     icon: const Icon(Icons.chevron_left),
-                                    tooltip: _weekly ? 'שבוע הבא' : 'חודש הבא',
+                                    tooltip: _weekly
+                                        ? context.l10n.pick(
+                                            he: 'שבוע הבא', en: 'Next week')
+                                        : context.l10n.pick(
+                                            he: 'חודש הבא', en: 'Next month'),
                                   ),
                                 ],
                               ),

@@ -33,7 +33,9 @@ void main() {
           {'three': 3}
         ],
         'futureObject_$tag': {
-          'nested': {'deeper': [true, null, 'ד']},
+          'nested': {
+            'deeper': [true, null, 'ד']
+          },
           'count': 7,
         },
       };
@@ -203,18 +205,18 @@ void main() {
       });
 
       final loaded = await storage.loadProjects();
-      expect(loaded, hasLength(1), reason: 'the unreadable one is not returned');
+      expect(loaded, hasLength(1),
+          reason: 'the unreadable one is not returned');
 
       // The app does what it always does: saves the list it is holding.
       await storage.saveProjects(loaded);
 
       final prefs = await SharedPreferences.getInstance();
-      final stored =
-          jsonDecode(prefs.getString('projects')!) as List<dynamic>;
+      final stored = jsonDecode(prefs.getString('projects')!) as List<dynamic>;
       expect(stored, hasLength(2), reason: 'the unreadable record was erased');
 
-      final carried = stored.firstWhere((e) => e['tag'] == 'kept')
-          as Map<String, dynamic>;
+      final carried =
+          stored.firstWhere((e) => e['tag'] == 'kept') as Map<String, dynamic>;
       expectPreserved(unreadable('kept'), carried, 'kept');
     });
 
@@ -228,8 +230,7 @@ void main() {
       }
 
       final prefs = await SharedPreferences.getInstance();
-      final stored =
-          jsonDecode(prefs.getString('history')!) as List<dynamic>;
+      final stored = jsonDecode(prefs.getString('history')!) as List<dynamic>;
       expect(stored, hasLength(1));
     });
 
@@ -256,8 +257,7 @@ void main() {
       await storage.saveExpenses(expenses);
 
       final prefs = await SharedPreferences.getInstance();
-      final stored =
-          jsonDecode(prefs.getString('expenses')!) as List<dynamic>;
+      final stored = jsonDecode(prefs.getString('expenses')!) as List<dynamic>;
       expect(stored, hasLength(1));
     });
   });
@@ -438,7 +438,8 @@ void main() {
     test('the time of day is not part of the key', () {
       // A plan is about days. A stray time would make two entries for one
       // Tuesday, and the second would silently win.
-      final p = withOverrides({Project.planDay(DateTime(2026, 8, 4, 17, 30)): 0});
+      final p =
+          withOverrides({Project.planDay(DateTime(2026, 8, 4, 17, 30)): 0});
       expect(p.planOverrides.keys.single, tuesday);
     });
 
@@ -494,7 +495,16 @@ void main() {
     // `toStringAsFixed(2)`, or rounding on the way in. Both would look right on
     // screen and quietly destroy what was entered.
     const amounts = [
-      0.07, 0.1, 0.005, 0.3, 4.35, 8.15, 99.99, 123.45, 1200.0, 1234567.89,
+      0.07,
+      0.1,
+      0.005,
+      0.3,
+      4.35,
+      8.15,
+      99.99,
+      123.45,
+      1200.0,
+      1234567.89,
     ];
 
     test('a project keeps its price and its costs', () {
@@ -539,6 +549,47 @@ void main() {
         allocation: ExpenseAllocation.month,
       );
       expect(expense.copyWith(product: 'דיו').amount, 1234567.89);
+    });
+
+    test('nullable fields can be cleared explicitly while omitted fields stay', () {
+      final target = DateTime(2026, 12, 1);
+      final project = Project(
+        id: 'p',
+        name: 'ספר',
+        type: ProjectType.sefer,
+        price: 1,
+        expenses: 0,
+        targetDaily: 1,
+        targetMonthly: 2,
+        clientEmail: 'a@example.com',
+        targetCompletionDate: target,
+        planOverrides: {DateTime(2026, 8, 1): 0.5},
+        tefillinFlags: const {'1:head:1': 'stuck'},
+        extraFields: const {'future': 7},
+      );
+      final edited = project.copyWith(clientEmail: null, targetCompletionDate: null);
+      expect(edited.clientEmail, isNull);
+      expect(edited.targetCompletionDate, isNull);
+      expect(edited.planOverrides, project.planOverrides);
+      expect(edited.tefillinFlags, project.tefillinFlags);
+      expect(edited.extraFields, project.extraFields);
+
+      final expense = Expense(
+        id: 'e2',
+        product: 'קלף',
+        date: DateTime(2026, 8, 1),
+        amount: 10,
+        allocation: ExpenseAllocation.period,
+        periodStart: DateTime(2026, 8, 1),
+        periodEnd: DateTime(2026, 8, 31),
+      );
+      final monthly = expense.copyWith(
+        allocation: ExpenseAllocation.month,
+        periodStart: null,
+        periodEnd: null,
+      );
+      expect(monthly.periodStart, isNull);
+      expect(monthly.periodEnd, isNull);
     });
   });
 }

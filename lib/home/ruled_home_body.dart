@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models.dart';
+import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
 import '../widgets/sofer_widgets.dart';
 
@@ -42,6 +43,7 @@ class HomeSnapshot {
   /// Optional, independently enabled rows below the main clocks.
   final String? writingTargetStatus;
   final bool writingTargetOverrun;
+  final bool showWritingTargetButton;
   final String? endTimeStatus;
   final bool endTimeOverrun;
   final int? metronomeBpm;
@@ -75,6 +77,7 @@ class HomeSnapshot {
   /// and line go beneath. Null everywhere else, where a number is exactly what
   /// the writer means.
   final String? positionTitle;
+  final bool wordEntry;
 
   final String todayOutput;
   final String? hourlyRate;
@@ -99,6 +102,7 @@ class HomeSnapshot {
     this.lineClockOverrun = false,
     this.writingTargetStatus,
     this.writingTargetOverrun = false,
+    this.showWritingTargetButton = false,
     this.endTimeStatus,
     this.endTimeOverrun = false,
     this.metronomeBpm,
@@ -109,6 +113,7 @@ class HomeSnapshot {
     required this.pageLabel,
     required this.positionUnit,
     this.positionTitle,
+    this.wordEntry = false,
     required this.todayOutput,
     this.hourlyRate,
     this.doneOfTotal,
@@ -121,6 +126,7 @@ class HomeSnapshot {
   String get shownLineLabel => lineClockLabel ?? 'זמן השורה';
   String get shownLineValue => lineClockValue ?? sinceLastLap;
   bool get hasHomeAdditions =>
+      showWritingTargetButton ||
       writingTargetStatus != null ||
       endTimeStatus != null ||
       metronomeBpm != null;
@@ -135,10 +141,8 @@ class HomeActions {
   final VoidCallback onManualEntry;
   final VoidCallback onNextLine;
 
-  /// Marking a finished line in plain mode, where nothing is tracking the
-  /// position. The cards layout has always offered it and this one could not:
-  /// the action was simply never passed in, so a writer who moved to klaf or
-  /// layla found a button he had been using every evening had gone.
+  /// Resetting the line stopwatch in plain mode, where nothing is tracking the
+  /// position. It deliberately does not claim that output was recorded.
   final VoidCallback onLap;
   final VoidCallback onEditPosition;
 
@@ -150,6 +154,7 @@ class HomeActions {
   /// Pausing and resuming are the same button in the cards layout, so it needs
   /// resuming as its own action rather than as "start".
   final VoidCallback onResume;
+  final VoidCallback? onWritingTarget;
 
   const HomeActions({
     required this.onStart,
@@ -162,6 +167,7 @@ class HomeActions {
     required this.onSkipMezuza,
     required this.onProjectChanged,
     required this.onResume,
+    this.onWritingTarget,
   });
 }
 
@@ -203,7 +209,12 @@ class RuledHomeBody extends StatelessWidget {
         builder: (context, box) {
           // One column on a phone, two side by side once there is room — the
           // same content either way, never a different feature set.
-          final wide = box.maxWidth > 620;
+          // A tablet is not effectively wide when every word is twice its
+          // normal width. Raise the two-column threshold with the chosen text
+          // size so parchment and night reflow instead of squeezing two
+          // beautiful columns into two unreadable slivers.
+          final textScale = MediaQuery.textScalerOf(context).scale(1);
+          final wide = box.maxWidth > 620 * textScale;
           final left = _WorkColumn(
               snapshot: snapshot, actions: actions, isSmart: isSmart);
           final right = _FiguresColumn(snapshot: snapshot);
@@ -259,7 +270,12 @@ class _WorkColumn extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SoferSectionTitle(
-            s.isActive ? "כותב כעת" : "הפרויקט הנבחר",
+            s.isActive
+                ? context.l10n.pick(he: "כותב כעת", en: "Writing now")
+                : context.l10n.pick(
+                    he: "הפרויקט הנבחר",
+                    en: "Selected project",
+                  ),
             padding: EdgeInsets.zero,
           ),
           const SizedBox(height: 5),
@@ -273,9 +289,12 @@ class _WorkColumn extends StatelessWidget {
             DropdownButtonFormField<Project>(
               initialValue: s.project,
               isExpanded: true,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 border: UnderlineInputBorder(),
-                hintText: "בחר פרויקט להתחלת עבודה",
+                hintText: context.l10n.pick(
+                  he: "בחר פרויקט להתחלת עבודה",
+                  en: "Choose a project to start writing",
+                ),
               ),
               items: [
                 for (final p in s.projects)
@@ -301,7 +320,10 @@ class _WorkColumn extends StatelessWidget {
 
           if (s.hasHomeAdditions) ...[
             const SizedBox(height: 16),
-            HomeAdditionsPanel(snapshot: s),
+            HomeAdditionsPanel(
+              snapshot: s,
+              onWritingTarget: actions.onWritingTarget,
+            ),
           ],
 
           const SizedBox(height: 20),
@@ -328,7 +350,7 @@ class _PositionHero extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (!s.isActive) ...[
-          Text("ממשיך מ",
+          Text(context.l10n.pick(he: "ממשיך מ", en: "Continue from"),
               style: TextStyle(
                   fontFamily: t.labelFamily,
                   fontSize: 12,
@@ -338,7 +360,7 @@ class _PositionHero extends StatelessWidget {
         ],
         Semantics(
           button: true,
-          label: 'שינוי מיקום',
+          label: context.l10n.pick(he: 'שינוי מיקום', en: 'Change position'),
           child: InkWell(
             onTap: onEdit,
             child: Padding(
@@ -399,8 +421,11 @@ class _PositionHero extends StatelessWidget {
                   children: [
                     Text(
                         s.breakElapsed.isEmpty
-                            ? "בהפסקה"
-                            : "בהפסקה ${s.breakElapsed}",
+                            ? context.l10n.pick(he: "בהפסקה", en: "On break")
+                            : context.l10n.pick(
+                                he: "בהפסקה ${s.breakElapsed}",
+                                en: "On break ${s.breakElapsed}",
+                              ),
                         style: TextStyle(
                             fontFamily: t.labelFamily,
                             fontSize: 13,
@@ -408,8 +433,14 @@ class _PositionHero extends StatelessWidget {
                     if (s.breakRemaining.isNotEmpty)
                       Text(
                         s.breakOverrun
-                            ? "חריגה ${s.breakRemaining}"
-                            : "נותרו ${s.breakRemaining}",
+                            ? context.l10n.pick(
+                                he: "חריגה ${s.breakRemaining}",
+                                en: "Overtime ${s.breakRemaining}",
+                              )
+                            : context.l10n.pick(
+                                he: "נותרו ${s.breakRemaining}",
+                                en: "Remaining ${s.breakRemaining}",
+                              ),
                         style: TextStyle(
                           fontFamily: t.numeralFamily,
                           fontSize: 14,
@@ -422,7 +453,7 @@ class _PositionHero extends StatelessWidget {
             ],
           )
         else
-          Text("מוכן להתחיל",
+          Text(context.l10n.pick(he: "מוכן להתחיל", en: "Ready to start"),
               style: TextStyle(
                   fontFamily: t.labelFamily,
                   fontSize: 13,
@@ -464,10 +495,13 @@ class _ClockHero extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           s.isPaused
-              ? "בהפסקה"
+              ? context.l10n.pick(he: "בהפסקה", en: "On break")
               : s.isRunning
-                  ? "כותב"
-                  : "מוכן להתחיל",
+                  ? context.l10n.pick(he: "כותב", en: "Writing")
+                  : context.l10n.pick(
+                      he: "מוכן להתחיל",
+                      en: "Ready to start",
+                    ),
           style: TextStyle(
             fontFamily: t.labelFamily,
             fontSize: 13,
@@ -521,7 +555,8 @@ class _ClockPair extends StatelessWidget {
 
     return Row(
       children: [
-        metric('זמן כתיבה', snapshot.elapsed),
+        metric(context.l10n.pick(he: 'זמן כתיבה', en: 'Writing time'),
+            snapshot.elapsed),
         Container(
           width: 1,
           height: compact ? 42 : 58,
@@ -538,8 +573,13 @@ class _ClockPair extends StatelessWidget {
 /// The opt-in tools that sit beneath the clocks in every home layout.
 class HomeAdditionsPanel extends StatelessWidget {
   final HomeSnapshot snapshot;
+  final VoidCallback? onWritingTarget;
 
-  const HomeAdditionsPanel({super.key, required this.snapshot});
+  const HomeAdditionsPanel({
+    super.key,
+    required this.snapshot,
+    this.onWritingTarget,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -547,31 +587,35 @@ class HomeAdditionsPanel extends StatelessWidget {
     final t = SoferTokens.of(context);
 
     Widget row(IconData icon, String text,
-        {bool danger = false, bool active = false}) {
+        {bool danger = false, bool active = false, VoidCallback? onTap}) {
       final color = danger
           ? t.danger
           : active
               ? t.accent
               : t.inkMuted;
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          children: [
-            Icon(icon, size: 18, color: color),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                text,
-                style: TextStyle(
-                  fontFamily: t.labelFamily,
-                  fontSize: 13,
-                  height: 1.35,
-                  fontWeight: danger ? FontWeight.bold : FontWeight.normal,
-                  color: color,
+      return InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            children: [
+              Icon(icon, size: 18, color: color),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  text,
+                  style: TextStyle(
+                    fontFamily: t.labelFamily,
+                    fontSize: 13,
+                    height: 1.35,
+                    fontWeight: danger ? FontWeight.bold : FontWeight.normal,
+                    color: color,
+                  ),
                 ),
               ),
-            ),
-          ],
+              if (onTap != null) Icon(Icons.chevron_right, color: color),
+            ],
+          ),
         ),
       );
     }
@@ -588,17 +632,28 @@ class HomeAdditionsPanel extends StatelessWidget {
         children: [
           if (snapshot.writingTargetStatus case final value?)
             row(Icons.hourglass_bottom, value,
-                danger: snapshot.writingTargetOverrun),
+                danger: snapshot.writingTargetOverrun,
+                onTap:
+                    snapshot.showWritingTargetButton ? onWritingTarget : null),
           if (snapshot.endTimeStatus case final value?)
             row(Icons.alarm, value, danger: snapshot.endTimeOverrun),
           if (snapshot.metronomeBpm case final bpm?)
             row(
               Icons.graphic_eq,
               snapshot.metronomeActive
-                  ? 'מטרונום · $bpm פעימות בדקה'
+                  ? context.l10n.pick(
+                      he: 'מטרונום · $bpm פעימות בדקה',
+                      en: 'Metronome · $bpm beats per minute',
+                    )
                   : snapshot.isActive
-                      ? 'מטרונום · $bpm פעימות בדקה · מושהה'
-                      : 'מטרונום · $bpm פעימות בדקה · יתחיל עם הטיימר',
+                      ? context.l10n.pick(
+                          he: 'מטרונום · $bpm פעימות בדקה · מושהה',
+                          en: 'Metronome · $bpm beats per minute · paused',
+                        )
+                      : context.l10n.pick(
+                          he: 'מטרונום · $bpm פעימות בדקה · יתחיל עם הטיימר',
+                          en: 'Metronome · $bpm beats per minute · starts with the timer',
+                        ),
               active: snapshot.metronomeActive,
             ),
         ],
@@ -647,7 +702,10 @@ class GoalCelebrationOverlay extends StatelessWidget {
                   Icon(Icons.auto_awesome, color: t.accent),
                   const SizedBox(width: 10),
                   Text(
-                    'היעד היומי הושלם! 🎉',
+                    context.l10n.pick(
+                      he: 'היעד היומי הושלם! 🎉',
+                      en: 'Daily target reached! 🎉',
+                    ),
                     style: TextStyle(
                       fontFamily: t.labelFamily,
                       color: t.ink,
@@ -688,12 +746,14 @@ class _Actions extends StatelessWidget {
       // Nothing to start or record until a project is chosen.
       final ready = s.project != null;
       return Column(children: [
-        SoferPrimaryButton("תחילת כתיבה",
+        SoferPrimaryButton(
+            context.l10n.pick(he: "תחילת כתיבה", en: "Start writing"),
             icon: Icons.play_arrow,
             expand: true,
             onPressed: ready ? actions.onStart : null),
         const SizedBox(height: 8),
-        SoferSecondaryButton("הזנה ידנית",
+        SoferSecondaryButton(
+            context.l10n.pick(he: "הזנה ידנית", en: "Manual entry"),
             icon: Icons.edit_calendar,
             expand: true,
             quiet: true,
@@ -707,11 +767,20 @@ class _Actions extends StatelessWidget {
     // the way through, not the one pressed last.
     return Column(children: [
       if (!s.isPaused) ...[
-        SoferPrimaryButton("סיימתי שורה",
+        SoferPrimaryButton(
+            isSmart
+                ? context.l10n.pick(
+                    he: s.wordEntry ? 'סמן מילה אחרונה' : "סיימתי שורה",
+                    en: s.wordEntry ? 'Select last word' : "Finished a line",
+                  )
+                : context.l10n.pick(
+                    he: "איפוס זמן שורה",
+                    en: "Reset line timer",
+                  ),
             icon: Icons.flag,
             expand: true,
-            // Smart mode advances the stored position; plain mode only times
-            // the line. Same button, because to the writer it is the same act.
+            // Smart mode advances the stored position; plain mode only resets
+            // the lap clock, so its label must not promise saved output.
             onPressed: s.isSavingLine
                 ? null
                 : isSmart
@@ -719,7 +788,11 @@ class _Actions extends StatelessWidget {
                     : actions.onLap),
         const SizedBox(height: 8),
         if (isSmart && s.project?.type == ProjectType.mezuza) ...[
-          SoferSecondaryButton("עבור למזוזה הבאה",
+          SoferSecondaryButton(
+              context.l10n.pick(
+                he: "עבור למזוזה הבאה",
+                en: "Move to next Mezuzah",
+              ),
               icon: Icons.skip_next,
               expand: true,
               onPressed: s.isSavingLine ? null : actions.onSkipMezuza),
@@ -727,27 +800,33 @@ class _Actions extends StatelessWidget {
         ],
         Row(children: [
           Expanded(
-            child: SoferSecondaryButton("הפסקה",
+            child: SoferSecondaryButton(
+                context.l10n.pick(he: "הפסקה", en: "Break"),
                 icon: Icons.coffee,
                 expand: true,
                 onPressed: s.isSavingLine ? null : actions.onBreak),
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: SoferSecondaryButton("סיים",
+            child: SoferSecondaryButton(
+                context.l10n.pick(he: "סיים", en: "Finish"),
                 icon: Icons.stop,
                 expand: true,
-                onPressed: s.isSavingLine ? null : actions.onStop),
+                // A fast line-finished → stop sequence is queued by the home
+                // screen and must not lose its second tap during the save.
+                onPressed: actions.onStop),
           ),
         ]),
       ] else ...[
         // Plain mode has no line to mark, and a paused sitting has nothing to
         // mark yet — so stopping is the leading action again.
-        SoferPrimaryButton("סיים",
+        SoferPrimaryButton(context.l10n.pick(he: "סיים", en: "Finish"),
             icon: Icons.stop, expand: true, onPressed: actions.onStop),
         const SizedBox(height: 8),
         SoferSecondaryButton(
-          s.isPaused ? "המשך" : "הפסקה",
+          s.isPaused
+              ? context.l10n.pick(he: "המשך", en: "Resume")
+              : context.l10n.pick(he: "הפסקה", en: "Break"),
           icon: s.isPaused ? Icons.play_arrow : Icons.coffee,
           expand: true,
           // Resuming is its own action, which is why HomeActions carries one.
@@ -781,7 +860,8 @@ class _FiguresColumn extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              SoferSectionTitle("היום", padding: EdgeInsets.zero),
+              SoferSectionTitle(context.l10n.pick(he: "היום", en: "Today"),
+                  padding: EdgeInsets.zero),
               Text(s.hebrewDate,
                   style: TextStyle(
                       fontFamily: t.labelFamily,
@@ -790,11 +870,15 @@ class _FiguresColumn extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          SoferStatRow("נכתב", s.todayOutput),
+          SoferStatRow(
+              context.l10n.pick(he: "נכתב", en: "Written"), s.todayOutput),
           if (s.hourlyRate case final rate?)
-            SoferStatRow("לשעה", rate, emphasise: true),
+            SoferStatRow(context.l10n.pick(he: "לשעה", en: "Per hour"), rate,
+                emphasise: true),
           if (s.doneOfTotal case final done?)
-            SoferStatRow("מהעבודה", done, last: true),
+            SoferStatRow(
+                context.l10n.pick(he: "מהעבודה", en: "Of project"), done,
+                last: true),
           if (s.doneOfTotal != null) ...[
             const SizedBox(height: 12),
             SoferProgress(s.progress),
@@ -803,7 +887,12 @@ class _FiguresColumn extends StatelessWidget {
             const SizedBox(height: 20),
             const SoferRule(strong: true),
             const SizedBox(height: 12),
-            SoferSectionTitle("צפי סיום", padding: EdgeInsets.zero),
+            SoferSectionTitle(
+                context.l10n.pick(
+                  he: "צפי סיום",
+                  en: "Estimated completion",
+                ),
+                padding: EdgeInsets.zero),
             const SizedBox(height: 5),
             Text(finishOn,
                 style: TextStyle(
@@ -845,12 +934,17 @@ class _EmptyState extends StatelessWidget {
                     letterSpacing: 1.5,
                     color: t.inkMuted)),
             const SizedBox(height: 18),
-            Text("אין עוד פרויקטים",
+            Text(
+                context.l10n
+                    .pick(he: "אין עוד פרויקטים", en: "No projects yet"),
                 style: TextStyle(
                     fontFamily: t.numeralFamily, fontSize: 24, color: t.ink)),
             const SizedBox(height: 8),
             Text(
-              "פתח פרויקט ראשון כדי להתחיל למדוד כתיבה, רווח וצפי סיום.",
+              context.l10n.pick(
+                he: "פתח פרויקט ראשון כדי להתחיל למדוד כתיבה, רווח וצפי סיום.",
+                en: "Create your first project to start measuring writing, profit, and estimated completion.",
+              ),
               textAlign: TextAlign.center,
               style: TextStyle(
                   fontFamily: t.labelFamily,

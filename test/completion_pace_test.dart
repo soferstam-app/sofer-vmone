@@ -34,7 +34,8 @@ void main() {
   );
 
   /// A full page written on [day].
-  WorkSession page(DateTime day, {bool backlog = false, bool deleted = false}) =>
+  WorkSession page(DateTime day,
+          {bool backlog = false, bool deleted = false}) =>
       WorkSession(
         id: 'w${seq++}',
         projectId: 'p',
@@ -131,7 +132,9 @@ void main() {
 
   group('the estimate it feeds', () {
     test('a steady page a day finishes in about the pages remaining', () {
-      final history = [for (var d = 1; d <= 10; d++) page(DateTime(2026, 7, d))];
+      final history = [
+        for (var d = 1; d <= 10; d++) page(DateTime(2026, 7, d))
+      ];
       final estimate = CompletionEstimator.estimate(
         project: project,
         history: history,

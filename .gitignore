@@ -101,5 +101,25 @@ GEMINI.MD
 /tool/preview/
 /tool/shoot_window.ps1
 
+# Publication excludes: internal reports, attachments and obsolete prototypes.
+/.codex-remote-attachments/
+/RELEASE_FIXES_*.md
+/docs/AUDIT*.md
+/docs/WORD-SELECTION.md
+/docs/help/FAQ.he.html
+/lib/entry/word_selection_dialog.dart
+/lib/logic/writing_template.dart
+/test/word_selection_dialog_test.dart
+/test/writing_template_test.dart
+
+# Keep only the vendored plugin source, license and local patch notes.
+/packages/printing/example/
+/packages/printing/example.png
+/packages/printing/test/
+/packages/printing/CHANGELOG.md
+/packages/printing/CONTRIBUTING.md
+/packages/printing/README.md
+/packages/printing/analysis_options.yaml
+
 # docs/unnamed.jpg הייתה כאן בטעות — אתר הפרויקט בנוי עליה כרקע, ולכן היא
 # חייבת להיות במאגר. בזמן שהיא הייתה מוחרגת היא הועלתה ידנית דרך הדפדפן.

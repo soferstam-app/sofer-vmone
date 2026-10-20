@@ -28,7 +28,8 @@ void main() {
     });
 
     test('tomorrow, when it is exactly now', () {
-      expect(upcoming(DateTime(2026, 8, 2, 20)).first, DateTime(2026, 8, 3, 20));
+      expect(
+          upcoming(DateTime(2026, 8, 2, 20)).first, DateTime(2026, 8, 3, 20));
     });
 
     test('a whole week of them, one a day', () {
@@ -40,24 +41,26 @@ void main() {
     });
 
     test('all at the hour that was set', () {
-      for (final moment in upcoming(DateTime(2026, 8, 2, 9), hour: 6, minute: 45)) {
+      for (final moment
+          in upcoming(DateTime(2026, 8, 2, 9), hour: 6, minute: 45)) {
         expect(moment.hour, 6);
         expect(moment.minute, 45);
       }
     });
 
     test('crossing a month, and a year', () {
-      expect(upcoming(DateTime(2026, 12, 30, 9)).last, DateTime(2027, 1, 5, 20));
+      expect(
+          upcoming(DateTime(2026, 12, 30, 9)).last, DateTime(2027, 1, 5, 20));
     });
   });
 
   group('the identifiers', () {
     test('a week of them never collides', () {
-      final ids = upcoming(DateTime(2026, 8, 2, 9))
-          .map(ReminderSchedule.idFor)
-          .toSet();
+      final ids =
+          upcoming(DateTime(2026, 8, 2, 9)).map(ReminderSchedule.idFor).toSet();
       expect(ids, hasLength(ReminderSchedule.days),
-          reason: 'two days sharing an id means one silently replaces the other');
+          reason:
+              'two days sharing an id means one silently replaces the other');
     });
 
     test('today can be found without a record of what was booked', () {

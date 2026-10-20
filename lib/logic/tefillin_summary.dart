@@ -1,4 +1,6 @@
 import '../models.dart';
+import 'tefillin_text.dart';
+import 'tefillin_state.dart';
 
 /// Says in words what a stretch of tefillin work came to.
 ///
@@ -33,34 +35,50 @@ class TefillinSummary {
   /// The eight slots: four parshiyot of the head, then four of the hand.
   static const int _slots = 8;
 
-  static String describe(Iterable<WorkSession> sessions) {
+  static String describe(Iterable<WorkSession> sessions,
+      {bool english = false}) {
     // How many of each parshiya were finished, and what was left part-written.
     final counts = List.filled(_slots, 0);
     final partials = <String>[];
-    final rangeLines = <String, int>{};
-    final rangeReachedEnd = <String, bool>{};
+    final rangeCovered = <String, Set<int>>{};
     final rangeSide = <String, String>{};
     final rangeParshiya = <String, int>{};
+    final wordGroups = <String, List<WorkSession>>{};
 
     for (final s in sessions) {
+      // Invalid writing remains part of the time denominator, but it is not
+      // output and must not make a parshiya look complete in any description.
+      if (s.isDeleted || s.isInvalid || !s.countsAsOutput) continue;
       final type = s.tefillinType;
       final parshiya = s.parshiya;
+      if (TefillinWordRange.isWordRecord(s)) {
+        if (TefillinWordRange.read(s) != null) {
+          final key = '${s.pairIndex}:$type:$parshiya';
+          wordGroups.putIfAbsent(key, () => []).add(s);
+          rangeCovered.putIfAbsent(key, () => <int>{});
+          rangeSide[key] = type!;
+          rangeParshiya[key] = parshiya!;
+        }
+        continue;
+      }
 
-      // Smart-mode continuation records are exact ranges. Gather all ranges
-      // belonging to the same physical parshiya before describing them, or a
-      // parshiya written in two sittings would be reported as one complete and
-      // another partial parshiya.
-      if (type != null &&
-          parshiya != null &&
-          s.pairIndex != null &&
-          s.startLine > 0) {
+      // Every record with a physical address belongs to that one parshiya.
+      // Older manual first stretches use startLine 0 and "up to line";
+      // smart records and new manual continuations use exact ranges. Gather
+      // both shapes here, otherwise a first stretch to line 3 followed by
+      // lines 4–7 is described as a complete parshiya plus another partial.
+      if (type != null && parshiya != null && s.pairIndex != null) {
         final maxLines =
             type == 'head' ? linesInHeadParshiya : linesInHandParshiya;
         final key = '${s.pairIndex}:$type:$parshiya';
-        final lines = (s.endLine - s.startLine + 1).clamp(0, maxLines);
-        rangeLines[key] = (rangeLines[key] ?? 0) + lines;
-        rangeReachedEnd[key] =
-            (rangeReachedEnd[key] ?? false) || s.endLine >= maxLines;
+        final from = s.startLine > 0 ? s.startLine : 1;
+        final to = s.endLine <= 0 ? maxLines : s.endLine;
+        final covered = rangeCovered.putIfAbsent(key, () => <int>{});
+        for (var line = from.clamp(1, maxLines);
+            line <= to.clamp(0, maxLines);
+            line++) {
+          covered.add(line);
+        }
         rangeSide[key] = type;
         rangeParshiya[key] = parshiya;
         continue;
@@ -86,25 +104,51 @@ class TefillinSummary {
           final base = type == 'head' ? 0 : 4;
           counts[base + parshiya - 1] += s.amount;
         } else {
-          final part = type == 'head' ? "ראש" : "יד";
-          partials
-              .add("${parshiyaName(parshiya)} של $part (עד שורה ${s.endLine})");
+          final part = english
+              ? (type == 'head' ? 'Shel Rosh' : 'Shel Yad')
+              : (type == 'head' ? "ראש" : "יד");
+          partials.add(english
+              ? "${parshiyaName(parshiya)} $part (to line ${s.endLine})"
+              : "${parshiyaName(parshiya)} של $part (עד שורה ${s.endLine})");
         }
       }
     }
 
-    for (final entry in rangeLines.entries) {
+    for (final entry in rangeCovered.entries) {
       final type = rangeSide[entry.key]!;
       final parshiya = rangeParshiya[entry.key]!;
       final maxLines =
           type == 'head' ? linesInHeadParshiya : linesInHandParshiya;
-      if (rangeReachedEnd[entry.key] == true || entry.value >= maxLines) {
+      final words = wordGroups[entry.key];
+      final position = words == null
+          ? null
+          : TefillinState.wordPosition(words,
+              legacyFraction: entry.value.length / maxLines);
+      if (words != null && position != null && position.fraction < 1 - 1e-9) {
+        final word = TefillinText.of(parshiya).wordAt(position.boundary);
+        partials.add(english
+            ? '${parshiyaName(parshiya)} ${type == 'head' ? 'Shel Rosh' : 'Shel Yad'} (through word ${position.boundary}: $word)'
+            : '${parshiyaName(parshiya)} של ${type == 'head' ? 'ראש' : 'יד'} (עד מילה ${position.boundary}: $word)');
+      } else if ((position != null && position.fraction >= 1 - 1e-9) ||
+          words == null && entry.value.length >= maxLines) {
         final base = type == 'head' ? 0 : 4;
         counts[base + parshiya - 1]++;
       } else {
-        final part = type == 'head' ? 'ראש' : 'יד';
-        partials
-            .add('${parshiyaName(parshiya)} של $part (עד שורה ${entry.value})');
+        if (words != null) {
+          partials.add(english
+              ? '${parshiyaName(parshiya)} (word records need correction)'
+              : '${parshiyaName(parshiya)} (רישומי המילים דורשים תיקון)');
+          continue;
+        }
+        final part = english
+            ? (type == 'head' ? 'Shel Rosh' : 'Shel Yad')
+            : (type == 'head' ? 'ראש' : 'יד');
+        final lastLine = entry.value.isEmpty
+            ? 0
+            : entry.value.reduce((a, b) => a > b ? a : b);
+        partials.add(english
+            ? '${parshiyaName(parshiya)} $part (to line $lastLine)'
+            : '${parshiyaName(parshiya)} של $part (עד שורה $lastLine)');
       }
     }
 
@@ -120,22 +164,39 @@ class TefillinSummary {
     _take(counts, 4, _slots, handSets);
 
     final parts = <String>[
-      if (pairs > 0) pairs == 1 ? "זוג תפילין אחד" : "$pairs זוגות תפילין",
-      if (headSets > 0) "$headSets תפילין של ראש",
-      if (handSets > 0) "$handSets תפילין של יד",
+      if (pairs > 0)
+        english
+            ? (pairs == 1 ? '1 Tefillin Set' : '$pairs Tefillin Sets')
+            : (pairs == 1 ? "זוג תפילין אחד" : "$pairs זוגות תפילין"),
+      if (headSets > 0)
+        english ? '$headSets Tefillin Shel Rosh' : "$headSets תפילין של ראש",
+      if (handSets > 0)
+        english ? '$handSets Tefillin Shel Yad' : "$handSets תפילין של יד",
       for (var i = 0; i < _slots; i++)
         if (counts[i] > 0)
           _looseParshiyot(
-              counts[i], parshiyaName((i % 4) + 1), i < 4 ? "ראש" : "יד"),
+              counts[i], parshiyaName((i % 4) + 1), i < 4 ? "ראש" : "יד",
+              english: english),
       ...partials,
     ];
 
-    if (parts.isEmpty) return "לא נרשמה כתיבה משמעותית";
+    if (parts.isEmpty) {
+      return english
+          ? 'No significant writing was recorded'
+          : "לא נרשמה כתיבה משמעותית";
+    }
     return parts.join(", ");
   }
 
-  static String _looseParshiyot(int count, String name, String part) =>
-      count == 1 ? "פרשיית $name של $part" : "$count פרשיות $name של $part";
+  static String _looseParshiyot(int count, String name, String part,
+          {bool english = false}) =>
+      english
+          ? (count == 1
+              ? '$name Parashah ${part == 'ראש' ? 'Shel Rosh' : 'Shel Yad'}'
+              : '$count $name Parashiyot ${part == 'ראש' ? 'Shel Rosh' : 'Shel Yad'}')
+          : (count == 1
+              ? "פרשיית $name של $part"
+              : "$count פרשיות $name של $part");
 
   /// How many complete sets the slots in `[from, to)` can make.
   static int _smallest(List<int> counts, int from, int to) =>

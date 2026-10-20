@@ -6,7 +6,6 @@ import 'date_logic.dart';
 import 'hebrew_clock.dart';
 import 'hebrew_work_calendar.dart';
 import 'production_calculator.dart';
-import 'profit_calculator.dart';
 
 /// A stretch of days laid out one by one: where the writing should have reached
 /// by the end of each.
@@ -136,7 +135,8 @@ class ProductionPlan {
   /// Any stretch of days at all.
   ///
   /// [overrides] replaces the calendar's own weight for a day — 0 for "I am not
-  /// writing that day", 1 for "I am, whatever the rule says". Changing one
+  /// writing that day", 1 for "I am, whatever the recurring rule says".
+  /// Personal exceptions still cap this availability. Changing one
   /// moves every day after it, which is the whole point of planning on a
   /// cumulative line rather than a fixed one.
   static ProductionPlan forRange({
@@ -151,14 +151,17 @@ class ProductionPlan {
   }) {
     final start = _midnight(from);
     final end = _midnight(to);
-    final today = _midnight(DateLogic.effectiveDate(now ?? DateTime.now(), dayStart));
+    final today =
+        _midnight(DateLogic.effectiveDate(now ?? DateTime.now(), dayStart));
 
     final mine = history
-        .where((s) => s.projectId == project.id && !s.isDeleted && !s.backlogOnly)
+        .where(
+            (s) => s.projectId == project.id && !s.isDeleted && !s.backlogOnly)
         .toList();
 
     // The plan is a line drawn from where the writer already was, not from zero.
-    final opening = _unitsUpTo(project, mine, dayStart, start, inclusive: false);
+    final opening =
+        _unitsUpTo(project, mine, dayStart, start, inclusive: false);
     final daily = dailyUnits(project);
 
     // Pass one: the straight line the stretch was planned on.
@@ -180,17 +183,26 @@ class ProductionPlan {
         walker.getJewishDayOfMonth(),
         rules,
       );
-      // A writer's own decision beats the calendar's. He knows about the
-      // wedding on Tuesday; the rules do not.
+      // Project decisions replace recurring rules; global personal exceptions
+      // still limit the writer's availability across projects.
       final override = overrides[date];
-      final weight = override ?? calendar.value;
+      final effective = override == null
+          ? calendar
+          : HebrewWorkCalendar.classifyHebrewDate(
+              walker.getJewishYear(),
+              walker.getJewishMonth(),
+              walker.getJewishDayOfMonth(),
+              rules,
+              override: override,
+            );
+      final weight = effective.value;
       cumulativeWeight += weight;
 
       drafts.add(_Draft(
         date: date,
         hebrewDay: walker.getJewishDayOfMonth(),
         weight: weight,
-        reason: weight > 0 ? null : (calendar.reason ?? NonWorkReason.shabbat),
+        reason: effective.reason,
         overridden: override != null && override != calendar.value,
         weightSoFar: cumulativeWeight,
       ));
@@ -208,7 +220,8 @@ class ProductionPlan {
     // date order rather than re-scanning the whole history for every day of the
     // range. Two passes over thirty days used to cost sixty scans of everything
     // a writer had ever recorded, on every rebuild.
-    final byDay = _cumulativeUnits(project, mine, dayStart, start, end, opening);
+    final byDay =
+        _cumulativeUnits(project, mine, dayStart, start, end, opening);
 
     var actualNow = opening;
     for (final d in drafts) {
@@ -267,7 +280,7 @@ class ProductionPlan {
   /// pages — a calendar that says "be at line 431" tells a writer nothing he
   /// can act on without dividing it himself.
   static double dailyUnits(Project project) {
-    if (project.type != ProjectType.sefer) {
+    if (!project.type.isPaged) {
       return project.targetDaily.toDouble();
     }
     if (!project.dailyGoalInLines) return project.targetDaily.toDouble();
@@ -279,7 +292,6 @@ class ProductionPlan {
   /// date — which is already normalised — every session on the first day of a
   /// range counted as having happened before the range began.
   static DateTime _midnight(DateTime d) => DateTime(d.year, d.month, d.day);
-
 
   /// Billable units reached by the end of each day of the range.
   ///
@@ -313,7 +325,7 @@ class ProductionPlan {
       // Summed per day rather than cumulatively re-billed, because billable
       // units are additive across sessions.
       if (here != null) {
-        running += ProfitCalculator.billableUnits(project, here);
+        running += ProductionCalculator.projectUnits(project, here);
       }
       totals[day] = running;
     }
@@ -332,7 +344,7 @@ class ProductionPlan {
       final d = DateTime(filed.year, filed.month, filed.day);
       return inclusive ? !d.isAfter(day) : d.isBefore(day);
     });
-    return ProfitCalculator.billableUnits(project, upTo);
+    return ProductionCalculator.projectUnits(project, upTo);
   }
 }
 
@@ -383,7 +395,8 @@ class PlannedDay {
 
   /// The target that is worth showing: the adjusted one where it still matters,
   /// the original where the day has already been judged against it.
-  double get shownTarget => isFuture || isToday ? adjustedTarget : plannedTarget;
+  double get shownTarget =>
+      isFuture || isToday ? adjustedTarget : plannedTarget;
 
   /// Fell short of what this day asked for. Only ever true of a day gone by.
   bool get isBehind {

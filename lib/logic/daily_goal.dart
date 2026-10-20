@@ -29,12 +29,14 @@ class DailyGoal {
     var done = 0;
     for (final s in history) {
       if (s.projectId != project.id) continue;
-      if (s.isDeleted || s.backlogOnly) continue;
+      if (s.isDeleted || s.isInvalid || s.backlogOnly) continue;
       if (!DateLogic.sessionIsOnDay(s, day, dayStart)) continue;
 
-      done += project.type == ProjectType.sefer
+      done += project.type.isPaged
           ? ProductionCalculator.seferLinesInSession(s)
-          : s.amount;
+          : project.type == ProjectType.tefillin
+              ? ProductionCalculator.parshiyotInSession(s)
+              : s.amount;
     }
     return done;
   }
@@ -46,7 +48,7 @@ class DailyGoal {
   /// a target is a plan for tomorrow, not a record of the past, so unlike every
   /// stored figure it is right for it to follow the setting.
   static int targetFor(Project project) {
-    if (project.type != ProjectType.sefer || project.dailyGoalInLines) {
+    if (!project.type.isPaged || project.dailyGoalInLines) {
       return project.targetDaily;
     }
     return project.targetDaily * ProductionCalculator.linesPerPageOf(project);

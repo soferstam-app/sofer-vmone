@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'logic/measured_work.dart';
+import 'logic/megillah_format.dart';
 import 'logic/completion_estimator.dart';
 import 'logic/expense_logic.dart';
 import 'logic/hebrew_work_calendar.dart';
@@ -13,27 +16,43 @@ import 'storage_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/sofer_widgets.dart';
 import 'widgets/confirm.dart';
+import 'widgets/feedback.dart';
 import 'format.dart';
 import 'logic/client_update.dart';
 import 'logic/tefillin_state.dart';
 import 'logic/tefillin_units.dart';
-import 'project/progress_grids.dart';
 import 'project/rhythm_panel.dart';
 import 'project/tefillin_board.dart';
+import 'project/project_writing_tab.dart';
 import 'logic/hebrew_clock.dart';
 import 'logic/payment_ledger.dart';
 import 'logic/proofread_board.dart';
+import 'logic/work_correction.dart';
 import 'project/payment_sheet.dart';
 import 'project/client_update_sheet.dart';
+import 'l10n/app_localizations.dart';
 
 class ProjectSummaryScreen extends StatefulWidget {
   final List<Project> projects;
   final List<WorkSession> history;
+  final FutureOr<void> Function(List<Project>, List<WorkSession>)?
+      onWorkCommitted;
+  final String? initialProjectId;
+  final Future<Project?> Function(Project project)? onEditProject;
+  final Future<bool> Function(Project project)? onDeleteProject;
+  final FutureOr<void> Function(Project)? onProjectUpdated;
+  final FutureOr<void> Function(List<WorkSession>)? onHistoryUpdated;
 
   const ProjectSummaryScreen({
     super.key,
     required this.projects,
     required this.history,
+    this.initialProjectId,
+    this.onWorkCommitted,
+    this.onEditProject,
+    this.onDeleteProject,
+    this.onProjectUpdated,
+    this.onHistoryUpdated,
   });
 
   @override
@@ -41,6 +60,9 @@ class ProjectSummaryScreen extends StatefulWidget {
 }
 
 class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
+  late List<Project> _projects;
+  late List<WorkSession> _history;
+  bool _workSaving = false;
   Project? _selectedProject;
   WorkCalendarRules _rules = WorkCalendarRules.standard;
   bool _useGregorianDates = false;
@@ -68,9 +90,9 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
   /// that every קדש sits under every other.
   BoardGrouping _boardGrouping = BoardGrouping.byPair;
 
-  /// Flags edited on this screen, held here so the board redraws before the
-  /// write comes back. Keyed like [Project.tefillinFlags].
+  /// Flags from the last committed snapshot, keyed like [Project.tefillinFlags].
   Map<String, String>? _flagsOverride;
+  _ProjectSection _section = _ProjectSection.overview;
 
   Map<String, String> _flagsFor(Project project) =>
       _flagsOverride ?? project.tefillinFlags;
@@ -89,7 +111,9 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
       projectName: project.name,
       slots: TefillinState.slots(withFlags, sessions),
       pairsOrdered: project.targetUnits,
-      dailyTarget: '${project.targetDaily} פרשיות',
+      dailyTarget: context.l10n.pick(
+          he: '${project.targetDaily} פרשיות',
+          en: '${project.targetDaily} Parashiyot'),
       grouping: grouping ?? _boardGrouping,
       onGroupingChanged:
           onGroupingChanged ?? (g) => setState(() => _boardGrouping = g),
@@ -106,14 +130,16 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
   Future<void> _slotActions(Project project, TefillinSlot slot) async {
     final t = SoferTokens.of(context);
     final name = TefillinUnits.names[slot.parshiya - 1];
-    final where =
-        'זוג ${slot.pair} · ${TefillinUnits.sideName(slot.side)} · $name';
+    final where = context.l10n.pick(
+      he: 'זוג ${slot.pair} · ${TefillinUnits.sideName(slot.side)} · $name',
+      en: 'Set ${slot.pair} · ${slot.side == TefillinSide.head ? 'Shel Rosh' : 'Shel Yad'} · $name',
+    );
 
     final action = await showModalBottomSheet<_TefillinSlotAction>(
       context: context,
       backgroundColor: t.paper,
       builder: (ctx) => Directionality(
-        textDirection: TextDirection.rtl,
+        textDirection: context.l10n.textDirection,
         child: SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -132,14 +158,17 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
               if (slot.state != SlotState.stuck)
                 ListTile(
                   leading: Icon(Icons.build_outlined, color: t.caution),
-                  title: const Text('מסמן: ממתין לתיקון'),
+                  title: Text(context.l10n.pick(
+                      he: 'מסמן: ממתין לתיקון',
+                      en: 'Mark: Awaiting Correction')),
                   onTap: () =>
                       Navigator.pop(ctx, _TefillinSlotAction.markStuck),
                 ),
               if (slot.state != SlotState.voided)
                 ListTile(
                   leading: Icon(Icons.block, color: t.danger),
-                  title: const Text('מסמן: נפסל'),
+                  title: Text(
+                      context.l10n.pick(he: 'מסמן: נפסל', en: 'Mark: Invalid')),
                   onTap: () =>
                       Navigator.pop(ctx, _TefillinSlotAction.markVoided),
                 ),
@@ -147,14 +176,19 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                   slot.state == SlotState.voided)
                 ListTile(
                   leading: Icon(Icons.undo, color: t.accent),
-                  title: const Text('ביטול הסימון'),
+                  title: Text(
+                      context.l10n.pick(he: 'ביטול הסימון', en: 'Clear mark')),
                   onTap: () => Navigator.pop(ctx, _TefillinSlotAction.clear),
                 ),
               if (slot.state == SlotState.voided)
                 ListTile(
                   leading: Icon(Icons.restart_alt, color: t.danger),
-                  title: const Text('הסר את הפרשייה והתחל מחדש'),
-                  subtitle: const Text('גם הפרשיות שאחריה באותו סט יוסרו'),
+                  title: Text(context.l10n.pick(
+                      he: 'הסר את הפרשייה והתחל מחדש',
+                      en: 'Remove the Parashah and start again')),
+                  subtitle: Text(context.l10n.pick(
+                      he: 'גם הפרשיות שאחריה באותו סט יוסרו',
+                      en: 'Later Parashiyot in this set will also be removed')),
                   onTap: () => Navigator.pop(ctx, _TefillinSlotAction.remove),
                 ),
               const SizedBox(height: 8),
@@ -193,17 +227,35 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
       next[key] = flag;
     }
 
-    setState(() {
-      _flagsOverride = next;
-      _selectedProject = project.copyWith(tefillinFlags: next);
-    });
-
-    final all = await _storage.loadProjects();
-    final at = all.indexWhere((p) => p.id == project.id);
-    if (at != -1) {
-      all[at] = all[at].copyWith(tefillinFlags: next);
-      await _storage.saveProjects(all);
+    var nextHistory = _history;
+    if (flag == TefillinState.voidFlag) {
+      final correction = WorkCorrection.markTefillinInvalid(
+        history: _history,
+        project: project,
+        pair: slot.pair,
+        side: slot.side,
+        parshiya: slot.parshiya,
+      );
+      nextHistory = correction.history;
+    } else if (flag == null) {
+      final side = slot.side == TefillinSide.head ? 'head' : 'hand';
+      final slotIds = _history
+          .where((session) =>
+              !session.isDeleted &&
+              session.projectId == project.id &&
+              session.pairIndex == slot.pair &&
+              session.tefillinType == side &&
+              session.parshiya == slot.parshiya)
+          .map((session) => session.id)
+          .toSet();
+      if (slotIds.isNotEmpty) {
+        nextHistory =
+            WorkCorrection.markInvalid(_history, slotIds, invalid: false)
+                .history;
+      }
     }
+
+    await _commitWork(project.copyWith(tefillinFlags: next), nextHistory);
   }
 
   /// Removes a rejected parshiya and every later parshiya in the same four.
@@ -214,11 +266,14 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
     final name = TefillinUnits.names[slot.parshiya - 1];
     final confirmed = await confirmAction(
       context,
-      title: 'להסיר את פרשיית $name?',
-      message: 'הפרשייה וכל הפרשיות שאחריה באותו סט יועברו לסל המחזור. '
-          'לאחר מכן יהיה אפשר להתחיל את $name מחדש.',
-      cancelLabel: 'ביטול',
-      confirmLabel: 'הסר והתחל מחדש',
+      title: context.l10n
+          .pick(he: 'להסיר את פרשיית $name?', en: 'Remove Parashah $name?'),
+      message: context.l10n.pick(
+          he: 'הפרשייה וכל הפרשיות שאחריה באותו סט יועברו לסל המחזור. לאחר מכן יהיה אפשר להתחיל את $name מחדש.',
+          en: 'This Parashah and all later Parashiyot in the same set will move to the Recycle Bin. You can then start $name again.'),
+      cancelLabel: context.l10n.cancel,
+      confirmLabel:
+          context.l10n.pick(he: 'הסר והתחל מחדש', en: 'Remove and start again'),
       danger: true,
     );
     if (!confirmed || !mounted) return;
@@ -229,41 +284,37 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
       nextFlags.remove(Project.slotKey(slot.pair, side, p));
     }
 
-    final nextHistory = TefillinState.removeFrom(
-      history: widget.history,
-      projectId: project.id,
+    final correction = WorkCorrection.deleteTefillinFrom(
+      history: _history,
+      project: project,
       pair: slot.pair,
       side: slot.side,
       parshiya: slot.parshiya,
     );
-    widget.history
-      ..clear()
-      ..addAll(nextHistory);
-
-    final updated = project.copyWith(tefillinFlags: nextFlags);
-    final localProject = widget.projects.indexWhere((p) => p.id == project.id);
-    if (localProject != -1) widget.projects[localProject] = updated;
-    setState(() {
-      _flagsOverride = nextFlags;
-      _selectedProject = updated;
-    });
-
-    final storedProjects = await _storage.loadProjects();
-    final storedAt = storedProjects.indexWhere((p) => p.id == project.id);
-    if (storedAt != -1) storedProjects[storedAt] = updated;
-    await _storage.saveProjects(storedProjects);
-    await _storage.saveHistory(widget.history);
+    final nextHistory = correction.history;
+    if (!await _commitWork(
+        project.copyWith(tefillinFlags: nextFlags), nextHistory)) {
+      return;
+    }
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('פרשיית $name הוסרה ואפשר להתחיל אותה מחדש')),
+      SnackBar(
+          content: Text(context.l10n.pick(
+              he: 'פרשיית $name הוסרה ואפשר להתחיל אותה מחדש',
+              en: 'Parashah $name was removed and can now be started again'))),
     );
   }
 
   @override
   void initState() {
     super.initState();
-    if (widget.projects.isNotEmpty) {
-      _selectedProject = widget.projects.first;
+    _projects = [...widget.projects];
+    _history = [...widget.history];
+    if (_projects.isNotEmpty) {
+      _selectedProject = _projects.firstWhere(
+        (project) => project.id == widget.initialProjectId,
+        orElse: () => _projects.first,
+      );
     }
     _storage.getWorkCalendarRules().then((v) {
       if (mounted) setState(() => _rules = v);
@@ -290,33 +341,274 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final selected = _selectedProject;
     return Scaffold(
-      appBar: AppBar(title: const Text("סיכום פרויקט")),
+      appBar: AppBar(
+        title: Text(selected?.name ??
+            context.l10n.pick(he: "מרכז הפרויקט", en: "Project center")),
+        actions: [
+          if (selected != null)
+            PopupMenuButton<String>(
+              onSelected: (action) async {
+                if (action == 'edit') await _editProject(selected);
+                if (action == 'delete') {
+                  final deleted =
+                      await widget.onDeleteProject?.call(selected) ?? false;
+                  if (!mounted || !deleted) return;
+                  Navigator.pop(this.context);
+                }
+              },
+              itemBuilder: (context) => [
+                PopupMenuItem(
+                  value: 'edit',
+                  child: ListTile(
+                    leading: const Icon(Icons.edit_outlined),
+                    title: Text(context.l10n.pick(
+                        he: 'עריכת פרטי הפרויקט', en: 'Edit project details')),
+                  ),
+                ),
+                if (widget.onDeleteProject != null)
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: ListTile(
+                      leading: Icon(Icons.delete_outline,
+                          color: SoferTokens.of(context).danger),
+                      title: Text(context.l10n
+                          .pick(he: 'מחיקת הפרויקט', en: 'Delete project')),
+                    ),
+                  ),
+              ],
+            ),
+        ],
+      ),
       body: Column(
         children: [
-          if (widget.projects.isNotEmpty)
+          if (_projects.length > 1)
             Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
               child: DropdownButtonFormField<Project>(
                 initialValue: _selectedProject,
-                decoration: const InputDecoration(
-                  labelText: "בחר פרויקט",
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText:
+                      context.l10n.pick(he: "בחר פרויקט", en: "Select project"),
+                  border: const OutlineInputBorder(),
                 ),
-                items: widget.projects.map((p) {
+                items: _projects.map((p) {
                   return DropdownMenuItem(value: p, child: Text(p.name));
                 }).toList(),
-                onChanged: (val) => setState(() => _selectedProject = val),
+                onChanged: (val) => setState(() {
+                  _selectedProject = val;
+                  _flagsOverride = val?.tefillinFlags;
+                }),
               ),
             ),
-          if (_selectedProject != null)
-            Expanded(
-              child: _buildProjectContent(_selectedProject!),
+          if (selected != null) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+              child: SegmentedButton<_ProjectSection>(
+                segments: [
+                  ButtonSegment(
+                    value: _ProjectSection.overview,
+                    icon: const Icon(Icons.insights_outlined),
+                    label: Text(context.l10n.pick(he: 'סקירה', en: 'Overview')),
+                  ),
+                  ButtonSegment(
+                    value: _ProjectSection.writing,
+                    icon: const Icon(Icons.history_edu_outlined),
+                    label: Text(context.l10n.pick(he: 'הכתיבה', en: 'Writing')),
+                  ),
+                  ButtonSegment(
+                    value: _ProjectSection.details,
+                    icon: const Icon(Icons.tune_outlined),
+                    label: Text(context.l10n.pick(he: 'פרטים', en: 'Details')),
+                  ),
+                ],
+                selected: {_section},
+                onSelectionChanged: (value) =>
+                    setState(() => _section = value.first),
+              ),
             ),
+            Expanded(
+              child: switch (_section) {
+                _ProjectSection.overview => _buildProjectContent(selected),
+                _ProjectSection.writing => ProjectWritingTab(
+                    project: selected,
+                    projects: _projects,
+                    history: _history,
+                    dayStart: _dayStart,
+                    useGregorianDates: _useGregorianDates,
+                    onHistoryUpdated: _historyUpdated,
+                    tefillinBoard: selected.type == ProjectType.tefillin
+                        ? _tefillinBoard(
+                            selected,
+                            _history
+                                .where((session) =>
+                                    session.projectId == selected.id &&
+                                    !session.isDeleted &&
+                                    !session.isInvalid)
+                                .toList(),
+                          )
+                        : null,
+                  ),
+                _ProjectSection.details => _details(selected),
+              },
+            ),
+          ],
         ],
       ),
     );
   }
+
+  Future<void> _editProject(Project project) async {
+    final updated = await widget.onEditProject?.call(project);
+    if (updated == null || !mounted) return;
+    setState(() {
+      _projects = [for (final p in _projects) p.id == updated.id ? updated : p];
+      _selectedProject = updated;
+      _flagsOverride = updated.tefillinFlags;
+    });
+  }
+
+  Future<bool> _commitWork(
+      Project updated, List<WorkSession> nextHistory) async {
+    if (_workSaving) return false;
+    _workSaving = true;
+    try {
+      final storedProjects = await _storage.loadProjects();
+      final nextProjects = [
+        for (final p in storedProjects) p.id == updated.id ? updated : p
+      ];
+      await _storage.saveWorkSnapshot(
+          projects: nextProjects, history: nextHistory);
+      _projects = [for (final p in _projects) p.id == updated.id ? updated : p];
+      _history = [...nextHistory];
+      if (mounted) {
+        setState(() {
+          _selectedProject = updated;
+          _flagsOverride = updated.tefillinFlags;
+        });
+      }
+      try {
+        await widget.onWorkCommitted?.call(nextProjects, nextHistory);
+      } catch (error) {
+        debugPrint('Project refresh after commit failed: $error');
+      }
+      return true;
+    } catch (error) {
+      if (mounted) {
+        showAppError(
+            context,
+            context.l10n.pick(
+                he: 'השינוי לא נשמר. אפשר לנסות שוב: $error',
+                en: 'The change could not be saved. Try again: $error'));
+      }
+      return false;
+    } finally {
+      _workSaving = false;
+    }
+  }
+
+  Future<void> _historyUpdated(List<WorkSession> next) async {
+    if (widget.onHistoryUpdated != null) {
+      await widget.onHistoryUpdated!(next);
+    } else {
+      await _storage.saveHistory(next);
+    }
+    if (mounted) setState(() => _history = [...next]);
+  }
+
+  Widget _details(Project project) {
+    final t = SoferTokens.of(context);
+    String typeName() => switch (project.type) {
+          ProjectType.sefer =>
+            context.l10n.pick(he: 'ספר תורה', en: 'Sefer Torah'),
+          ProjectType.megillah =>
+            context.l10n.pick(he: 'מגילה', en: 'Megillah'),
+          ProjectType.mezuza => context.l10n.pick(he: 'מזוזות', en: 'Mezuzot'),
+          ProjectType.tefillin =>
+            context.l10n.pick(he: 'תפילין', en: 'Tefillin'),
+        };
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: SoferSectionTitle(context.l10n
+                  .pick(he: 'פרטי ההזמנה', en: 'Commission details')),
+            ),
+            FilledButton.tonalIcon(
+              onPressed: widget.onEditProject == null
+                  ? null
+                  : () => _editProject(project),
+              icon: const Icon(Icons.edit_outlined),
+              label: Text(context.l10n.pick(he: 'עריכה', en: 'Edit')),
+            ),
+          ],
+        ),
+        Card(
+          child: Column(
+            children: [
+              _detailRow(context.l10n.pick(he: 'שם', en: 'Name'), project.name),
+              _detailRow(context.l10n.pick(he: 'סוג', en: 'Type'), typeName()),
+              if (project.clientEmail case final email? when email.isNotEmpty)
+                _detailRow(context.l10n.pick(he: 'לקוח', en: 'Client'), email),
+              _detailRow(context.l10n.pick(he: 'מחיר', en: 'Price'),
+                  formatMoney(project.price, project.currency)),
+              _detailRow(context.l10n.pick(he: 'יעד יומי', en: 'Daily target'),
+                  '${project.targetDaily}'),
+              _detailRow(
+                  context.l10n.pick(he: 'יעד חודשי', en: 'Monthly target'),
+                  '${project.targetMonthly}'),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+        SoferSectionTitle(
+            context.l10n.pick(he: 'מבנה העבודה', en: 'Work structure')),
+        Card(
+          child: Column(
+            children: [
+              if (project.type.isPaged) ...[
+                _detailRow(
+                    context.l10n.pick(he: 'עמודים בספר', en: 'Sefer pages'),
+                    '${project.totalPages ?? ProductionCalculator.defaultTotalPages}'),
+                _detailRow(
+                    context.l10n.pick(he: 'שורות לעמוד', en: 'Lines per page'),
+                    '${ProductionCalculator.linesPerPageOf(project)}'),
+              ] else
+                _detailRow(
+                    project.type == ProjectType.mezuza
+                        ? context.l10n
+                            .pick(he: 'מזוזות בהזמנה', en: 'Ordered Mezuzot')
+                        : context.l10n
+                            .pick(he: 'זוגות בהזמנה', en: 'Ordered sets'),
+                    '${project.targetUnits ?? '—'}'),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
+                child: Text(
+                  context.l10n.pick(
+                    he: 'שינוי המבנה עשוי להשפיע על חישובי התקדמות. לפני שמירה יוצג פירוט ההשפעה.',
+                    en: 'Structural changes may affect progress calculations. Their impact is shown before saving.',
+                  ),
+                  style: TextStyle(color: t.inkMuted, fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _detailRow(String label, String value) => ListTile(
+        dense: true,
+        title: Text(label),
+        trailing: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 220),
+          child: Text(value, textAlign: TextAlign.end),
+        ),
+      );
 
   /// What proofreading on this commission is waiting on, in a line.
   ///
@@ -329,11 +621,17 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
 
     final mine = board.mine.length;
     final out = board.at(ProofreadStage.sent).length;
-    if (mine == 0 && out == 0) return 'הכול הושלם';
+    if (mine == 0 && out == 0) {
+      return context.l10n.pick(he: 'הכול הושלם', en: 'Everything is complete');
+    }
 
     return [
-      if (mine > 0) '$mine ממתינות לך',
-      if (out > 0) '$out אצל המגיה',
+      if (mine > 0)
+        context.l10n.pick(
+            he: '$mine ממתינות לך', en: '$mine awaiting your corrections'),
+      if (out > 0)
+        context.l10n
+            .pick(he: '$out אצל המגיה', en: '$out with the proofreader'),
     ].join(' · ');
   }
 
@@ -346,16 +644,25 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
     final ledger = PaymentLedger.of(
       project: project,
       allPayments: _payments,
-      history: widget.history,
+      history: _history,
     );
     final outstanding = ledger.outstanding;
     final value = ledger.isEmpty
-        ? "לא נרשמו תשלומים"
+        ? context.l10n.pick(he: "לא נרשמו תשלומים", en: "No payments recorded")
         : [
-            "התקבל ${ledger.received.format(project.currency)}",
+            context.l10n.pick(
+                he: "התקבל ${ledger.received.format(project.currency)}",
+                en: "Received ${ledger.received.format(project.currency)}"),
             if (outstanding != null && outstanding.amount > 0)
-              "נותר ${outstanding.format()}",
-            if (outstanding != null && outstanding.amount == 0) "שולם במלואו",
+              context.l10n.pick(
+                  he: "נותר ${outstanding.format()}",
+                  en: "${outstanding.format()} outstanding"),
+            if (outstanding != null && outstanding.amount == 0)
+              context.l10n.pick(he: "שולם במלואו", en: "Paid in full"),
+            if (outstanding == null)
+              context.l10n.pick(
+                  he: 'היתרה אינה מחושבת — תשלומים בכמה מטבעות',
+                  en: 'Outstanding unavailable — multiple currencies'),
           ].join(' · ');
 
     return InkWell(
@@ -363,22 +670,29 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
         final changed = await showPaymentSheet(
           context: context,
           project: project,
-          history: widget.history,
+          history: _history,
           useGregorianDates: _useGregorianDates,
         );
         if (!changed || !mounted) return;
         final fresh = await _storage.loadPayments();
         if (mounted) setState(() => _payments = fresh);
       },
-      child: _statRow("תשלומים:", value),
+      child: SoferTokens.of(context).isRules
+          ? SoferStatRow(
+              context.l10n.pick(he: 'תשלומים', en: 'Payments'), value)
+          : _statRow(context.l10n.pick(he: "תשלומים:", en: "Payments:"), value),
     );
   }
 
   Widget _buildProjectContent(Project project) {
-    final sessions = widget.history
+    final sessions = _history
         .where((s) => s.projectId == project.id && !s.isDeleted)
         .toList();
     final sessionsForStats = sessions.where((s) => !s.backlogOnly).toList();
+    final validOutputSessions =
+        sessionsForStats.where((s) => !s.isInvalid).toList();
+    final invalidTime = MeasuredWork.invalidTime(
+        sessions.where((session) => !session.backlogOnly));
 
     // Anything divided by time is measured only from work that carried time.
     //
@@ -393,65 +707,76 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
     // by hand -- and summing those raw took an honest hour down to half of one.
     final sessionsWithTime = MeasuredWork.only(sessionsForStats);
     final someWorkUntimed = sessionsWithTime.length != sessionsForStats.length;
-    final tefillinAverage = project.type == ProjectType.tefillin
-        ? ProductionCalculator.tefillinAverageStats(sessionsWithTime)
-        : null;
-
     String totalWrittenStr = "";
     double totalProfit = 0;
     String avgTimeStr = "";
 
     final Duration totalTime = MeasuredWork.time(sessionsWithTime);
+    final comparableLinesForStats = project.type == ProjectType.tefillin
+        ? ProductionCalculator.tefillinSeferLinesTotal(sessionsWithTime,
+            includeInvalid: true)
+        : ProductionCalculator.comparableLinesTotal(project, sessionsWithTime,
+            includeInvalid: true);
 
     int totalLinesWritten = 0;
-    if (project.type == ProjectType.sefer) {
-      int totalLines = 0;
-      for (var s in sessions) {
-        totalLines += ProductionCalculator.seferLinesInSession(s);
-      }
-      totalLinesWritten = totalLines;
+    if (project.type.isPaged) {
+      totalLinesWritten =
+          ProductionCalculator.seferLinesTotal(validOutputSessions);
 
       final int linesPerPage = ProductionCalculator.linesPerPageOf(project);
 
-      totalWrittenStr =
-          "${totalLines ~/ linesPerPage} עמודים ו-${totalLines % linesPerPage} שורות";
+      totalWrittenStr = context.l10n.pick(
+          he: "${totalLinesWritten ~/ linesPerPage} עמודים ו-${totalLinesWritten % linesPerPage} שורות",
+          en: "${totalLinesWritten ~/ linesPerPage} pages and ${totalLinesWritten % linesPerPage} lines");
 
       // The lines on the other side of the ratio, from the same records the
       // time came from — otherwise it divides lines that carried no time by
       // time that produced no lines.
-      int linesForStats = 0;
-      for (var s in sessionsWithTime) {
-        linesForStats += ProductionCalculator.seferLinesInSession(s);
-      }
-      totalProfit = ProfitCalculator.profit(project, sessionsForStats);
+      totalProfit = ProfitCalculator.profit(project, validOutputSessions);
 
-      if (linesForStats > 0 && totalTime.inSeconds > 0) {
-        double avg = totalTime.inMinutes / linesForStats;
-        avgTimeStr = "${avg.toStringAsFixed(2)} דקות לשורה";
+      if (comparableLinesForStats > 0 && totalTime.inSeconds > 0) {
+        double avg = minutesWithSeconds(totalTime) / comparableLinesForStats;
+        avgTimeStr = context.l10n.pick(
+            he: "${avg.toStringAsFixed(2)} דקות לשורה",
+            en: "${avg.toStringAsFixed(2)} minutes per line");
       }
     } else if (project.type == ProjectType.mezuza) {
       final int totalMezuzotLines =
-          ProductionCalculator.mezuzaLinesTotal(sessions);
+          ProductionCalculator.mezuzaLinesTotal(validOutputSessions);
       double mezuzot = totalMezuzotLines / ProductionCalculator.linesPerMezuza;
-      totalWrittenStr = "${mezuzot.toStringAsFixed(1)} מזוזות";
-      final int mezuzaLinesForStats =
-          ProductionCalculator.mezuzaLinesTotal(sessionsWithTime);
-      totalProfit = ProfitCalculator.profit(project, sessionsForStats);
+      totalWrittenStr = context.l10n.pick(
+          he: "${mezuzot.toStringAsFixed(1)} מזוזות",
+          en: "${mezuzot.toStringAsFixed(1)} Mezuzot");
+      totalProfit = ProfitCalculator.profit(project, validOutputSessions);
 
-      if (mezuzaLinesForStats > 0 && totalTime.inSeconds > 0) {
-        double avg = totalTime.inMinutes / mezuzaLinesForStats;
-        avgTimeStr = "${avg.toStringAsFixed(2)} דקות לשורה";
+      if (comparableLinesForStats > 0 && totalTime.inSeconds > 0) {
+        double avg = minutesWithSeconds(totalTime) / comparableLinesForStats;
+        avgTimeStr = context.l10n.pick(
+            he: "${avg.toStringAsFixed(2)} דקות לשורה",
+            en: "${avg.toStringAsFixed(2)} minutes per line");
       }
     } else {
-      final int totalParshiyot = ProductionCalculator.parshiyotTotal(sessions);
-      totalWrittenStr = "$totalParshiyot פרשיות (סה\"כ)";
-      final int parshiyotForStats = tefillinAverage?.parshiyot ?? 0;
-      totalProfit = ProfitCalculator.profit(project, sessionsForStats);
+      final totalParshiyot =
+          ProductionCalculator.parshiyotTotal(validOutputSessions);
+      final physicalLines =
+          ProductionCalculator.tefillinPhysicalLinesTotal(validOutputSessions);
+      final comparableLines =
+          ProductionCalculator.tefillinSeferLinesTotal(validOutputSessions);
+      final comparableText = comparableLines % 1 == 0
+          ? comparableLines.toInt().toString()
+          : comparableLines.toStringAsFixed(1);
+      totalWrittenStr = context.l10n.pick(
+        he: "$physicalLines ($comparableText) שורות · $totalParshiyot פרשיות",
+        en: "$physicalLines ($comparableText) lines · $totalParshiyot Parashiyot",
+      );
+      totalProfit = ProfitCalculator.profit(project, validOutputSessions);
 
-      final averageTime = tefillinAverage?.duration ?? Duration.zero;
-      if (parshiyotForStats > 0 && averageTime.inSeconds > 0) {
-        double avg = averageTime.inMinutes / parshiyotForStats;
-        avgTimeStr = "${avg.toStringAsFixed(2)} דקות לפרשייה";
+      if (comparableLinesForStats > 0 && totalTime.inSeconds > 0) {
+        final avg = minutesWithSeconds(totalTime) / comparableLinesForStats;
+        avgTimeStr = context.l10n.pick(
+          he: "${avg.toStringAsFixed(2)} דקות לשורה",
+          en: "${avg.toStringAsFixed(2)} minutes per line",
+        );
       }
     }
 
@@ -488,13 +813,14 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
     // delivery date is produced the same way for all three.
     final estimate = CompletionEstimator.estimate(
       project: project,
-      history: widget.history,
+      history: _history,
       rules: _rules,
     );
 
     final String estimatedEndStr = estimate == null
         ? ""
-        : formatDisplayDate(estimate.plan.completionDate, _useGregorianDates);
+        : formatDisplayDate(estimate.plan.completionDate, _useGregorianDates,
+            english: context.l10n.isEnglish);
 
     String targetPaceStr = "";
     if (project.targetCompletionDate != null && estimate != null) {
@@ -502,11 +828,18 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
         remainingUnits: estimate.remainingUnits,
         deadline: project.targetCompletionDate!,
         rules: _rules,
+        overrides: project.planOverrides,
       );
       if (needed != null) {
-        targetPaceStr = project.type == ProjectType.sefer
-            ? "${(needed * ProductionCalculator.linesPerPageOf(project)).toStringAsFixed(1)} שורות ליום עבודה"
-            : "${needed.toStringAsFixed(1)} ${_unitPlural(project.type)} ליום עבודה";
+        targetPaceStr = project.type.isPaged
+            ? context.l10n.pick(
+                he:
+                    "${(needed * ProductionCalculator.linesPerPageOf(project)).toStringAsFixed(1)} שורות ליום עבודה",
+                en:
+                    "${(needed * ProductionCalculator.linesPerPageOf(project)).toStringAsFixed(1)} lines per workday")
+            : context.l10n.pick(
+                he: "${needed.toStringAsFixed(1)} ${_unitPlural(project.type)} ליום עבודה",
+                en: "${needed.toStringAsFixed(1)} ${_unitPlural(project.type)} per workday");
       }
     }
 
@@ -527,8 +860,10 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                       linesWritten: totalLinesWritten,
                       soferName: _soferName,
                       today: DateTime.now(),
-                      formatDate: (d) =>
-                          formatDisplayDate(d, _useGregorianDates),
+                      formatDate: (d) => formatDisplayDate(
+                          d, _useGregorianDates,
+                          english: context.l10n.isEnglish),
+                      english: context.l10n.isEnglish,
                     );
                     if (!mounted) return;
                     // Shown before it is sent. Going straight to a mailto link
@@ -537,12 +872,15 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                     await showClientUpdate(
                       context: context,
                       body: body,
-                      subject: 'עדכון התקדמות – ${project.name}',
+                      subject: context.l10n.pick(
+                          he: 'עדכון התקדמות – ${project.name}',
+                          en: 'Progress update – ${project.name}'),
                       to: project.clientEmail,
                     );
                   },
                   icon: const Icon(Icons.email),
-                  label: const Text("שלח עדכון ללקוח"),
+                  label: Text(context.l10n
+                      .pick(he: "שלח עדכון ללקוח", en: "Send client update")),
                 ),
               ),
             ),
@@ -555,6 +893,7 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
               hourlyRate: hourlyRate,
               avgTimeStr: avgTimeStr,
               someWorkUntimed: someWorkUntimed,
+              invalidTime: invalidTime,
               estimate: estimate,
               targetPaceStr: targetPaceStr,
             )
@@ -566,26 +905,55 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   children: [
-                    _statRow("סך הכל נכתב:", totalWrittenStr),
+                    _statRow(
+                        context.l10n
+                            .pick(he: "סך הכל נכתב:", en: "Total written:"),
+                        totalWrittenStr),
                     if (_proofreadLine(project) != null)
-                      _statRow("הגהה:", _proofreadLine(project)!),
+                      _statRow(
+                          context.l10n.pick(he: "הגהה:", en: "Proofreading:"),
+                          _proofreadLine(project)!),
                     _paymentRow(project),
-                    _statRow("סך הכל רווח:",
+                    _statRow(
+                        context.l10n
+                            .pick(he: "סך הכל רווח:", en: "Total profit:"),
                         formatMoneyExact(totalProfit, project.currency)),
                     if (projectExpenses > 0) ...[
-                      _statRow("הוצאות משויכות:",
+                      _statRow(
+                          context.l10n.pick(
+                              he: "הוצאות משויכות:", en: "Allocated expenses:"),
                           formatMoneyExact(projectExpenses, project.currency)),
                       _statRow(
-                          "נטו (לאחר הוצאות):",
+                          context.l10n.pick(
+                              he: "נטו (לאחר הוצאות):",
+                              en: "Net (after expenses):"),
                           formatMoneyExact(
                               totalProfit - projectExpenses, project.currency)),
                     ],
                     if (hourlyRate != null)
-                      _statRow("שכר לשעה:",
-                          "${formatMoney(hourlyRate, project.currency)} לשעה"),
-                    if (avgTimeStr.isNotEmpty) _statRow("ממוצע:", avgTimeStr),
+                      _statRow(
+                          context.l10n
+                              .pick(he: "שכר לשעה:", en: "Hourly earnings:"),
+                          context.l10n.pick(
+                              he: "${formatMoney(hourlyRate, project.currency)} לשעה",
+                              en: "${formatMoney(hourlyRate, project.currency)} per hour")),
+                    if (avgTimeStr.isNotEmpty)
+                      _statRow(context.l10n.pick(he: "ממוצע:", en: "Average:"),
+                          avgTimeStr),
+                    if (invalidTime > Duration.zero)
+                      _statRow(
+                        context.l10n.pick(
+                            he: "זמן על עבודה שנפסלה:",
+                            en: "Time on invalid work:"),
+                        formatSpan(invalidTime,
+                            english: context.l10n.isEnglish),
+                      ),
                     if (someWorkUntimed)
-                      _statRow("", "הממוצע מחושב רק מרשומות שנמדד בהן זמן"),
+                      _statRow(
+                          "",
+                          context.l10n.pick(
+                              he: "הממוצע מחושב רק מרשומות שנמדד בהן זמן",
+                              en: "The average uses only records with measured time")),
                   ],
                 ),
               ),
@@ -594,14 +962,6 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
               _completionCard(project, estimate, targetPaceStr)
             else if (project.plannedUnits == null)
               _missingSizeCard(project),
-          ],
-          // The ruled layout reaches the map through the button under the
-          // figures, so it is not also laid out down the screen.
-          if (SoferTokens.of(context).isCards) ...[
-            if (project.type == ProjectType.sefer)
-              seferProgressGrid(context, project, sessions),
-            if (project.type == ProjectType.tefillin)
-              _tefillinBoard(project, sessions),
           ],
           RhythmPanel(
             project: project,
@@ -617,10 +977,15 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
-          Text(value),
+          Expanded(
+              flex: 2,
+              child: Text(label,
+                  style: const TextStyle(fontWeight: FontWeight.bold))),
+          const SizedBox(width: 12),
+          Expanded(flex: 3, child: Text(value, textAlign: TextAlign.end)),
         ],
       ),
     );
@@ -640,6 +1005,7 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
     required double? hourlyRate,
     required String avgTimeStr,
     required bool someWorkUntimed,
+    required Duration invalidTime,
     required CompletionEstimate? estimate,
     required String targetPaceStr,
   }) {
@@ -658,8 +1024,13 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
             padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
             child: Text(
               project.plannedUnits == null
-                  ? "כדי לחשב צפי סיום צריך להזין את ${_sizeQuestion(project)}"
-                  : "העבודה הושלמה",
+                  ? context.l10n.pick(
+                      he:
+                          "כדי לחשב צפי סיום צריך להזין את ${_sizeQuestion(project)}",
+                      en:
+                          "Enter ${_sizeQuestion(project)} to calculate an estimated completion date")
+                  : context.l10n
+                      .pick(he: "העבודה הושלמה", en: "The project is complete"),
               style: TextStyle(
                   fontFamily: t.numeralFamily,
                   fontSize: 21,
@@ -684,7 +1055,9 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                 marks: run.marks(
                   estimatedEnd: estimate.plan.completionDate,
                   target: project.targetCompletionDate,
-                  formatDate: (d) => formatDisplayDate(d, _useGregorianDates),
+                  formatDate: (d) => formatDisplayDate(d, _useGregorianDates,
+                      english: context.l10n.isEnglish),
+                  english: context.l10n.isEnglish,
                 ),
               );
             }),
@@ -701,7 +1074,8 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                   crossAxisAlignment: CrossAxisAlignment.baseline,
                   textBaseline: TextBaseline.alphabetic,
                   children: [
-                    Text("${(estimate.progress * 100).toStringAsFixed(0)}%",
+                    Text(
+                        "${(MegillahFormat.displayedProgress(project, estimate.progress) * 100).toStringAsFixed(0)}%",
                         style: TextStyle(
                             fontFamily: t.numeralFamily,
                             fontSize: 27,
@@ -709,7 +1083,10 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                             color: t.accent)),
                     const SizedBox(width: 9),
                     Expanded(
-                      child: Text("מהעבודה נכתבו",
+                      child: Text(
+                          context.l10n.pick(
+                              he: "מהעבודה נכתבו",
+                              en: "of the project written"),
                           style: TextStyle(
                               fontFamily: t.labelFamily,
                               fontSize: 13,
@@ -718,7 +1095,8 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                   ],
                 ),
                 const SizedBox(height: 9),
-                SoferProgress(estimate.progress),
+                SoferProgress(MegillahFormat.displayedProgress(
+                    project, estimate.progress)),
               ],
             ),
           ),
@@ -728,7 +1106,8 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
               TextSpan(children: [
                 if (deadlineVerdict(
                         target: project.targetCompletionDate,
-                        estimatedEnd: estimate.plan.completionDate)
+                        estimatedEnd: estimate.plan.completionDate,
+                        english: context.l10n.isEnglish)
                     case final verdict?)
                   TextSpan(
                     text: "${verdict.text}. ",
@@ -760,16 +1139,33 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SoferSectionTitle("העבודה", padding: EdgeInsets.zero),
+                SoferSectionTitle(
+                    context.l10n.pick(he: "העבודה", en: "The work"),
+                    padding: EdgeInsets.zero),
                 const SizedBox(height: 6),
-                SoferStatRow("נכתב", totalWrittenStr),
+                SoferStatRow(context.l10n.pick(he: "נכתב", en: "Written"),
+                    totalWrittenStr),
                 if (estimate != null)
-                  SoferStatRow("נותרו",
+                  SoferStatRow(context.l10n.pick(he: "נותרו", en: "Remaining"),
                       "${estimate.remainingUnits.toStringAsFixed(0)} ${_unitPlural(project.type)}"),
                 if (avgTimeStr.isNotEmpty)
-                  SoferStatRow("ממוצע", avgTimeStr, last: !someWorkUntimed),
+                  SoferStatRow(
+                      context.l10n.pick(he: "ממוצע", en: "Average"), avgTimeStr,
+                      last: !someWorkUntimed && invalidTime == Duration.zero),
                 if (someWorkUntimed)
-                  SoferStatRow("", "רק מרשומות שנמדד בהן זמן", last: true),
+                  SoferStatRow(
+                      "",
+                      context.l10n.pick(
+                          he: "רק מרשומות שנמדד בהן זמן",
+                          en: "Only records with measured time"),
+                      last: true),
+                if (invalidTime > Duration.zero)
+                  SoferStatRow(
+                    context.l10n.pick(
+                        he: "זמן על עבודה שנפסלה", en: "Time on invalid work"),
+                    formatSpan(invalidTime, english: context.l10n.isEnglish),
+                    last: invalidTime == Duration.zero,
+                  ),
               ],
             ),
           );
@@ -779,18 +1175,25 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SoferSectionTitle("הכסף", padding: EdgeInsets.zero),
+                SoferSectionTitle(context.l10n.pick(he: "הכסף", en: "Money"),
+                    padding: EdgeInsets.zero),
                 const SizedBox(height: 6),
+                _paymentRow(project),
                 if (projectExpenses > 0) ...[
+                  SoferStatRow(context.l10n.pick(he: "רווח", en: "Profit"),
+                      formatMoney(totalProfit, project.currency)),
                   SoferStatRow(
-                      "רווח", formatMoney(totalProfit, project.currency)),
-                  SoferStatRow("הוצאות משויכות",
+                      context.l10n
+                          .pick(he: "הוצאות משויכות", en: "Allocated expenses"),
                       formatMoney(projectExpenses, project.currency)),
                 ],
-                SoferStatRow(projectExpenses > 0 ? "נטו" : "רווח",
+                SoferStatRow(
+                    projectExpenses > 0
+                        ? context.l10n.pick(he: "נטו", en: "Net")
+                        : context.l10n.pick(he: "רווח", en: "Profit"),
                     formatMoney(net, project.currency)),
                 SoferStatRow(
-                    "לשעה",
+                    context.l10n.pick(he: "לשעה", en: "Per hour"),
                     hourlyRate == null
                         ? "—"
                         : formatMoney(hourlyRate, project.currency),
@@ -837,7 +1240,9 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text("מפת העבודה",
+                      Text(
+                          context.l10n
+                              .pick(he: "מפת העבודה", en: "Project map"),
                           style: TextStyle(
                               fontFamily: t.numeralFamily,
                               fontSize: 17,
@@ -851,7 +1256,11 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                     ],
                   ),
                 ),
-                Icon(Icons.chevron_left, color: t.inkFaint),
+                Icon(
+                    Directionality.of(context) == TextDirection.rtl
+                        ? Icons.chevron_left
+                        : Icons.chevron_right,
+                    color: t.inkFaint),
               ],
             ),
           ),
@@ -862,17 +1271,26 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
   }
 
   /// What the map is a map of, in the unit the commission is counted in.
-  static String _mapSubtitle(Project project) => switch (project.type) {
-        ProjectType.sefer => "כל עמוד בספר, ומה נכתב בו",
-        ProjectType.mezuza => "כל מזוזה בהזמנה, ומה כבר נכתב",
-        ProjectType.tefillin => "כל זוג בהזמנה, ומה כבר נכתב",
+  String _mapSubtitle(Project project) => switch (project.type) {
+        ProjectType.sefer => context.l10n.pick(
+            he: "כל עמוד בספר, ומה נכתב בו",
+            en: "Every page in the Sefer and what has been written"),
+        ProjectType.megillah => context.l10n.pick(
+            he: "כל עמוד במגילה, ומה נכתב בו",
+            en: "Every page in the Megillah and what has been written"),
+        ProjectType.mezuza => context.l10n.pick(
+            he: "כל מזוזה בהזמנה, ומה כבר נכתב",
+            en: "Every Mezuzah in the order and what has been written"),
+        ProjectType.tefillin => context.l10n.pick(
+            he: "כל זוג בהזמנה, ומה כבר נכתב",
+            en: "Every set in the order and what has been written"),
       };
 
   /// The day the first session on this commission was recorded, or null when
   /// nothing has been.
   DateTime? _firstSessionDate(Project project) {
     DateTime? first;
-    for (final s in widget.history) {
+    for (final s in _history) {
       if (s.projectId != project.id || s.isDeleted || s.backlogOnly) continue;
       if (first == null || s.startTime.isBefore(first)) first = s.startTime;
     }
@@ -881,33 +1299,16 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
 
   /// Opens the map of the whole commission, in whatever unit it is counted in.
   void _openMap(Project project) {
-    final sessions = widget.history
-        .where((s) => s.projectId == project.id && !s.isDeleted)
-        .toList();
-
-    if (project.type == ProjectType.sefer) {
-      final linesPerPage = ProductionCalculator.linesPerPageOf(project);
-      final lines = <int, Set<int>>{};
-      for (final s in sessions) {
-        if (s.amount <= 0) continue;
-        final page = lines.putIfAbsent(s.amount, () => <int>{});
-        for (var i = s.startLine; i <= s.endLine; i++) {
-          page.add(i);
-        }
-      }
-      showScrollMap(
-        context,
-        title: "מפת הספר",
-        total: project.totalPages ?? ProductionCalculator.defaultTotalPages,
-        fill: {
-          for (final e in lines.entries)
-            e.key: (e.value.length / linesPerPage).clamp(0.0, 1.0),
-        },
-        unitSingular: "עמוד",
-        unitPlural: "עמודים",
-      );
+    // Sefer Torah's editable, page-by-page map lives in the unified writing
+    // section. Keep the overview entry point connected to that same map.
+    if (project.type.isPaged) {
+      setState(() => _section = _ProjectSection.writing);
       return;
     }
+
+    final sessions = _history
+        .where((s) => s.projectId == project.id && !s.isDeleted && !s.isInvalid)
+        .toList();
 
     // Tefillin has a map of its own. Filling counted units from the first
     // said only how much was done, never which parshiya of which pair — and
@@ -921,13 +1322,14 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
             backgroundColor: SoferTokens.of(context).paper,
             foregroundColor: SoferTokens.of(context).ink,
             elevation: 0,
-            title: const Text("מפת העבודה"),
+            title: Text(context.l10n.pick(he: "מפת העבודה", en: "Project map")),
           ),
           body: StatefulBuilder(
             builder: (mapContext, setMapState) => _tefillinBoard(
               project,
-              widget.history
-                  .where((s) => s.projectId == project.id && !s.isDeleted)
+              _history
+                  .where((s) =>
+                      s.projectId == project.id && !s.isDeleted && !s.isInvalid)
                   .toList(),
               grouping: grouping,
               onGroupingChanged: (next) => setMapState(() {
@@ -947,17 +1349,17 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
 
     // Mezuzot are counted, not paginated: the map is how many of the order are
     // finished, filled from the first.
-    final done = ProfitCalculator.billableUnits(project, sessions);
+    final done = ProductionCalculator.projectUnits(project, sessions);
     final total = (project.targetUnits ?? done.ceil()).clamp(1, 1 << 20);
     showScrollMap(
       context,
-      title: "מפת המזוזות",
+      title: context.l10n.pick(he: "מפת המזוזות", en: "Mezuzot map"),
       total: total,
       fill: {
         for (var i = 1; i <= total; i++) i: (done - (i - 1)).clamp(0.0, 1.0),
       },
-      unitSingular: "מזוזה",
-      unitPlural: "מזוזות",
+      unitSingular: context.l10n.pick(he: "מזוזה", en: "Mezuzah"),
+      unitPlural: context.l10n.pick(he: "מזוזות", en: "Mezuzot"),
       hebrewNumerals: false,
     );
   }
@@ -969,32 +1371,49 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
     final unit = _unitPlural(project.type);
     final parts = <String>[
       estimate.paceMeasured
-          ? "בקצב שנמדד — ${estimate.unitsPerWorkDay.toStringAsFixed(2)} $unit ליום עבודה"
-          : "לפי היעד היומי שהגדרת, כי אין עוד מספיק עבודה מתועדת",
-      "נותרו ${estimate.plan.calendarDays} ימים, מהם "
-          "${estimate.workDaysLeft.toStringAsFixed(1)} ימי עבודה",
+          ? context.l10n.pick(
+              he:
+                  "בקצב שנמדד — ${estimate.unitsPerWorkDay.toStringAsFixed(2)} $unit ליום עבודה",
+              en:
+                  "At the measured pace — ${estimate.unitsPerWorkDay.toStringAsFixed(2)} $unit per workday")
+          : context.l10n.pick(
+              he: "לפי היעד היומי שהגדרת, כי אין עוד מספיק עבודה מתועדת",
+              en: "Based on your daily target, because there is not enough recorded work yet"),
+      context.l10n.pick(
+          he: "נותרו ${estimate.plan.calendarDays} ימים, מהם ${estimate.workDaysLeft.toStringAsFixed(1)} ימי עבודה",
+          en: "${estimate.plan.calendarDays} calendar days remain, including ${estimate.workDaysLeft.toStringAsFixed(1)} workdays"),
     ];
     if (estimate.plan.skippedTotal > 0) {
-      parts.add("${estimate.plan.skippedTotal} ימים בדרך אינם ימי עבודה "
-          "(${formatSkippedDays(estimate.plan, maxReasons: 2)})");
+      parts.add(context.l10n.pick(
+          he: "${estimate.plan.skippedTotal} ימים בדרך אינם ימי עבודה (${formatSkippedDays(estimate.plan, maxReasons: 2)})",
+          en: "${estimate.plan.skippedTotal} days along the way are not workdays (${formatSkippedDays(estimate.plan, maxReasons: 2, english: true)})"));
     }
     if (targetPaceStr.isNotEmpty) {
-      parts.add("כדי לעמוד בתאריך היעד צריך $targetPaceStr");
+      parts.add(context.l10n.pick(
+          he: "כדי לעמוד בתאריך היעד צריך $targetPaceStr",
+          en: "To meet the target date you need $targetPaceStr"));
     }
     return "${parts.join('. ')}.";
   }
 
   /// What is missing when a commission has no stated size.
-  static String _sizeQuestion(Project project) => switch (project.type) {
-        ProjectType.sefer => "מספר העמודים בספר",
-        ProjectType.mezuza => "כמה מזוזות בהזמנה",
-        ProjectType.tefillin => "כמה זוגות בהזמנה",
+  String _sizeQuestion(Project project) => switch (project.type) {
+        ProjectType.sefer => context.l10n.pick(
+            he: "מספר העמודים בספר", en: "the number of pages in the Sefer"),
+        ProjectType.megillah => context.l10n.pick(
+            he: "מספר העמודים במגילה",
+            en: "the number of pages in the Megillah"),
+        ProjectType.mezuza => context.l10n.pick(
+            he: "כמה מזוזות בהזמנה", en: "the number of Mezuzot in the order"),
+        ProjectType.tefillin => context.l10n.pick(
+            he: "כמה זוגות בהזמנה", en: "the number of sets in the order"),
       };
 
-  static String _unitPlural(ProjectType type) => switch (type) {
-        ProjectType.sefer => 'עמודים',
-        ProjectType.mezuza => 'מזוזות',
-        ProjectType.tefillin => 'זוגות',
+  String _unitPlural(ProjectType type) => switch (type) {
+        ProjectType.sefer => context.l10n.pick(he: 'עמודים', en: 'pages'),
+        ProjectType.megillah => context.l10n.pick(he: 'עמודים', en: 'pages'),
+        ProjectType.mezuza => context.l10n.pick(he: 'מזוזות', en: 'Mezuzot'),
+        ProjectType.tefillin => context.l10n.pick(he: 'זוגות', en: 'sets'),
       };
 
   /// The delivery date, and what it rests on.
@@ -1009,6 +1428,8 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
   ) {
     final plan = estimate.plan;
     final unit = _unitPlural(project.type);
+    final shownProgress =
+        MegillahFormat.displayedProgress(project, estimate.progress);
 
     return Card(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -1023,15 +1444,18 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                 Icon(Icons.event_available,
                     color: SoferTokens.of(context).accent),
                 const SizedBox(width: 8),
-                const Text("צפי סיום",
-                    style:
-                        TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+                Text(
+                    context.l10n
+                        .pick(he: "צפי סיום", en: "Estimated completion"),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 17)),
               ],
             ),
             const SizedBox(height: 10),
             Text(
               formatDisplayDateWithWeekday(
-                  plan.completionDate, _useGregorianDates),
+                  plan.completionDate, _useGregorianDates,
+                  english: context.l10n.isEnglish),
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -1040,43 +1464,55 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              "בעוד ${plan.calendarDays} ימים · "
-              "${estimate.workDaysLeft.toStringAsFixed(1)} ימי עבודה",
+              context.l10n.pick(
+                  he: "בעוד ${plan.calendarDays} ימים · ${estimate.workDaysLeft.toStringAsFixed(1)} ימי עבודה",
+                  en: "In ${plan.calendarDays} days · ${estimate.workDaysLeft.toStringAsFixed(1)} workdays"),
               style: TextStyle(color: SoferTokens.of(context).inkMuted),
             ),
             const SizedBox(height: 12),
             LinearProgressIndicator(
-              value: estimate.progress,
+              value: shownProgress.clamp(0.0, 1.0),
               minHeight: 8,
               borderRadius: BorderRadius.circular(4),
             ),
             const SizedBox(height: 6),
             Text(
-              "${estimate.doneUnits.toStringAsFixed(1)} מתוך "
-              "${estimate.totalUnits.toStringAsFixed(0)} $unit "
-              "(${(estimate.progress * 100).toStringAsFixed(0)}%)",
+              context.l10n.pick(
+                  he: "${estimate.doneUnits.toStringAsFixed(1)} מתוך ${estimate.totalUnits.toStringAsFixed(0)} $unit (${(shownProgress * 100).toStringAsFixed(0)}%)",
+                  en: "${estimate.doneUnits.toStringAsFixed(1)} of ${estimate.totalUnits.toStringAsFixed(0)} $unit (${(shownProgress * 100).toStringAsFixed(0)}%)"),
               style: TextStyle(
                   fontSize: 13, color: SoferTokens.of(context).inkMuted),
             ),
             const Divider(height: 24),
             _statRow(
-              estimate.paceMeasured ? "הקצב שלך:" : "לפי היעד היומי:",
-              "${estimate.unitsPerWorkDay.toStringAsFixed(2)} $unit ליום עבודה",
+              estimate.paceMeasured
+                  ? context.l10n.pick(he: "הקצב שלך:", en: "Your pace:")
+                  : context.l10n.pick(
+                      he: "לפי היעד היומי:", en: "Based on daily target:"),
+              context.l10n.pick(
+                  he: "${estimate.unitsPerWorkDay.toStringAsFixed(2)} $unit ליום עבודה",
+                  en: "${estimate.unitsPerWorkDay.toStringAsFixed(2)} $unit per workday"),
             ),
             if (!estimate.paceMeasured)
               Text(
-                "עדיין אין מספיק עבודה מתועדת בפרויקט, לכן החישוב לפי היעד "
-                "היומי שהגדרת ולא לפי הקצב בפועל.",
+                context.l10n.pick(
+                    he: "עדיין אין מספיק עבודה מתועדת בפרויקט, לכן החישוב לפי היעד היומי שהגדרת ולא לפי הקצב בפועל.",
+                    en: "There is not enough recorded work in this project yet, so the calculation uses your daily target rather than your actual pace."),
                 style: TextStyle(
                     fontSize: 12, color: SoferTokens.of(context).caution),
               ),
             if (targetPaceStr.isNotEmpty)
-              _statRow("נדרש כדי לעמוד בתאריך היעד:", targetPaceStr),
+              _statRow(
+                  context.l10n.pick(
+                      he: "נדרש כדי לעמוד בתאריך היעד:",
+                      en: "Required to meet the target date:"),
+                  targetPaceStr),
             if (plan.skippedTotal > 0) ...[
               const SizedBox(height: 8),
               Text(
-                "${plan.skippedTotal} ימים בדרך אינם ימי עבודה: "
-                "${formatSkippedDays(plan)}",
+                context.l10n.pick(
+                    he: "${plan.skippedTotal} ימים בדרך אינם ימי עבודה: ${formatSkippedDays(plan)}",
+                    en: "${plan.skippedTotal} days along the way are not workdays: ${formatSkippedDays(plan, english: true)}"),
                 style: TextStyle(
                     fontSize: 12, color: SoferTokens.of(context).inkMuted),
               ),
@@ -1090,11 +1526,7 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
   /// Shown when the job size was never entered, since without it no date can
   /// be worked out at all.
   Widget _missingSizeCard(Project project) {
-    final what = switch (project.type) {
-      ProjectType.sefer => "מספר העמודים בספר",
-      ProjectType.mezuza => "כמה מזוזות בהזמנה",
-      ProjectType.tefillin => "כמה זוגות בהזמנה",
-    };
+    final what = _sizeQuestion(project);
     return Card(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       color: SoferTokens.of(context).paper,
@@ -1106,7 +1538,9 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                "כדי לחשב צפי סיום צריך להזין בפרויקט את $what.",
+                context.l10n.pick(
+                    he: "כדי לחשב צפי סיום צריך להזין בפרויקט את $what.",
+                    en: "Enter $what in the project to calculate an estimated completion date."),
                 style: const TextStyle(fontSize: 13),
               ),
             ),
@@ -1118,3 +1552,5 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
 }
 
 enum _TefillinSlotAction { markStuck, markVoided, clear, remove }
+
+enum _ProjectSection { overview, writing, details }

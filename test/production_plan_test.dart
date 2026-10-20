@@ -15,6 +15,7 @@ import 'package:kosher_dart/kosher_dart.dart';
 import 'package:sofer_vmone/logic/hebrew_clock.dart';
 import 'package:sofer_vmone/logic/hebrew_work_calendar.dart';
 import 'package:sofer_vmone/logic/production_plan.dart';
+import 'package:sofer_vmone/logic/plan_table.dart';
 import 'package:sofer_vmone/models.dart';
 
 void main() {
@@ -101,6 +102,26 @@ void main() {
         }
       }
     });
+  });
+
+  test('English plan export is LTR while Sefer page numerals stay Hebrew', () {
+    final production = plan();
+    final table = PlanTable.of(
+      project: project(),
+      plan: production,
+      periodLabel: 'Iyar 5786',
+      useGregorianDates: false,
+      english: true,
+    );
+    final exported = table.toExportTable(english: true);
+
+    expect(exported.rtl, isFalse);
+    expect(exported.headings, ['Date', 'Day', 'Target position', 'Actual']);
+    expect(table.rows.where((row) => row.isWorkingDay).first.target,
+        startsWith('Page '));
+    expect(table.rows.where((row) => row.isWorkingDay).first.target,
+        contains(RegExp('[א-ת]')),
+        reason: 'the approved policy keeps Sefer page numerals Hebrew');
   });
 
   group('a page a day, holding at page ten', () {
@@ -303,9 +324,9 @@ void main() {
       expect(afterEnd, closeTo(beforeEnd - 1, 0.001),
           reason: 'one working day less is one page less over the stretch');
 
-      final dayAfter = after.days.firstWhere((d) => d.date.isAfter(off) && d.isWorkingDay);
-      final sameBefore =
-          before.days.firstWhere((d) => d.date == dayAfter.date);
+      final dayAfter =
+          after.days.firstWhere((d) => d.date.isAfter(off) && d.isWorkingDay);
+      final sameBefore = before.days.firstWhere((d) => d.date == dayAfter.date);
       expect(dayAfter.plannedTarget, lessThan(sameBefore.plannedTarget));
     });
 
@@ -329,11 +350,13 @@ void main() {
     test('an override that agrees with the calendar is not a change', () {
       final open = plan().days.firstWhere((d) => d.weight == 1);
       final p = plan(overrides: {open.date: 1});
-      expect(p.days.firstWhere((d) => d.date == open.date).isOverridden, isFalse);
+      expect(
+          p.days.firstWhere((d) => d.date == open.date).isOverridden, isFalse);
     });
 
     test('a half day can be set by hand', () {
-      final open = plan().days.firstWhere((d) => d.weight == 1 && d.hebrewDay > 3);
+      final open =
+          plan().days.firstWhere((d) => d.weight == 1 && d.hebrewDay > 3);
       final p = plan(overrides: {open.date: 0.5});
       final day = p.days.firstWhere((d) => d.date == open.date);
       expect(day.isHalfDay, isTrue);

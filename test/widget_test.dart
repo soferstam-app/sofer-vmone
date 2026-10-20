@@ -1524,17 +1524,18 @@ void main() {
       expect(name, endsWith('.json'));
     });
 
-    test('survives corrupt stored data instead of throwing', () async {
+    test('rejects corrupt stored data instead of exporting empty records',
+        () async {
       SharedPreferences.setMockInitialValues({
         'projects': 'not-json-at-all',
         'expenses': '{"unexpected":"shape"}',
       });
 
-      final json = await BackupService.instance.buildBackupJson();
-      final decoded = jsonDecode(json) as Map<String, dynamic>;
-
-      expect((decoded['projects'] as List), isEmpty);
-      expect((decoded['expenses'] as List), isEmpty);
+      await expectLater(
+          BackupService.instance.buildBackupJson(), throwsFormatException);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('projects'), 'not-json-at-all');
+      expect(prefs.getString('expenses'), '{"unexpected":"shape"}');
     });
   });
 
@@ -2678,7 +2679,7 @@ void main() {
       final json = {
         'id': 'p',
         'name': 'x',
-        'typeName': 'megillah',
+        'typeName': 'futureKind',
         'type': 9,
         'price': 1,
         'expenses': 0,

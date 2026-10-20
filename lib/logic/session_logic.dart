@@ -185,14 +185,14 @@ class SessionLogic {
     String? excludeSessionId,
   }) {
     assert(
-      projectType == ProjectType.sefer,
+      projectType.isPaged,
       'hasSeferOverlap called for a $projectType project; `amount` is a count '
       'there, not a page number',
     );
-    if (projectType != ProjectType.sefer) return false;
+    if (!projectType.isPaged) return false;
 
     for (final session in history) {
-      if (session.isDeleted) continue;
+      if (session.isDeleted || !session.countsAsOutput) continue;
       if (session.id == excludeSessionId) continue;
       if (session.projectId != projectId) continue;
       // For sefer projects `amount` carries the page number.

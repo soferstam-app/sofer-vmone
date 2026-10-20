@@ -51,9 +51,7 @@ class DateLogic {
         // in Israel, but falling back to the calendar date is better than
         // throwing if the reference point ever changes.
         if (boundary == null) return date;
-        return moment.isBefore(boundary)
-            ? date
-            : CalendarDays.addDays(date, 1);
+        return moment.isBefore(boundary) ? date : CalendarDays.addDays(date, 1);
     }
   }
 

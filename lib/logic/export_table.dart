@@ -13,6 +13,11 @@ class ExportTable {
   final List<String> headings;
   final List<ExportRow> rows;
 
+  /// Whether visual exports should use a right-to-left page and worksheet.
+  /// The cell contents alone are not enough for PDF tables or Excel sheets to
+  /// choose the correct reading direction.
+  final bool rtl;
+
   /// Printed small at the foot of the page. What a reader needs in order not to
   /// misread the columns — where a figure comes from, or why one is blank.
   final String? note;
@@ -22,6 +27,7 @@ class ExportTable {
     required this.summary,
     required this.headings,
     required this.rows,
+    this.rtl = true,
     this.note,
   });
 

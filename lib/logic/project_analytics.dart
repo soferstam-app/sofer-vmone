@@ -1,5 +1,6 @@
 import '../models.dart';
 import 'measured_work.dart';
+import 'production_calculator.dart';
 import 'profit_calculator.dart';
 
 /// Everything worth knowing about how one project actually performed.
@@ -34,12 +35,14 @@ class ProjectPerformance {
   /// The unit this project is measured and priced in.
   String get unitName => switch (project.type) {
         ProjectType.sefer => 'עמוד',
+        ProjectType.megillah => 'פרויקט',
         ProjectType.mezuza => 'מזוזה',
         ProjectType.tefillin => 'זוג',
       };
 
   String get unitNamePlural => switch (project.type) {
         ProjectType.sefer => 'עמודים',
+        ProjectType.megillah => 'פרויקטים',
         ProjectType.mezuza => 'מזוזות',
         ProjectType.tefillin => 'זוגות',
       };
@@ -56,7 +59,8 @@ class ProjectAnalytics {
   static ProjectPerformance measure(
       Project project, Iterable<WorkSession> allSessions) {
     final sessions = allSessions
-        .where((s) => s.projectId == project.id && !s.isDeleted && !s.backlogOnly)
+        .where(
+            (s) => s.projectId == project.id && !s.isDeleted && !s.backlogOnly)
         .toList();
 
     // Both sides of every rate below come from the records that carried time.
@@ -67,7 +71,12 @@ class ProjectAnalytics {
     final measured = MeasuredWork.only(sessions);
     final time = MeasuredWork.time(measured);
 
-    final measuredUnits = ProfitCalculator.billableUnits(project, measured);
+    // Invalid work still consumed measured time and therefore remains in the
+    // pace denominator. It contributes no profit or displayed output, but
+    // omitting it here made "time per unit" disagree with comparable-line
+    // pace and understated the writer's real effort.
+    final measuredUnits = ProfitCalculator.billableUnits(project, measured,
+        includeInvalid: true);
     final measuredProfit = ProfitCalculator.profit(project, measured);
 
     // Quantities, which every record belongs in.
@@ -127,5 +136,61 @@ class ProjectAnalytics {
 
     if (totalUnits <= 0 || totalSeconds <= 0) return null;
     return Duration(seconds: (totalSeconds / totalUnits).round());
+  }
+
+  /// The first available measured pace in the agreed fallback order. It is
+  /// expressed per weighted Sefer line, so a pace learned on one kind of work
+  /// can price another kind without pretending their lines are identical.
+  static Duration? typicalTimePerComparableLine(
+    ProjectType requested,
+    Iterable<Project> projects,
+    Iterable<WorkSession> history,
+  ) {
+    final order = <ProjectType>[
+      requested,
+      ...switch (requested) {
+        ProjectType.tefillin => [
+            ProjectType.mezuza,
+            ProjectType.sefer,
+            ProjectType.megillah,
+          ],
+        ProjectType.mezuza => [
+            ProjectType.tefillin,
+            ProjectType.sefer,
+            ProjectType.megillah,
+          ],
+        ProjectType.sefer => [
+            ProjectType.megillah,
+            ProjectType.mezuza,
+            ProjectType.tefillin,
+          ],
+        ProjectType.megillah => [
+            ProjectType.sefer,
+            ProjectType.mezuza,
+            ProjectType.tefillin,
+          ],
+      }
+    ];
+
+    for (final type in order) {
+      var totalSeconds = 0;
+      var totalLines = 0.0;
+      for (final project in projects.where((p) => p.type == type)) {
+        final sessions = history.where(
+            (s) => s.projectId == project.id && !s.isDeleted && !s.backlogOnly);
+        final measured = MeasuredWork.only(sessions);
+        final seconds = MeasuredWork.time(measured).inSeconds;
+        final lines =
+            ProductionCalculator.comparableLinesTotal(project, measured,
+                includeInvalid: true);
+        if (seconds <= 0 || lines <= 0) continue;
+        totalSeconds += seconds;
+        totalLines += lines;
+      }
+      if (totalSeconds > 0 && totalLines > 0) {
+        return Duration(seconds: (totalSeconds / totalLines).round());
+      }
+    }
+    return null;
   }
 }

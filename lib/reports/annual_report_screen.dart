@@ -7,6 +7,7 @@ import '../models.dart';
 import '../storage_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/sofer_widgets.dart';
+import '../l10n/app_localizations.dart';
 
 /// A year's income and costs, month by month.
 ///
@@ -77,7 +78,23 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
         children: [
           SizedBox(
             width: 74,
-            child: Text(month.name,
+            child: Text(
+                context.l10n.isEnglish
+                    ? const [
+                        'January',
+                        'February',
+                        'March',
+                        'April',
+                        'May',
+                        'June',
+                        'July',
+                        'August',
+                        'September',
+                        'October',
+                        'November',
+                        'December'
+                      ][month.month - 1]
+                    : month.name,
                 style: TextStyle(
                     fontFamily: t.labelFamily,
                     fontSize: 13,
@@ -96,9 +113,7 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
               month.expenses.isEmpty ? '—' : month.expenses.format(_currency),
               textAlign: TextAlign.end,
               style: TextStyle(
-                  fontFamily: t.numeralFamily,
-                  fontSize: 14,
-                  color: t.inkMuted),
+                  fontFamily: t.numeralFamily, fontSize: 14, color: t.inkMuted),
             ),
           ),
           Expanded(
@@ -133,15 +148,19 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
       padding: const EdgeInsets.fromLTRB(20, 6, 20, 6),
       child: Row(
         children: [
-          SizedBox(width: 74, child: Text('חודש', style: style())),
+          SizedBox(
+              width: 74,
+              child: Text(context.l10n.pick(he: 'חודש', en: 'Month'),
+                  style: style())),
           Expanded(
-              child: Text('הכנסות',
+              child: Text(context.l10n.pick(he: 'הכנסות', en: 'Income'),
                   textAlign: TextAlign.end, style: style())),
           Expanded(
-              child: Text('הוצאות',
+              child: Text(context.l10n.pick(he: 'הוצאות', en: 'Expenses'),
                   textAlign: TextAlign.end, style: style())),
           Expanded(
-              child: Text('נטו', textAlign: TextAlign.end, style: style())),
+              child: Text(context.l10n.pick(he: 'נטו', en: 'Net'),
+                  textAlign: TextAlign.end, style: style())),
         ],
       ),
     );
@@ -152,7 +171,8 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
     final t = SoferTokens.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('דוח שנתי')),
+      appBar: AppBar(
+          title: Text(context.l10n.pick(he: 'דוח שנתי', en: 'Annual report'))),
       body: !_loaded
           ? const Center(child: CircularProgressIndicator())
           : Builder(builder: (context) {
@@ -178,7 +198,8 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
                           IconButton(
                             onPressed: () => setState(() => _year--),
                             icon: const Icon(Icons.chevron_right),
-                            tooltip: 'שנה קודמת',
+                            tooltip: context.l10n
+                                .pick(he: 'שנה קודמת', en: 'Previous year'),
                           ),
                           Expanded(
                             child: Text('$_year',
@@ -193,7 +214,8 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
                                 ? null
                                 : () => setState(() => _year++),
                             icon: const Icon(Icons.chevron_left),
-                            tooltip: 'שנה הבאה',
+                            tooltip: context.l10n
+                                .pick(he: 'שנה הבאה', en: 'Next year'),
                           ),
                         ],
                       ),
@@ -201,8 +223,9 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
                       child: Text(
-                        'שנת מס נספרת בלוח הלועזי, ינואר עד דצמבר — להבדיל '
-                        'משאר האפליקציה, שסופרת בחודשים עבריים.',
+                        context.l10n.pick(
+                            he: 'שנת מס נספרת בלוח הלועזי, ינואר עד דצמבר — להבדיל משאר האפליקציה, שסופרת בחודשים עבריים.',
+                            en: 'The tax year follows the Gregorian calendar, January through December. Other parts of the app use Hebrew months.'),
                         style: TextStyle(
                             fontFamily: t.labelFamily,
                             fontSize: 11,
@@ -220,13 +243,19 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           SoferStatRow(
-                              'הכנסות $_year', report.income.format(_currency)),
-                          SoferStatRow('הוצאות $_year',
+                              context.l10n.pick(
+                                  he: 'הכנסות $_year', en: 'Income $_year'),
+                              report.income.format(_currency)),
+                          SoferStatRow(
+                              context.l10n.pick(
+                                  he: 'הוצאות $_year', en: 'Expenses $_year'),
                               report.expenses.format(_currency)),
                           SoferStatRow(
-                            'נטו',
+                            context.l10n.pick(he: 'נטו', en: 'Net'),
                             net == null
-                                ? 'לא ניתן לחשב — יותר ממטבע אחד'
+                                ? context.l10n.pick(
+                                    he: 'לא ניתן לחשב — יותר ממטבע אחד',
+                                    en: 'Cannot calculate — more than one currency')
                                 : net.format(decimals: 2),
                             last: true,
                           ),
@@ -236,11 +265,9 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
                       child: Text(
-                        'הכנסות הן הכסף שהתקבל בפועל — התשלומים שנרשמו, '
-                        'לפי מועד קבלתם. שווי העבודה שנכתבה השנה הוא מספר '
-                        'אחר, והוא אינו הכנסה עד שהוא משולם. הוצאות הן חומרי '
-                        'הגלם ליחידה, ההוצאות שנרשמו ועלות ההגהה. עבודה '
-                        'שסומנה כהשלמת עבר אינה נספרת.',
+                        context.l10n.pick(
+                            he: 'הכנסות הן הכסף שהתקבל בפועל — התשלומים שנרשמו, לפי מועד קבלתם. שווי העבודה שנכתבה השנה הוא מספר אחר, והוא אינו הכנסה עד שהוא משולם. הוצאות הן חומרי הגלם ליחידה, ההוצאות שנרשמו ועלות ההגהה. עבודה שסומנה כהשלמת עבר אינה נספרת.',
+                            en: 'Income is money actually received: recorded payments, assigned to the date received. The value of work written this year is separate and is not income until paid. Expenses include per-unit materials, recorded expenses, and proofreading costs. Work marked as historical completion is excluded.'),
                         style: TextStyle(
                             fontFamily: t.labelFamily,
                             fontSize: 11,

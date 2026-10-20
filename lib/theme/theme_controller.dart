@@ -54,10 +54,9 @@ class ThemeController extends ChangeNotifier {
 
   /// Modern carries its night in its brightness rather than in a second theme,
   /// so the switch has to reach it that way.
-  Brightness get _brightness =>
-      nightByClock && _choice == AppTheme.modern
-          ? Brightness.dark
-          : _systemBrightness;
+  Brightness get _brightness => nightByClock && _choice == AppTheme.modern
+      ? Brightness.dark
+      : _systemBrightness;
 
   ThemeData get themeData =>
       AppThemeBuilder.build(effective, system: _brightness);

@@ -89,8 +89,8 @@ void main() {
     // The route the dialog was opened from is removed while the dialog is
     // still up. Anything the dialog registered against that screen is now
     // pointing at a subtree being torn down.
-    navigator.currentState!.removeRouteBelow(ModalRoute.of(
-        tester.element(find.text('שלום')))!);
+    navigator.currentState!
+        .removeRouteBelow(ModalRoute.of(tester.element(find.text('שלום')))!);
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);

@@ -60,6 +60,23 @@ void main() {
     });
   });
 
+  group('English keeps the Hebrew parashah names', () {
+    test('describes complete sets in the approved glossary', () {
+      expect(TefillinSummary.describe([session()], english: true),
+          '1 Tefillin Set');
+    });
+
+    test('translates the structure but not Shema', () {
+      expect(
+        TefillinSummary.describe(
+          [session(type: 'hand', parshiya: 3)],
+          english: true,
+        ),
+        'Shema Parashah Shel Yad'.replaceFirst('Shema', 'שמע'),
+      );
+    });
+  });
+
   group('loose parshiyot are gathered up', () {
     test('four of the head make a head', () {
       expect(describe(allFour('head')), '1 תפילין של ראש');
@@ -143,6 +160,37 @@ void main() {
       ]);
 
       expect(summary, 'פרשיית קדש של ראש');
+    });
+
+    test('an old manual first stretch and a continuation are one parshiya', () {
+      final summary = describe([
+        session(type: 'hand', parshiya: 4, pair: 2, endLine: 3),
+        session(
+          amount: 0,
+          type: 'hand',
+          parshiya: 4,
+          pair: 2,
+          startLine: 4,
+          endLine: 7,
+        ),
+      ]);
+
+      expect(summary, 'פרשיית והיה אם שמע של יד');
+    });
+
+    test('overlapping ranges never manufacture a completed parshiya', () {
+      final summary = describe([
+        session(type: 'head', parshiya: 1, pair: 1, startLine: 1, endLine: 2),
+        session(
+            amount: 0,
+            type: 'head',
+            parshiya: 1,
+            pair: 1,
+            startLine: 1,
+            endLine: 2),
+      ]);
+
+      expect(summary, 'קדש של ראש (עד שורה 2)');
     });
   });
 

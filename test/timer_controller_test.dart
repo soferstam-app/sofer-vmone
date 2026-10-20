@@ -117,6 +117,18 @@ void main() {
   });
 
   group('ending a sitting', () {
+    test('previewing an end leaves the clock active until commit', () {
+      clock.start();
+      pass(const Duration(minutes: 12));
+      final preview = clock.previewStop();
+      expect(preview.worked, const Duration(minutes: 12));
+      expect(clock.isActive, isTrue);
+      pass(const Duration(minutes: 5));
+      clock.commitPreview(preview);
+      expect(clock.lastSitting, const Duration(minutes: 12));
+      expect(clock.isActive, isFalse);
+    });
+
     test('reports what it came to and leaves the clock at nothing', () {
       clock.start();
       pass(const Duration(hours: 1, minutes: 14));
@@ -156,6 +168,18 @@ void main() {
       expect(clock.recordLap(), const Duration(minutes: 3));
     });
 
+    test('a failed checkpoint can restore the previous line boundary', () {
+      clock.start();
+      pass(const Duration(minutes: 4));
+      clock.recordLap();
+      final previous = clock.lastLapElapsed;
+      pass(const Duration(minutes: 2));
+      clock.recordLap();
+      clock.restoreLastLap(previous);
+
+      expect(clock.sinceLastLap, const Duration(minutes: 2));
+    });
+
     test('the current line survives a restart', () {
       clock.start();
       pass(const Duration(minutes: 4));
@@ -174,6 +198,105 @@ void main() {
   });
 
   group('surviving a restart', () {
+    test('unusual time needs both a large interval and a fivefold jump', () {
+      clock.start();
+      pass(const Duration(minutes: 5));
+      clock.recordLap();
+      pass(const Duration(minutes: 24, seconds: 59));
+      expect(clock.hasUnusualLineTime, isFalse);
+      pass(const Duration(seconds: 1));
+      expect(clock.hasUnusualLineTime, isTrue);
+    });
+
+    test('a slower normal pace is not mistaken for a break', () {
+      clock.start();
+      pass(const Duration(minutes: 10));
+      clock.recordLap();
+      pass(const Duration(minutes: 25));
+      expect(clock.hasUnusualLineTime, isFalse);
+    });
+
+    test('an hour is suspicious even without a previous line', () {
+      clock.start();
+      pass(const Duration(minutes: 59, seconds: 59));
+      expect(clock.hasUnusualLineTime, isFalse);
+      pass(const Duration(seconds: 1));
+      expect(clock.hasUnusualLineTime, isTrue);
+    });
+
+    test('recorded breaks do not trigger the guard', () {
+      clock.start();
+      pass(const Duration(minutes: 5));
+      clock.recordLap();
+      clock.pause();
+      pass(const Duration(hours: 2));
+      clock.start();
+      pass(const Duration(minutes: 5));
+      expect(clock.hasUnusualLineTime, isFalse);
+    });
+
+    for (final paused in [false, true]) {
+      test('restart keeps confirmed time and excludes current time ($paused)',
+          () {
+        clock.start();
+        pass(const Duration(minutes: 5));
+        clock.recordLap();
+        pass(const Duration(minutes: 25));
+        if (paused) clock.pause();
+        clock.restartCurrentLine();
+        expect(clock.elapsed, const Duration(minutes: 5));
+        expect(clock.sinceLastLap, Duration.zero);
+        expect(clock.previousLineDuration, const Duration(minutes: 5));
+        expect(clock.hasUnusualLineTime, isFalse);
+        if (paused) clock.start();
+        pass(const Duration(minutes: 3));
+        expect(clock.recordLap(), const Duration(minutes: 3));
+        final stopped = clock.stop();
+        expect(stopped.worked, const Duration(minutes: 8));
+        expect(stopped.onBreak, const Duration(minutes: 25));
+      });
+    }
+
+    test('previous pace and corrected time survive restoring', () {
+      clock.start();
+      pass(const Duration(minutes: 5));
+      clock.recordLap();
+      pass(const Duration(minutes: 25));
+      clock.pause();
+      final state = clock.toJson();
+      clock.restoreFrom(state);
+      expect(clock.hasUnusualLineTime, isTrue);
+      clock.restartCurrentLine();
+      clock.restoreFrom(clock.toJson());
+      expect(clock.elapsed, const Duration(minutes: 5));
+      expect(clock.sinceLastLap, Duration.zero);
+      expect(clock.previousLineDuration, const Duration(minutes: 5));
+      expect(clock.previewStop().onBreak, const Duration(minutes: 25));
+    });
+
+    test('a rejected checkpoint restores the previous pace too', () {
+      clock.start();
+      pass(const Duration(minutes: 5));
+      clock.recordLap();
+      final boundary = clock.lastLapElapsed;
+      final previous = clock.previousLineDuration;
+      pass(const Duration(minutes: 25));
+      clock.recordLap();
+      clock.restoreLastLap(boundary, previousLineDuration: previous);
+      expect(clock.hasUnusualLineTime, isTrue);
+    });
+
+    test('a new sitting does not inherit the previous pace', () {
+      clock.start();
+      pass(const Duration(minutes: 5));
+      clock.recordLap();
+      clock.stop();
+      clock.start();
+      pass(const Duration(minutes: 25));
+      expect(clock.previousLineDuration, Duration.zero);
+      expect(clock.hasUnusualLineTime, isFalse);
+    });
+
     test('a running sitting picks up where the clock says it is', () {
       // The whole reason for timestamps: the process died, and the writer was
       // at the desk for another twenty minutes regardless.

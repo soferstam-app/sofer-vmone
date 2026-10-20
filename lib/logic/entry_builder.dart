@@ -1,10 +1,12 @@
 import '../hebrew_utils.dart';
 import '../models.dart';
 import 'id_generator.dart';
+import 'mezuza_state.dart';
 import 'production_calculator.dart';
 import 'session_logic.dart';
 import 'tefillin_state.dart';
 import 'tefillin_units.dart';
+import 'tefillin_text.dart';
 
 /// What the entry form was told, in the shape the builder needs it.
 ///
@@ -46,6 +48,13 @@ class EntryInput {
   /// "Up to line", for a mezuza or a tefillin parshiya left part-written.
   final String partialLine;
 
+  /// Mezuza only: the part-written physical mezuza being resumed.
+  ///
+  /// Null means new work. The identity already exists on smart-mode records;
+  /// carrying it through manual entry is what lets two separately entered
+  /// halves become one mezuza instead of two unrelated partial ones.
+  final int? mezuzaIndex;
+
   /// Tefillin only: `set`, `head`, `hand` or `parshiya`.
   final String tefillinMode;
 
@@ -55,9 +64,17 @@ class EntryInput {
   /// Tefillin parshiya mode only, 1–4.
   final int tefillinParshiya;
 
-  /// Which pair the parshiya belongs to, as typed. Blank means the writer did
-  /// not say, and the work falls into the first free slot in writing order.
+  /// Which pair the parshiya belongs to, as typed or filled by a continuation.
+  /// New manual parshiya records require a physical pair address.
   final String tefillinPair;
+
+  /// Stable while a pending form is retried after a crash or storage error.
+  /// Reusing it makes the durable write idempotent rather than duplicating the
+  /// same work if history was saved but clearing the draft was interrupted.
+  final String? entryId;
+  final int? tefillinUntilWord;
+  final int? tefillinBaselineWord;
+  final StamScript tefillinScript;
 
   const EntryInput({
     required this.project,
@@ -74,10 +91,15 @@ class EntryInput {
     this.lineTo = '',
     this.amount = '',
     this.partialLine = '',
+    this.mezuzaIndex,
     this.tefillinMode = 'set',
     this.tefillinPart = 'head',
     this.tefillinParshiya = 1,
     this.tefillinPair = '',
+    this.entryId,
+    this.tefillinUntilWord,
+    this.tefillinBaselineWord,
+    this.tefillinScript = StamScript.beitYosef,
   });
 }
 
@@ -147,13 +169,17 @@ class EntryBuilder {
     // One mark for the whole entry, settled before anything is built, so that
     // every record it produces carries the same one — including an entry that
     // turns out to produce a single record.
-    final entryId = IdGenerator.generate();
+    final entryId = input.entryId ?? IdGenerator.generate();
     return switch (input.project.type) {
-      ProjectType.sefer => _sefer(input, history, entryId),
-      ProjectType.mezuza => _counted(input, entryId),
-      ProjectType.tefillin => input.tefillinMode == 'parshiya'
-          ? _parshiya(input, history, entryId)
-          : _counted(input, entryId),
+      ProjectType.sefer ||
+      ProjectType.megillah =>
+        _sefer(input, history, entryId),
+      ProjectType.mezuza => _counted(input, history, entryId),
+      ProjectType.tefillin => input.tefillinUntilWord != null
+          ? _words(input, history, entryId)
+          : input.tefillinMode == 'parshiya'
+              ? _parshiya(input, history, entryId)
+              : _counted(input, history, entryId),
     };
   }
 
@@ -301,6 +327,102 @@ class EntryBuilder {
   }
 
   /// A single tefillin parshiya, whole or part-written.
+  static EntryOutcome _words(
+      EntryInput input, Iterable<WorkSession> history, String entryId) {
+    history = history.where((s) => s.entryId != entryId);
+    final p = input.tefillinParshiya;
+    final pair = int.tryParse(input.tefillinPair);
+    if (p < 1 ||
+        p > 4 ||
+        pair == null ||
+        pair < 1 ||
+        !const {'head', 'hand'}.contains(input.tefillinPart)) {
+      return const EntryRejected('יש לבחור זוג, צד ופרשייה תקינים');
+    }
+    final side =
+        input.tefillinPart == 'head' ? TefillinSide.head : TefillinSide.hand;
+    final all = TefillinState.slots(input.project, history);
+    final slot = all.firstWhere(
+        (s) => s.pair == pair && s.side == side && s.parshiya == p,
+        orElse: () => TefillinSlot(pair: pair, side: side, parshiya: p));
+    if (!TefillinState.canWrite(slot, all) || slot.state == SlotState.stuck) {
+      return const EntryRejected(
+          'הפרשייה אינה זמינה לכתיבה. יש להשלים את הקודמת או לטפל בפסילה');
+    }
+    final previous = history
+        .where((s) =>
+            s.projectId == input.project.id &&
+            !s.isDeleted &&
+            !s.isInvalid &&
+            s.countsAsOutput &&
+            s.pairIndex == pair &&
+            s.tefillinType == input.tefillinPart &&
+            s.parshiya == p &&
+            TefillinWordRange.isWordRecord(s))
+        .toList();
+    if (previous.isNotEmpty && slot.wordBoundary == null) {
+      return const EntryRejected(
+          'רישומי המילים אינם תואמים לנקודת ההמשך. יש לתקן את ההיסטוריה לפני הוספה');
+    }
+    final priorRange =
+        previous.isEmpty ? null : TefillinWordRange.read(previous.first);
+    final legacy = slot.linesWritten / TefillinUnits.linesIn(side);
+    final base = priorRange?.baselineWord ??
+        (legacy > 0 ? input.tefillinBaselineWord : 0);
+    final text = TefillinText.of(p);
+    if (base == null ||
+        base < 0 ||
+        base >= text.words.length ||
+        (legacy > 0 && base == 0)) {
+      return const EntryRejected(
+          'יש לסמן את המילה האחרונה שכבר נרשמה לפי שורות לפני המעבר למילים');
+    }
+    final from = slot.wordBoundary ?? base;
+    final until = input.tefillinUntilWord!;
+    if (until <= from || until > text.words.length) {
+      return const EntryRejected('יש לסמן מילה חדשה אחרי המילה האחרונה שנשמרה');
+    }
+    // Reject overlap with disconnected later stretches too, so deletion of an
+    // earlier record can never make the later words count a second time.
+    if (previous.any((s) {
+      final r = TefillinWordRange.read(s);
+      return r == null || (from < r.until && until > r.from);
+    })) {
+      return const EntryRejected(
+          'טווח המילים חופף לרישום קיים. יש לתקן את ההיסטוריה לפני שמירה');
+    }
+    final range = TefillinWordRange(
+        parshiya: p,
+        from: from,
+        until: until,
+        baselineWord: base,
+        baselineFraction: priorRange?.baselineFraction ?? legacy,
+        script: input.tefillinScript.id);
+    final session = _session(input,
+            id: '$entryId-tefillin-words',
+            entryId: entryId,
+            start: input.start,
+            end: input.end,
+            amount: 0,
+            startLine: 0,
+            endLine: 0,
+            tefillinType: input.tefillinPart,
+            parshiya: p,
+            pairIndex: pair,
+            description:
+                'פרשיית ${TefillinUnits.names[p - 1]} של ${side == TefillinSide.head ? 'ראש' : 'יד'} (זוג $pair, מילים ${from + 1}–$until, עד ${text.wordAt(until)})')
+        .copyWith(
+            isPartialLine: true,
+            partialLineCompleted: true,
+            extraFields: {TefillinWordRange.key: range.toJson()});
+    return EntryBuilt(
+        sessions: [session],
+        overlapsRecordedWork: false,
+        reachedPage: (pair - 1) * 8 + (side == TefillinSide.head ? 0 : 4) + p,
+        reachedLine:
+            until == text.words.length ? TefillinUnits.linesIn(side) : 0);
+  }
+
   static EntryOutcome _parshiya(
       EntryInput input, Iterable<WorkSession> history, String entryId) {
     final endLine = int.tryParse(input.partialLine.trim()) ?? 0;
@@ -326,6 +448,17 @@ class EntryBuilder {
     final side =
         input.tefillinPart == 'head' ? TefillinSide.head : TefillinSide.hand;
     final slots = TefillinState.slots(input.project, history);
+    if (history.any((s) =>
+        s.projectId == input.project.id &&
+        !s.isDeleted &&
+        !s.isInvalid &&
+        s.pairIndex == pairIndex &&
+        s.tefillinType == input.tefillinPart &&
+        s.parshiya == input.tefillinParshiya &&
+        TefillinWordRange.isWordRecord(s))) {
+      return const EntryRejected(
+          'הפרשייה נרשמת לפי מילים. יש להמשיך לפי המילה האחרונה שנשמרה');
+    }
     final target = slots.firstWhere(
       (s) =>
           s.pair == pairIndex &&
@@ -337,8 +470,58 @@ class EntryBuilder {
         parshiya: input.tefillinParshiya,
       ),
     );
+    if (target.state == SlotState.partial) {
+      if (!TefillinState.canWrite(target, slots)) {
+        return EntryRejected(
+            "אי אפשר להמשיך את $name לפני שהפרשייה הקודמת הסתיימה באותו סט");
+      }
+      if (endLine <= 0) {
+        return const EntryRejected("יש להזין עד איזו שורה הגעת עכשיו");
+      }
+      if (endLine <= target.linesWritten) {
+        return EntryRejected(
+            "פרשיית $name בזוג $pairIndex כבר נכתבה עד שורה ${target.linesWritten}");
+      }
+      final maxLines = TefillinUnits.linesIn(side);
+      final complete = endLine >= maxLines;
+      final from = target.linesWritten + 1;
+      final description = complete
+          ? "השלמת פרשיית $name של $part (זוג $pairIndex, שורות $from–$endLine)"
+          : "פרשיית $name של $part (זוג $pairIndex, שורות $from–$endLine)";
+      return EntryBuilt(
+        sessions: [
+          _session(
+            input,
+            id: IdGenerator.generate(),
+            entryId: entryId,
+            start: input.start,
+            end: input.end,
+            // The first stretch already introduced this physical parshiya.
+            // Zero keeps old readers and count-based totals from treating the
+            // continuation as another complete unit.
+            amount: 0,
+            startLine: from,
+            endLine: endLine,
+            description: description,
+            tefillinType: input.tefillinPart,
+            parshiya: input.tefillinParshiya,
+            pairIndex: pairIndex,
+          ),
+        ],
+        overlapsRecordedWork: false,
+        reachedPage: pairIndex,
+        reachedLine: endLine,
+      );
+    }
+    if (target.state == SlotState.done) {
+      return EntryRejected("פרשיית $name בזוג $pairIndex כבר הסתיימה");
+    }
+    if (target.state == SlotState.voided) {
+      return EntryRejected(
+          "פרשיית $name בזוג $pairIndex נפסלה; יש להסיר אותה לפני התחלה מחדש");
+    }
     if (target.state != SlotState.empty) {
-      return EntryRejected("פרשיית $name בזוג $pairIndex כבר התחילה");
+      return EntryRejected("פרשיית $name בזוג $pairIndex אינה זמינה לכתיבה");
     }
     if (!TefillinState.canStart(target, slots)) {
       final previous = TefillinUnits.names[input.tefillinParshiya - 2];
@@ -359,7 +542,9 @@ class EntryBuilder {
           start: input.start,
           end: input.end,
           amount: 1,
-          startLine: 0,
+          // A partial new parshiya is an exact first range. A blank line still
+          // retains the compatible whole-parshiya shape.
+          startLine: endLine > 0 ? 1 : 0,
           endLine: endLine,
           description: description,
           tefillinType: input.tefillinPart,
@@ -368,13 +553,68 @@ class EntryBuilder {
         ),
       ],
       overlapsRecordedWork: false,
-      reachedPage: 1,
+      // Smart mode folds the physical tefillin address into the page field.
+      // Returning one here made a manually entered parshiya reset the smart
+      // workflow to the first slot of the first pair.
+      reachedPage: (pairIndex - 1) * 8 +
+          (side == TefillinSide.head ? 0 : 4) +
+          input.tefillinParshiya,
       reachedLine: endLine,
     );
   }
 
   /// Mezuzot, and tefillin counted as sets or as head/hand units.
-  static EntryOutcome _counted(EntryInput input, String entryId) {
+  static EntryOutcome _counted(
+      EntryInput input, Iterable<WorkSession> history, String entryId) {
+    if (input.project.type == ProjectType.mezuza && input.mezuzaIndex != null) {
+      final index = input.mezuzaIndex!;
+      MezuzaSlot? slot;
+      for (final candidate in MezuzaState.slots(input.project, history)) {
+        if (candidate.index == index) slot = candidate;
+      }
+      if (slot == null || slot.state != MezuzaSlotState.partial) {
+        return const EntryRejected(
+            "המזוזה שנבחרה כבר אינה חלקית. יש לרענן ולבחור שוב");
+      }
+
+      final reached = int.tryParse(input.partialLine.trim()) ?? 0;
+      if (reached <= 0) {
+        return const EntryRejected("יש להזין עד איזו שורה הגעת");
+      }
+      final lineError = SessionLogic.validateMezuzaLine(reached);
+      if (lineError != null) return EntryRejected(lineError);
+      if (reached <= slot.linesWritten) {
+        return EntryRejected(
+            "מזוזה $index כבר נכתבה עד שורה ${slot.linesWritten}");
+      }
+
+      final added = reached - slot.linesWritten;
+      final complete = reached >= ProductionCalculator.linesPerMezuza;
+      return EntryBuilt(
+        sessions: [
+          _session(
+            input,
+            id: IdGenerator.generate(),
+            entryId: entryId,
+            start: input.start,
+            end: input.end,
+            amount: 1,
+            startLine: 0,
+            // For an identified mezuza this is the contribution of this
+            // stretch. MezuzaState adds it to the earlier stretch.
+            endLine: added,
+            description: complete
+                ? "השלמת מזוזה $index (שורות ${slot.linesWritten + 1}–$reached)"
+                : "מזוזה $index (שורות ${slot.linesWritten + 1}–$reached)",
+            mezuzaIndex: index,
+          ),
+        ],
+        overlapsRecordedWork: false,
+        reachedPage: index,
+        reachedLine: reached,
+      );
+    }
+
     // Negative as well as absent. A minus typed in front of a quantity used to
     // be accepted whole: five mezuzot entered as "-5" subtracted five from the
     // commission and five hundred shekels from its income, and nothing on any
@@ -385,6 +625,7 @@ class EntryBuilder {
     var endLine = 0;
     String description;
     String? tefillinType;
+    int? mezuzaIndex;
 
     if (input.project.type == ProjectType.mezuza) {
       endLine = int.tryParse(input.partialLine.trim()) ?? 0;
@@ -392,6 +633,20 @@ class EntryBuilder {
       if (lineError != null) return EntryRejected(lineError);
       description =
           endLine > 0 ? "$amount מזוזות (עד שורה $endLine)" : "$amount מזוזות";
+      // Give a single new partial an identity immediately, so its second half
+      // can be selected later even when its date is edited or other mezuzot
+      // are entered in between. Larger counted entries retain their compatible
+      // legacy shape; their last partial is still reconstructed by MezuzaState.
+      if (amount == 1 && endLine > 0) {
+        final slots = MezuzaState.slots(input.project, history);
+        for (final slot in slots) {
+          if (slot.state == MezuzaSlotState.empty) {
+            mezuzaIndex = slot.index;
+            break;
+          }
+        }
+        mezuzaIndex ??= slots.length + 1;
+      }
     } else {
       switch (input.tefillinMode) {
         case 'set':
@@ -419,6 +674,7 @@ class EntryBuilder {
           startLine: 0,
           endLine: endLine,
           description: description,
+          mezuzaIndex: mezuzaIndex,
           tefillinType: tefillinType,
         ),
       ],
@@ -456,6 +712,7 @@ class EntryBuilder {
     required int startLine,
     required int endLine,
     required String description,
+    int? mezuzaIndex,
     String? tefillinType,
     int? parshiya,
     int? pairIndex,
@@ -469,6 +726,7 @@ class EntryBuilder {
         amount: amount,
         startLine: startLine,
         endLine: endLine,
+        mezuzaIndex: mezuzaIndex,
         tefillinType: tefillinType,
         parshiya: parshiya,
         pairIndex: pairIndex,

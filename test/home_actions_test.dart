@@ -106,13 +106,12 @@ void main() {
   });
 
   group('where there is no line to mark', () {
-    testWidgets('a plain sitting marks lines too', (tester) async {
-      // Nothing is tracking the position, but the writer still finishes lines
-      // and still wants them timed. The cards layout has always offered this;
-      // the ruled ones could not, because the action was never passed in.
+    testWidgets('a plain sitting can reset the line stopwatch', (tester) async {
+      // Plain mode does not record or advance the writing position. This action
+      // only keeps the optional per-line stopwatch useful between manual marks.
       await pump(tester, snapshot: snap(running: true), isSmart: false);
 
-      expect(find.widgetWithText(SoferPrimaryButton, 'סיימתי שורה'),
+      expect(find.widgetWithText(SoferPrimaryButton, 'איפוס זמן שורה'),
           findsOneWidget);
       expect(find.widgetWithText(SoferSecondaryButton, 'סיים'), findsOneWidget);
     });
@@ -148,7 +147,8 @@ void main() {
         ),
       ));
       await tester.pump(const Duration(milliseconds: 400));
-      await tester.tap(find.widgetWithText(SoferPrimaryButton, 'סיימתי שורה'));
+      await tester
+          .tap(find.widgetWithText(SoferPrimaryButton, 'איפוס זמן שורה'));
       await tester.pump();
 
       expect(lapped, 1);

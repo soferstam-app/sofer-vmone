@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../hebrew_utils.dart';
 import '../logic/production_calculator.dart';
+import '../logic/tefillin_state.dart';
+import '../logic/tefillin_units.dart';
+import '../logic/tefillin_text.dart';
 import '../models.dart';
 import '../theme/app_theme.dart';
+import '../l10n/app_localizations.dart';
 
 /// What has been written, drawn as the thing itself.
 ///
@@ -20,6 +24,7 @@ Widget seferProgressGrid(
 
   Map<int, Set<int>> pageContent = {};
   for (var s in sessions) {
+    if (!s.countsAsOutput) continue;
     if (s.amount > 0) {
       pageContent.putIfAbsent(s.amount, () => {});
       for (int i = s.startLine; i <= s.endLine; i++) {
@@ -38,7 +43,7 @@ Widget seferProgressGrid(
         child: Row(
           children: [
             Expanded(
-              child: Text("מפת העמודים",
+              child: Text(context.l10n.pick(he: "מפת העמודים", en: "Page map"),
                   style: TextStyle(
                     fontFamily: t.labelFamily,
                     fontSize: 12,
@@ -47,7 +52,10 @@ Widget seferProgressGrid(
                     color: t.isCards ? t.accent : t.inkMuted,
                   )),
             ),
-            Text("$totalPages עמודים · לחיצה לפרטים",
+            Text(
+                context.l10n.pick(
+                    he: "$totalPages עמודים · לחיצה לפרטים",
+                    en: "$totalPages pages · tap for details"),
                 style: TextStyle(
                     fontFamily: t.labelFamily,
                     fontSize: 11,
@@ -128,9 +136,11 @@ void _showSeferPageDetails(
     BuildContext context, int page, Set<int> lines, int maxLines) {
   String msg;
   if (lines.length >= maxLines) {
-    msg = "מושלם, זיכית יהודים בעוד מוצר סת\"ם כשר ומהודר";
+    msg = context.l10n.pick(
+        he: "מושלם, זיכית יהודים בעוד מוצר סת\"ם כשר ומהודר",
+        en: "Complete — another beautiful kosher STaM item is ready");
   } else if (lines.isEmpty) {
-    msg = "טרם נכתב";
+    msg = context.l10n.pick(he: "טרם נכתב", en: "Not yet written");
   } else {
     List<int> sorted = lines.toList()..sort();
     List<String> ranges = [];
@@ -148,17 +158,22 @@ void _showSeferPageDetails(
       }
       ranges.add(start == end ? "$start" : "$start-$end");
     }
-    msg = "שורות שנכתבו: ${ranges.join(', ')}";
+    msg = context.l10n.pick(
+        he: "שורות שנכתבו: ${ranges.join(', ')}",
+        en: "Lines written: ${ranges.join(', ')}");
   }
 
   showDialog(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: Text("עמוד ${formatHebrewNumber(page)}"),
+      title: Text(context.l10n.pick(
+          he: "עמוד ${formatHebrewNumber(page)}",
+          en: "Page ${formatHebrewNumber(page)}")),
       content: Text(msg),
       actions: [
         TextButton(
-            onPressed: () => Navigator.pop(ctx), child: const Text("סגור"))
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(context.l10n.pick(he: "סגור", en: "Close")))
       ],
     ),
   );
@@ -167,8 +182,18 @@ void _showSeferPageDetails(
 Widget tefillinProgressGrid(
     BuildContext context, Project project, List<WorkSession> sessions) {
   List<int> counts = List.filled(8, 0);
+  final hasWords = sessions.any(TefillinWordRange.isWordRecord);
+  if (hasWords) {
+    for (final slot in TefillinState.slots(project, sessions)) {
+      if (slot.state == SlotState.done) {
+        counts[(slot.side == TefillinSide.head ? 0 : 4) + slot.parshiya - 1]++;
+      }
+    }
+  }
 
   for (var s in sessions) {
+    if (hasWords) break;
+    if (!s.countsAsOutput) continue;
     if (s.tefillinType == null && s.parshiya == null) {
       for (int i = 0; i < 8; i++) {
         counts[i] += s.amount;
@@ -195,8 +220,8 @@ Widget tefillinProgressGrid(
     padding: const EdgeInsets.all(16.0),
     child: Column(
       children: [
-        const Text("תפילין של ראש",
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        Text(context.l10n.pick(he: "תפילין של ראש", en: "Tefillin Shel Rosh"),
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         const SizedBox(height: 8),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -204,8 +229,8 @@ Widget tefillinProgressGrid(
               4, (i) => _tefillinBox(context, i, counts[i], true)),
         ),
         const SizedBox(height: 24),
-        const Text("תפילין של יד",
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        Text(context.l10n.pick(he: "תפילין של יד", en: "Tefillin Shel Yad"),
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         const SizedBox(height: 8),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -226,11 +251,15 @@ Widget _tefillinBox(BuildContext context, int index, int count, bool isHead) {
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: Text("פרשיית $name (${isHead ? 'ראש' : 'יד'})"),
-          content: Text("נכתבו בשלמות: $count"),
+          title: Text(context.l10n.pick(
+              he: "פרשיית $name (${isHead ? 'ראש' : 'יד'})",
+              en: "Parashah $name (${isHead ? 'Shel Rosh' : 'Shel Yad'})")),
+          content: Text(context.l10n
+              .pick(he: "נכתבו בשלמות: $count", en: "Completed: $count")),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(ctx), child: const Text("סגור"))
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(context.l10n.pick(he: "סגור", en: "Close")))
           ],
         ),
       );

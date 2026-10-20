@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../hebrew_utils.dart';
 import '../theme/app_theme.dart';
 import '../widgets/sofer_widgets.dart';
+import '../l10n/app_localizations.dart';
 
 /// How much of each unit has been written. Keys are 1-based — there is no
 /// page 0 — and values run from 0 to 1.
@@ -172,12 +173,10 @@ Future<void> showScrollMap(
 
       String label(int n) =>
           hebrewNumerals ? formatHebrewNumber(n) : n.toString();
-      String range(UnitRun r) => r.length == 1
-          ? label(r.from)
-          : "${label(r.from)}–${label(r.to)}";
+      String range(UnitRun r) =>
+          r.length == 1 ? label(r.from) : "${label(r.from)}–${label(r.to)}";
       String list(List<UnitRun> rs) => rs.map(range).join(", ");
-      int count(List<UnitRun> rs) =>
-          rs.fold(0, (sum, r) => sum + r.length);
+      int count(List<UnitRun> rs) => rs.fold(0, (sum, r) => sum + r.length);
 
       return AlertDialog(
         title: Text(title),
@@ -188,7 +187,11 @@ Future<void> showScrollMap(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                SoferSectionTitle("כל העבודה · $total $unitPlural",
+                SoferSectionTitle(
+                    context.l10n.pick(
+                      he: "כל העבודה · $total $unitPlural",
+                      en: "All work · $total $unitPlural",
+                    ),
                     padding: EdgeInsets.zero),
                 const SizedBox(height: 8),
                 ScrollMap(total: total, fill: fill),
@@ -196,11 +199,14 @@ Future<void> showScrollMap(
                 _Ruler(total: total, label: label),
                 if (total > 60) ...[
                   const SizedBox(height: 18),
-                  SoferSectionTitle("מחולק לשורות · לאיתור חורים",
+                  SoferSectionTitle(
+                      context.l10n.pick(
+                        he: "מחולק לשורות · לאיתור חורים",
+                        en: "Wrapped rows · find gaps",
+                      ),
                       padding: EdgeInsets.zero),
                   const SizedBox(height: 8),
-                  ScrollMap(
-                      total: total, fill: fill, rows: 5, bandHeight: 14),
+                  ScrollMap(total: total, fill: fill, rows: 5, bandHeight: 14),
                 ],
                 const SizedBox(height: 18),
                 const SoferRule(),
@@ -208,7 +214,8 @@ Future<void> showScrollMap(
                 if (full.isNotEmpty)
                   _Legend(
                     swatch: t.accent,
-                    label: "נכתב במלואו",
+                    label:
+                        context.l10n.pick(he: "נכתב במלואו", en: "Completed"),
                     detail: "$unitPlural ${list(full)}",
                     trailing: "${count(full)}",
                   ),
@@ -216,7 +223,7 @@ Future<void> showScrollMap(
                   _Legend(
                     swatch: t.accent,
                     half: true,
-                    label: "חלקי",
+                    label: context.l10n.pick(he: "חלקי", en: "Partial"),
                     detail: "$unitSingular ${range(r)} — "
                         "${(r.fill * 100).toStringAsFixed(0)}%",
                   ),
@@ -224,7 +231,7 @@ Future<void> showScrollMap(
                   _Legend(
                     swatch: t.paper,
                     outlined: true,
-                    label: "טרם נכתב",
+                    label: context.l10n.pick(he: "טרם נכתב", en: "Not started"),
                     detail: "$unitPlural ${list(untouched)}",
                     trailing: "${count(untouched)}",
                   ),
@@ -234,7 +241,8 @@ Future<void> showScrollMap(
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text("סגור")),
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(context.l10n.pick(he: "סגור", en: "Close"))),
         ],
       );
     },
@@ -261,9 +269,7 @@ class _Ruler extends StatelessWidget {
                 height: 5,
                 decoration: BoxDecoration(
                   border: Border(
-                    left: i == 0
-                        ? BorderSide.none
-                        : BorderSide(color: t.rule),
+                    left: i == 0 ? BorderSide.none : BorderSide(color: t.rule),
                   ),
                 ),
               ),
@@ -277,9 +283,7 @@ class _Ruler extends StatelessWidget {
                 label(i == 0 ? 1 : (total * i / divisions).round()),
                 textAlign: i == 0 ? TextAlign.right : TextAlign.center,
                 style: TextStyle(
-                    fontFamily: t.labelFamily,
-                    fontSize: 10,
-                    color: t.inkMuted),
+                    fontFamily: t.labelFamily, fontSize: 10, color: t.inkMuted),
               ),
             ),
         ]),

@@ -2,8 +2,8 @@ import '../models.dart';
 
 /// The records a figure involving time may be computed from.
 ///
-/// The rule, and it is one rule: **a quantity counts every record; a ratio that
-/// has time in it counts only records that carried time — on both sides.**
+/// The rule, and it is one rule: **a quantity counts valid output; a time ratio
+/// counts every non-deleted timed record — including work later ruled invalid.**
 ///
 /// Sums of output are quantities. Lines written, pages done, profit, progress,
 /// a delivery date: every record belongs in those. Minutes per line and shekels
@@ -21,12 +21,12 @@ class MeasuredWork {
 
   /// Whether this record can take part in a ratio involving time.
   ///
-  /// A duration of zero or less is refused as well as an unmarked record: a
+  /// Deletion, a duration of zero or less, or an unmarked record is refused: a
   /// session written before the midnight-crossing fix can hold a negative
   /// length, and subtracting it from an hour of real work would report less
   /// time than was spent.
   static bool countsForTime(WorkSession session) =>
-      session.timeRecorded && session.duration > Duration.zero;
+      !session.isDeleted && session.timeRecorded && session.duration > Duration.zero;
 
   /// The subset of [sessions] a time ratio may use.
   static List<WorkSession> only(Iterable<WorkSession> sessions) =>
@@ -45,4 +45,14 @@ class MeasuredWork {
   /// average it is showing rests on part of the work rather than all of it.
   static bool anyUntimed(Iterable<WorkSession> sessions) =>
       sessions.any((s) => !countsForTime(s));
+
+  /// Time spent on physical work that was later ruled invalid. It remains a
+  /// real cost of the commission even though it contributes no output.
+  static Duration invalidTime(Iterable<WorkSession> sessions) => time(
+        sessions.where((s) => !s.isDeleted && s.isInvalid),
+      );
+
+  /// Valid output eligible for a writing-speed ratio.
+  static List<WorkSession> validOnly(Iterable<WorkSession> sessions) =>
+      sessions.where((s) => !s.isDeleted && !s.isInvalid).toList();
 }

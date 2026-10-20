@@ -25,12 +25,12 @@ void main() {
     });
 
     test('modern dark really is dark', () {
-      final tokens = AppThemeBuilder.build(AppTheme.modern,
-              system: Brightness.dark)
-          .extension<SoferTokens>()!;
-      final light = AppThemeBuilder.build(AppTheme.modern,
-              system: Brightness.light)
-          .extension<SoferTokens>()!;
+      final tokens =
+          AppThemeBuilder.build(AppTheme.modern, system: Brightness.dark)
+              .extension<SoferTokens>()!;
+      final light =
+          AppThemeBuilder.build(AppTheme.modern, system: Brightness.light)
+              .extension<SoferTokens>()!;
 
       expect(tokens.paper.computeLuminance(),
           lessThan(light.paper.computeLuminance()));
@@ -52,10 +52,10 @@ void main() {
 
   group('klaf after dark', () {
     test('is layla, which is the same family in the dark', () {
-      final klaf = AppThemeBuilder.build(AppTheme.klaf)
-          .extension<SoferTokens>()!;
-      final layla = AppThemeBuilder.build(AppTheme.layla)
-          .extension<SoferTokens>()!;
+      final klaf =
+          AppThemeBuilder.build(AppTheme.klaf).extension<SoferTokens>()!;
+      final layla =
+          AppThemeBuilder.build(AppTheme.layla).extension<SoferTokens>()!;
 
       expect(klaf.layout, layla.layout, reason: 'the same arrangement');
       expect(layla.paper.computeLuminance(),

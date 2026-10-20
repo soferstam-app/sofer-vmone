@@ -27,9 +27,8 @@ enum AppTheme {
         AppTheme.layla => 'פחם ופליז, לכתיבה בלילה',
       };
 
-  static AppTheme fromName(String? name) =>
-      AppTheme.values.firstWhere((t) => t.name == name,
-          orElse: () => AppTheme.modern);
+  static AppTheme fromName(String? name) => AppTheme.values
+      .firstWhere((t) => t.name == name, orElse: () => AppTheme.modern);
 }
 
 /// How a screen arranges its information.
@@ -209,7 +208,8 @@ class AppThemeBuilder {
   static const String _serif = 'FrankRuhlLibre';
   static const String _sans = 'Heebo';
 
-  static ThemeData build(AppTheme theme, {Brightness system = Brightness.light}) =>
+  static ThemeData build(AppTheme theme,
+          {Brightness system = Brightness.light}) =>
       switch (theme) {
         AppTheme.modern => _modern(system),
         AppTheme.klaf => _klaf(),
@@ -440,8 +440,7 @@ class AppThemeBuilder {
           side: BorderSide(color: rule),
           borderRadius: BorderRadius.circular(2),
         ),
-        titleTextStyle:
-            TextStyle(fontFamily: _serif, fontSize: 20, color: ink),
+        titleTextStyle: TextStyle(fontFamily: _serif, fontSize: 20, color: ink),
       ),
       extensions: [
         SoferTokens(

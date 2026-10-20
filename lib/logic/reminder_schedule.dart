@@ -61,8 +61,7 @@ class ReminderSchedule {
   static int idFor(DateTime day) => _base + CalendarDays.dayNumber(day) % days;
 
   /// Every id the ring can hold, for clearing the queue before refilling it.
-  static List<int> get allIds =>
-      [for (var i = 0; i < days; i++) _base + i];
+  static List<int> get allIds => [for (var i = 0; i < days; i++) _base + i];
 
   /// Above the ids used elsewhere; id 0 was the old repeating reminder.
   static const int _base = 100;

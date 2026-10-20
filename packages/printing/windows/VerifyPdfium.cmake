@@ -1,0 +1,10 @@
+# Verified from the same PDFium 5200 x64 archive pinned in CMakeLists.txt.
+function(verify_pdfium_dll DLL_PATH)
+  if(NOT EXISTS "${DLL_PATH}")
+    message(FATAL_ERROR "PDFium DLL is missing: ${DLL_PATH}")
+  endif()
+  file(SHA256 "${DLL_PATH}" DLL_SHA256)
+  if(NOT DLL_SHA256 STREQUAL "0c88ebacc0393fd45fc3e7b35e31e72c9e55b633a846a7ecf4085694dba68abd")
+    message(FATAL_ERROR "PDFium DLL SHA-256 mismatch: ${DLL_PATH}")
+  endif()
+endfunction()

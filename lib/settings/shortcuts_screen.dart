@@ -6,6 +6,7 @@ import '../storage_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/feedback.dart';
 import '../widgets/sofer_widgets.dart';
+import '../l10n/app_localizations.dart';
 
 /// Choosing which key does what.
 ///
@@ -44,8 +45,10 @@ class _ShortcutsScreenState extends State<ShortcutsScreen> {
     if (!picked.isUsable) {
       showAppError(
         context,
-        "אות או ספרה בודדת נבלעת ברשימות נפתחות. יש להוסיף Ctrl, Alt או "
-        "Shift — או לבחור מקש פונקציה, רווח או Enter.",
+        context.l10n.pick(
+          he: "אות או ספרה בודדת נבלעת ברשימות נפתחות. יש להוסיף Ctrl, Alt או Shift — או לבחור מקש פונקציה, רווח או Enter.",
+          en: "A bare letter or digit is consumed by dropdown lists. Add Ctrl, Alt, or Shift, or choose a function key, Space, or Enter.",
+        ),
       );
       return;
     }
@@ -53,7 +56,13 @@ class _ShortcutsScreenState extends State<ShortcutsScreen> {
     final clash = _map.conflictWith(picked, except: action);
     if (clash != null) {
       // Naming the action it already means beats refusing without saying why.
-      showAppError(context, "${picked.label} כבר משמש ל\"${clash.label}\"");
+      showAppError(
+        context,
+        context.l10n.pick(
+          he: "${picked.label} כבר משמש ל\"${clash.label}\"",
+          en: "${_bindingLabel(picked)} is already assigned to “${_actionLabel(clash)}”",
+        ),
+      );
       return;
     }
 
@@ -61,7 +70,8 @@ class _ShortcutsScreenState extends State<ShortcutsScreen> {
     await _storage.setShortcuts(next);
     if (!mounted) return;
     setState(() => _map = next);
-    showAppSuccess(context, "${action.label}: ${picked.label}");
+    showAppSuccess(
+        context, "${_actionLabel(action)}: ${_bindingLabel(picked)}");
   }
 
   /// Waits for the writer to press the combination he wants.
@@ -75,7 +85,7 @@ class _ShortcutsScreenState extends State<ShortcutsScreen> {
       builder: (ctx) {
         final t = SoferTokens.of(ctx);
         return AlertDialog(
-          title: Text(action.label),
+          title: Text(_actionLabel(action)),
           content: KeyboardListener(
             focusNode: node,
             autofocus: true,
@@ -99,11 +109,14 @@ class _ShortcutsScreenState extends State<ShortcutsScreen> {
               children: [
                 Icon(Icons.keyboard, size: 40, color: t.inkMuted),
                 const SizedBox(height: 14),
-                const Text("הקש את הצירוף הרצוי",
+                Text(
+                    context.l10n.pick(
+                        he: "הקש את הצירוף הרצוי",
+                        en: "Press the desired key combination"),
                     style: TextStyle(fontSize: 16)),
                 const SizedBox(height: 8),
                 Text(
-                  "Esc לביטול",
+                  context.l10n.pick(he: "Esc לביטול", en: "Esc to cancel"),
                   style: TextStyle(fontSize: 13, color: t.inkMuted),
                 ),
               ],
@@ -118,7 +131,8 @@ class _ShortcutsScreenState extends State<ShortcutsScreen> {
     await _storage.setShortcuts(ShortcutMap.defaults);
     if (!mounted) return;
     setState(() => _map = ShortcutMap.defaults);
-    showAppSuccess(context, "הוחזרו ברירות המחדל");
+    showAppSuccess(context,
+        context.l10n.pick(he: "הוחזרו ברירות המחדל", en: "Defaults restored"));
   }
 
   @override
@@ -126,7 +140,9 @@ class _ShortcutsScreenState extends State<ShortcutsScreen> {
     final t = SoferTokens.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text("קיצורי מקלדת")),
+      appBar: AppBar(
+          title: Text(
+              context.l10n.pick(he: "קיצורי מקלדת", en: "Keyboard shortcuts"))),
       body: !_loaded
           ? const Center(child: CircularProgressIndicator())
           : SoferPage(
@@ -135,10 +151,10 @@ class _ShortcutsScreenState extends State<ShortcutsScreen> {
                 children: [
                   SoferPanel(
                     child: Text(
-                      "הקיצורים פועלים כשחלון התוכנה בחזית — גם בחלון הצף. "
-                      "בזמן הקלדה בשדה טקסט הם אינם מופעלים.\n"
-                      "רווח ו-Enter פועלים כשאין כפתור שנבחר, כדי שלא יפעילו "
-                      "אותו וגם את הקיצור.",
+                      context.l10n.pick(
+                        he: "הקיצורים פועלים כשחלון התוכנה בחזית — גם בחלון הצף. בזמן הקלדה בשדה טקסט הם אינם מופעלים.\nרווח ו-Enter פועלים כשאין כפתור שנבחר, כדי שלא יפעילו אותו וגם את הקיצור.",
+                        en: "Shortcuts work while the app is in the foreground, including the floating window. They are disabled while typing in a text field.\nSpace and Enter work only when no button is focused, so they do not activate both the button and the shortcut.",
+                      ),
                       style: TextStyle(
                           fontSize: 14, height: 1.6, color: t.inkMuted),
                     ),
@@ -154,13 +170,13 @@ class _ShortcutsScreenState extends State<ShortcutsScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(action.label,
+                                  Text(_actionLabel(action),
                                       style: TextStyle(
                                           fontFamily: t.numeralFamily,
                                           fontSize: 17,
                                           color: t.ink)),
                                   const SizedBox(height: 3),
-                                  Text(action.describe,
+                                  Text(_actionDescription(action),
                                       style: TextStyle(
                                           fontSize: 13, color: t.inkMuted)),
                                 ],
@@ -169,7 +185,9 @@ class _ShortcutsScreenState extends State<ShortcutsScreen> {
                             const SizedBox(width: 10),
                             OutlinedButton(
                               onPressed: () => _rebind(action),
-                              child: Text(_map[action]?.label ?? '—'),
+                              child: Text(_map[action] == null
+                                  ? '—'
+                                  : _bindingLabel(_map[action]!)),
                             ),
                           ],
                         ),
@@ -177,7 +195,8 @@ class _ShortcutsScreenState extends State<ShortcutsScreen> {
                     ),
                   const SizedBox(height: 14),
                   SoferSecondaryButton(
-                    "החזרת ברירות המחדל",
+                    context.l10n
+                        .pick(he: "החזרת ברירות המחדל", en: "Restore defaults"),
                     icon: Icons.settings_backup_restore,
                     expand: true,
                     onPressed: _restoreDefaults,
@@ -187,4 +206,28 @@ class _ShortcutsScreenState extends State<ShortcutsScreen> {
             ),
     );
   }
+
+  String _actionLabel(ShortcutAction action) => context.l10n.isEnglish
+      ? switch (action) {
+          ShortcutAction.startStop => 'Start and stop',
+          ShortcutAction.takeBreak => 'Break and resume',
+          ShortcutAction.markLine => 'Finished a line',
+        }
+      : action.label;
+
+  String _actionDescription(ShortcutAction action) => context.l10n.isEnglish
+      ? switch (action) {
+          ShortcutAction.startStop =>
+            'Starts a session; during a session, finishes and saves it',
+          ShortcutAction.takeBreak =>
+            'Starts a break; during a break, resumes writing',
+          ShortcutAction.markLine =>
+            'Marks a completed line and measures its time',
+        }
+      : action.describe;
+
+  String _bindingLabel(ShortcutBinding binding) =>
+      context.l10n.isEnglish && binding.key == LogicalKeyboardKey.space
+          ? binding.label.replaceAll('רווח', 'Space')
+          : binding.label;
 }

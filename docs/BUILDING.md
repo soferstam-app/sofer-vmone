@@ -20,9 +20,37 @@ Studio עם רכיב Desktop development with C++ מזוהים. הוראות ה�
 הפרויקט: הרצפה של Flutter היא API 21, וגרסת ה-SDK שבשימוש קובעת 24. מכשיר ישן
 מכך פשוט לא יתקין את הקובץ.
 
-הערך מגיע מ-`flutter.minSdkVersion` ולא נכתב בפרויקט, כך שהוא עולה מעצמו עם
-כל שדרוג של Flutter. **אם זה חשוב שיישאר יציב — צריך לקבע אותו במפורש**
-ב-`android/app/build.gradle.kts`.
+הערך מקובע במפורש כ־24 ב־`android/app/build.gradle.kts`, כדי ששדרוג Flutter
+לא יוציא מכשירים מהתמיכה בלי החלטה מפורשת.
+
+---
+
+## חוזה קובצי השחרור עבור המעדכן
+
+יעד ההפצה שבהכנה הוא **0.7.0+8** (החלטה 66). קובצי ההפצה יהיו
+`sofer-vmone-0.7.0-android.apk` ו־`sofer-vmone-0.7.0-windows.zip`.
+החתימה וזהות Android ממשיכות את מסלול גרסת ההיערכות; שינוי המספר
+אינו שלב החלפת המפתח. חבילות סקירה ישנות אינן חבילות 0.7.0.
+
+המעדכן המובנה אינו מנחש איזה קובץ להתקין. בשחרור `X.Y.Z` חייבים להיות בדיוק
+הנכסים הבאים ב־GitHub Releases:
+
+```text
+sofer-vmone-X.Y.Z-android.apk
+sofer-vmone-X.Y.Z-windows.zip
+```
+
+GitHub מחשב לכל נכס שדה `digest` מסוג SHA-256. המעדכן דורש את השדה, מוריד את
+מספר הבתים שפורסם ומשווה את הגיבוב לפני התקנה. שינוי שם הקובץ, העלאת קובץ ריק
+או פרסום שחרור לפני ששני הנכסים מוכנים גורמים לעדכון להיעצר בהודעה ברורה.
+
+חבילת Windows חייבת להכיל באותה תיקיית שורש את קובץ ההפעלה, את
+`flutter_windows.dll` ואת `data/app.so` ו־`data/icudtl.dat`. אפשר לעטוף את
+השורש בתיקייה אחת בתוך ה־ZIP; המעדכן מאתר אותה, אבל אינו מקבל שני קובצי הפעלה
+באותו שם.
+
+לפני פרסום יש לוודא גם שמספר הבנייה ב־`pubspec.yaml` גבוה מה־`versionCode`
+האחרון ושחתימת ה־APK ממשיכה את מסלול החתימה המתועד ב־`docs/SIGNING.md`.
 
 ---
 
@@ -58,7 +86,35 @@ schannel: the revocation status is unknown
 & "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" --build "E:\stamsofer\build\windows\x64\pdfium-download" --config Debug
 ```
 
-### העקיפה
+### המסלול הנוכחי — אימות אוטומטי (0.7.0)
+
+`printing` מקובע לעותק מקומי של 5.14.3 ב־`packages/printing`, עם שינוי
+בקובצי הבנייה של Windows בלבד. CMake דורש SHA-256 קבוע לארכיון PDFium
+5200 x64, לפני חילוץ, ובודק גם את ה־DLL המחולץ בכל הגדרה של הבנייה.
+ארכיטקטורה אחרת מחייבת בחירה מפורשת של בינארי וגיבובים מאומתים.
+אין לערוך את Pub Cache או את קובצי התוספים המחוללים.
+
+בבנייה מקוונת ההורדה נעשית אצל המפתח. לבנייה מעותק מקומי שכבר הורד,
+אפשר להגדיר את הנתיב ב־CMakeCache; גם קובץ זה חייב להתאים לאותו גיבוב:
+
+```powershell
+& $cmakeExe -S windows -B build/windows/x64 `
+  -DSTAMSOFER_PDFIUM_ARCHIVE=C:/gradle-trust/pdfium-win-x64-verified.tgz
+flutter build windows --release --no-pub
+```
+
+`$cmakeExe` הוא הנתיב ל־cmake.exe של Visual Studio. בלי הפרמטר משתמשים
+בכתובת המקובעת של GitHub עם אימות התעודה הרגיל. אין צורך לכבות אימות TLS.
+הגדרת המטמון מקומית למחשב; אין לשמור נתיב אישי בקוד.
+
+המשתמש מקבל `pdfium.dll` לצד קובץ ההפעלה ואת
+`data/licenses/pdfium.txt`. אין הורדת PDFium בזמן הרצת האפליקציה.
+יש לארוז את תיקיית ההתקנה המלאה, ולא את ה־EXE בלבד.
+אם הוגדר בעבר `CMAKE_INSTALL_PREFIX`, הבנייה יכולה להתקין שם גם כשהפלט של
+Flutter מצביע על `runner/Release`. יש לבדוק את `install_manifest.txt` ואת
+מספר הגרסה של ה־EXE בחבילה; תיקייה ששמה 0.6.0 אינה הוכחה לגרסת התוכן.
+
+### העקיפה ההיסטורית — הוחלפה במסלול המאומת לעיל
 
 ```powershell
 $env:PUB_CACHE = "C:\pub-cache"
@@ -76,7 +132,7 @@ flutter build windows --debug
 ברשת, ואין דבר שמוודא שמה שהתקבל הוא מה שהיה אמור להתקבל. עם `TLS_VERIFY=0`
 גם אין אימות של הצד השני.
 
-**האימות היחיד שנעשה עד היום נעשה בידיים:**
+לפני התיקון ב־0.7.0 האימות נעשה ידנית:
 
 ```powershell
 # הורדה בערוץ שכן מאמת
@@ -93,8 +149,8 @@ Get-FileHash "build\windows\x64\pdfium-download\pdfium-download-prefix\src\pdfiu
 8E900C3E5103AE9A3AA7800653E804575C687D132FCFB4DEDA7BB2CE04ACA8D2   (2,629,624 bytes)
 ```
 
-**התיקון הנכון הוא לקבע את הקובץ או את ה-hash בפרויקט** ולא להסתמך על כך שמישהו
-יזכור לבדוק. עד אז — הערך למעלה הוא מה שיש להשוות אליו.
+ב־0.7.0 הגיבוב לעיל מקובע בבנייה, יחד עם גיבוב ה־DLL. התיאור הבא מתעד
+את הכשל במנגנון ההורדה הישן; קובץ מקומי מאומת נתמך כעת במפורש.
 
 ### תקלה נלווית: קובץ באורך אפס
 
@@ -129,7 +185,25 @@ flutter build apk --release
 
 ---
 
-## הרצת הבדיקות
+## עדכון סביבת Android — 14.10.2026
+
+השגיאה `Unable to establish loopback connection` הופיעה גם בהרצת
+PowerShell, עם `Invalid argument: connect` ב־`UnixDomainSockets`.
+הבנייה הצליחה עם ההגדרות הבאות עבור תהליך הבנייה בלבד:
+
+```powershell
+New-Item -ItemType Directory -Path C:\jtmp -Force | Out-Null
+$env:TEMP = "C:\jtmp"
+$env:TMP = "C:\jtmp"
+$env:JAVA_TOOL_OPTIONS = "-Djdk.net.unixdomain.tmpdir=C:/jtmp -Djava.net.preferIPv4Stack=true"
+& C:\flutter\bin\flutter.bat build apk --debug --no-pub
+```
+
+נבדקה בניית Debug לצורך סקירה. אין צורך לשנות את משתני הסביבה
+הקבועים במערכת. ההסבר הקודם על Git Bash מתאר את התקלה שנבדקה אז;
+הופעת אותה שגיאה אינה מוכיחה שההרצה הנוכחית נעשתה ב־Git Bash.
+
+## הרצת הבדיקות — פקודות
 
 ```bash
 flutter test

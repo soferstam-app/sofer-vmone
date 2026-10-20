@@ -30,12 +30,40 @@ class MezuzaSlot {
 class MezuzaState {
   const MezuzaState._();
 
+  /// Continue forward without adding work to an already completed mezuza.
+  /// A partial mezuza resumes after its recorded lines; earlier gaps remain
+  /// available through the position picker.
+  static ({int page, int line}) nextWritablePosition(
+    Project project,
+    Iterable<WorkSession> history, {
+    required int page,
+    required int line,
+  }) {
+    var index = page < 1 ? 1 : page;
+    final byIndex = {
+      for (final slot in slots(project, history)) slot.index: slot
+    };
+    while (byIndex[index]?.state == MezuzaSlotState.done) {
+      index++;
+    }
+    final requested = index == page ? line : 1;
+    final resume = byIndex[index]?.resumeLine ?? 1;
+    return (
+      page: index,
+      line: requested.clamp(resume, ProductionCalculator.linesPerMezuza),
+    );
+  }
+
   static List<MezuzaSlot> slots(
     Project project,
     Iterable<WorkSession> history,
   ) {
     final sessions = history
-        .where((s) => s.projectId == project.id && !s.isDeleted)
+        .where((s) =>
+            s.projectId == project.id &&
+            !s.isDeleted &&
+            !s.isInvalid &&
+            s.countsAsOutput)
         .toList()
       ..sort((a, b) => a.startTime.compareTo(b.startTime));
 

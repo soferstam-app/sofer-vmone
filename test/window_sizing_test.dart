@@ -39,21 +39,21 @@ void main() {
 
   group('the size the writer left it at', () {
     test('comes back', () {
-      final size =
-          WindowSizing.startup(remembered: const Size(1000, 800), available: desktop);
+      final size = WindowSizing.startup(
+          remembered: const Size(1000, 800), available: desktop);
       expect(size, const Size(1000, 800));
     });
 
     test('may be larger than the default, because he chose it', () {
-      final size =
-          WindowSizing.startup(remembered: const Size(1700, 950), available: desktop);
+      final size = WindowSizing.startup(
+          remembered: const Size(1700, 950), available: desktop);
       expect(size.width, greaterThan(WindowSizing.preferred.width));
     });
 
     test('is cut down to a smaller screen', () {
       // Remembered on the 4K monitor, opened on the laptop that evening.
-      final size =
-          WindowSizing.startup(remembered: const Size(3200, 1800), available: laptop);
+      final size = WindowSizing.startup(
+          remembered: const Size(3200, 1800), available: laptop);
       expect(size.width, lessThan(laptop.width));
       expect(size.height, lessThan(laptop.height));
     });
@@ -85,8 +85,10 @@ void main() {
       for (final screen in screens) {
         for (final was in remembered) {
           final size = WindowSizing.startup(remembered: was, available: screen);
-          expect(size.width,
-              greaterThanOrEqualTo(min(WindowSizing.minimum.width, screen.width)),
+          expect(
+              size.width,
+              greaterThanOrEqualTo(
+                  min(WindowSizing.minimum.width, screen.width)),
               reason: 'was $was on $screen');
         }
       }

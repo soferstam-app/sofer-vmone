@@ -65,7 +65,7 @@ const List<OnboardingPage> onboardingPages = [
     items: [
       OnboardingItem(
         'פרויקט',
-        'פעם אחת בהתחלה אתה אומר לתוכנה מה אתה כותב: ספר תורה, תפילין או '
+        'פעם אחת בהתחלה אתה אומר לתוכנה מה אתה כותב: ספר תורה, מגילה, תפילין או '
             'מזוזה. כמה עמודים, כמה שורות בעמוד, ובכמה סיכמת. מכאן היא יודעת '
             'לחשב את כל השאר.',
       ),
@@ -102,8 +102,8 @@ const List<OnboardingPage> onboardingPages = [
       OnboardingItem('הוצאות ותשלומים',
           'כמה קלף וקולמוס קנית, וכמה כסף באמת כבר הגיע אליך'),
       OnboardingItem('הגהה', 'מי הגיה, מתי, ומה נמצא'),
-      OnboardingItem('דוח שנתי לרואה חשבון',
-          'הכנסות והוצאות חודש בחודשו, מוכן להדפסה'),
+      OnboardingItem(
+          'דוח שנתי לרואה חשבון', 'הכנסות והוצאות חודש בחודשו, מוכן להדפסה'),
       OnboardingItem('הצעת מחיר',
           'כמה לבקש על עבודה חדשה, לפי הקצב האמיתי שלך ולא לפי הערכה'),
       OnboardingItem('תזכורת יומית', 'גיבוי לקובץ, ולוח עברי מלא'),
@@ -117,6 +117,86 @@ const List<OnboardingPage> onboardingPages = [
         'עלות השחר.',
   ),
 ];
+
+/// The same explanation in English. Professional STaM terms follow the
+/// glossary approved for the application; page numbers deliberately remain in
+/// Hebrew notation because that is how the physical work is marked.
+const List<OnboardingPage> englishOnboardingPages = [
+  OnboardingPage(
+    kind: OnboardingKind.prose,
+    title: 'Sofer v’Mone',
+    paragraphs: [
+      'Software for STaM Sofrim that does the counting for you.',
+      'While you write, it measures how long you worked, how many lines you '
+          'wrote, and how much you earned — without notes or calculations.',
+    ],
+    footnote: 'Everything is stored only on your device. No account, no '
+        'payment, and no internet connection are required.',
+  ),
+  OnboardingPage(
+    kind: OnboardingKind.steps,
+    title: 'Three things. That’s all.',
+    items: [
+      OnboardingItem(
+        'Project',
+        'At the beginning, tell the app what you are writing: a Sefer Torah, '
+            'Megillah, Tefillin, or a Mezuzah. Enter the number of pages, the lines per '
+            'page, and the agreed price. From there, it can calculate the rest.',
+      ),
+      OnboardingItem(
+        'Writing session',
+        'When you sit down to write, tap “Start”; when you get up, tap '
+            '“Finish”. The timer keeps running even if you close the app. '
+            'Taking a break? Tap the break button and that time will not count.',
+      ),
+      OnboardingItem(
+        'Line',
+        'Whenever you finish a line, tap the large “Finished a line” button. '
+            'That is all you need to do while writing.',
+      ),
+    ],
+  ),
+  OnboardingPage(
+    kind: OnboardingKind.facts,
+    title: 'After one week, it can already tell you',
+    items: [
+      OnboardingItem(
+          '◷', 'A line takes you 4 minutes and 20 seconds on average'),
+      OnboardingItem('₪', 'You earn ₪68 per hour — after expenses'),
+      OnboardingItem('☷', 'At this pace, you will finish on 23 Shevat'),
+      OnboardingItem('▤', 'Today you should reach page י״ד'),
+    ],
+    footnote: 'The calendar skips days on which you do not write. If you fall '
+        'behind, it spreads the difference across the remaining days, so you '
+        'do not have to recalculate the plan yourself.',
+  ),
+  OnboardingPage(
+    kind: OnboardingKind.list,
+    title: 'And there is more',
+    items: [
+      OnboardingItem('Expenses and payments',
+          'Track parchment and quill purchases, and how much you were actually paid'),
+      OnboardingItem(
+          'Proofreading', 'Who proofread the work, when, and what was found'),
+      OnboardingItem('Annual accountant report',
+          'Monthly income and expenses, ready to print'),
+      OnboardingItem('Quote',
+          'Price new work using your real pace instead of an estimate'),
+      OnboardingItem(
+          'Daily reminder', 'File backup and a complete Hebrew calendar'),
+    ],
+  ),
+  OnboardingPage(
+    kind: OnboardingKind.appearance,
+    title: 'Choose how it looks',
+    footnote: 'Your choice is applied immediately and can be changed at any '
+        'time in Settings. With automatic switching, the app uses the night '
+        'version of your chosen theme from nightfall until dawn.',
+  ),
+];
+
+List<OnboardingPage> onboardingPagesFor({required bool isEnglish}) =>
+    isEnglish ? englishOnboardingPages : onboardingPages;
 
 /// Whether to open with the explanation.
 ///

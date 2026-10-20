@@ -17,6 +17,7 @@ import '../storage_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/feedback.dart';
 import '../widgets/sofer_widgets.dart';
+import '../l10n/app_localizations.dart';
 
 /// A month, day by day, to print.
 ///
@@ -110,6 +111,7 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen> {
   ExportTable _table() => _report().toExportTable(
         currency: _currency,
         useGregorianDates: _useGregorianDates,
+        english: context.l10n.isEnglish,
       );
 
   Future<void> _print() async {
@@ -120,7 +122,12 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen> {
         onLayout: (_) => PlanExport.toPdf(table),
       );
     } catch (e) {
-      if (mounted) showAppError(context, 'ההדפסה נכשלה: $e');
+      if (mounted) {
+        showAppError(
+            context,
+            context.l10n
+                .pick(he: 'ההדפסה נכשלה: $e', en: 'Printing failed: $e'));
+      }
     }
   }
 
@@ -130,7 +137,8 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen> {
       final bytes = await PlanExport.toXlsx(table);
       if (!mounted) return;
       final path = await FilePicker.platform.saveFile(
-        dialogTitle: 'שמירת הדוח החודשי',
+        dialogTitle: context.l10n
+            .pick(he: 'שמירת הדוח החודשי', en: 'Save monthly report'),
         fileName: PlanExport.fileName(table, 'xlsx'),
         bytes: bytes,
       );
@@ -140,9 +148,15 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen> {
       if (!Platform.isAndroid && !Platform.isIOS) {
         await File(path).writeAsBytes(bytes, flush: true);
       }
-      if (mounted) showAppSuccess(context, 'נשמר: $path');
+      if (mounted) {
+        showAppSuccess(
+            context, context.l10n.pick(he: 'נשמר: $path', en: 'Saved: $path'));
+      }
     } catch (e) {
-      if (mounted) showAppError(context, 'הייצוא נכשל: $e');
+      if (mounted) {
+        showAppError(context,
+            context.l10n.pick(he: 'הייצוא נכשל: $e', en: 'Export failed: $e'));
+      }
     }
   }
 
@@ -164,7 +178,9 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen> {
           SizedBox(
             width: 62,
             child: Text(
-              '${formatHebrewNumber(day.hebrewDay)} · ${day.date.day}/${day.date.month}',
+              context.l10n.pick(
+                  he: '${formatHebrewNumber(day.hebrewDay)} · ${day.date.day}/${day.date.month}',
+                  en: '${day.hebrewDay} · ${day.date.month}/${day.date.day}'),
               style: TextStyle(
                   fontFamily: t.labelFamily,
                   fontSize: 11,
@@ -179,7 +195,9 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen> {
           Expanded(
               flex: 2,
               child: Text(
-                  day.worked > Duration.zero ? formatSpan(day.worked) : '',
+                  day.worked > Duration.zero
+                      ? formatSpan(day.worked, english: context.l10n.isEnglish)
+                      : '',
                   textAlign: TextAlign.end,
                   style: figure())),
           Expanded(
@@ -208,19 +226,24 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen> {
       padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
       child: Row(
         children: [
-          SizedBox(width: 62, child: Text('תאריך', style: style())),
+          SizedBox(
+              width: 62,
+              child: Text(context.l10n.pick(he: 'תאריך', en: 'Date'),
+                  style: style())),
           Expanded(
-              child:
-                  Text('שורות', textAlign: TextAlign.end, style: style())),
-          Expanded(
-              flex: 2,
-              child: Text('זמן', textAlign: TextAlign.end, style: style())),
-          Expanded(
-              child: Text('דק׳/שורה',
+              child: Text(context.l10n.pick(he: 'שורות', en: 'Lines'),
                   textAlign: TextAlign.end, style: style())),
           Expanded(
               flex: 2,
-              child: Text('רווח', textAlign: TextAlign.end, style: style())),
+              child: Text(context.l10n.pick(he: 'זמן', en: 'Time'),
+                  textAlign: TextAlign.end, style: style())),
+          Expanded(
+              child: Text(context.l10n.pick(he: 'דק׳/שורה', en: 'Min/line'),
+                  textAlign: TextAlign.end, style: style())),
+          Expanded(
+              flex: 2,
+              child: Text(context.l10n.pick(he: 'רווח', en: 'Profit'),
+                  textAlign: TextAlign.end, style: style())),
         ],
       ),
     );
@@ -232,17 +255,19 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('דוח חודשי'),
+        title: Text(context.l10n.pick(he: 'דוח חודשי', en: 'Monthly report')),
         actions: [
           if (_loaded) ...[
             IconButton(
               icon: const Icon(Icons.print),
-              tooltip: 'הדפסה או שמירה כ-PDF',
+              tooltip: context.l10n
+                  .pick(he: 'הדפסה או שמירה כ-PDF', en: 'Print or save as PDF'),
               onPressed: _print,
             ),
             IconButton(
               icon: const Icon(Icons.table_view),
-              tooltip: 'ייצוא לאקסל',
+              tooltip:
+                  context.l10n.pick(he: 'ייצוא לאקסל', en: 'Export to Excel'),
               onPressed: _exportXlsx,
             ),
           ],
@@ -263,21 +288,25 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen> {
                       child: DropdownButtonFormField<String>(
                         initialValue: _project?.id ?? '',
                         isExpanded: true,
-                        decoration: const InputDecoration(
-                          labelText: 'פרויקט',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText:
+                              context.l10n.pick(he: 'פרויקט', en: 'Project'),
+                          border: const OutlineInputBorder(),
                           isDense: true,
                         ),
                         items: [
-                          const DropdownMenuItem(
-                              value: '', child: Text('כל הפרויקטים')),
-                          ...widget.projects.map((p) =>
-                              DropdownMenuItem(value: p.id, child: Text(p.name))),
+                          DropdownMenuItem(
+                              value: '',
+                              child: Text(context.l10n.pick(
+                                  he: 'כל הפרויקטים', en: 'All projects'))),
+                          ...widget.projects.map((p) => DropdownMenuItem(
+                              value: p.id, child: Text(p.name))),
                         ],
-                        onChanged: (id) => setState(() => _project = id == null ||
-                                id.isEmpty
-                            ? null
-                            : widget.projects.firstWhere((p) => p.id == id)),
+                        onChanged: (id) => setState(() => _project =
+                            id == null || id.isEmpty
+                                ? null
+                                : widget.projects
+                                    .firstWhere((p) => p.id == id)),
                       ),
                     ),
                     Padding(
@@ -287,11 +316,14 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen> {
                           IconButton(
                             onPressed: () => _shift(-1),
                             icon: const Icon(Icons.chevron_right),
-                            tooltip: 'חודש קודם',
+                            tooltip: context.l10n
+                                .pick(he: 'חודש קודם', en: 'Previous month'),
                           ),
                           Expanded(
                             child: Text(
-                              formatDisplayDateMonth(_anchor, _useGregorianDates),
+                              formatDisplayDateMonth(
+                                  _anchor, _useGregorianDates,
+                                  english: context.l10n.isEnglish),
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                   fontFamily: t.numeralFamily,
@@ -302,7 +334,8 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen> {
                           IconButton(
                             onPressed: () => _shift(1),
                             icon: const Icon(Icons.chevron_left),
-                            tooltip: 'חודש הבא',
+                            tooltip: context.l10n
+                                .pick(he: 'חודש הבא', en: 'Next month'),
                           ),
                         ],
                       ),
@@ -311,10 +344,15 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen> {
                       padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
                       child: Text(
                         [
-                          '${report.totalLines} שורות',
-                          formatSpan(report.totalTime),
+                          context.l10n.pick(
+                              he: '${report.totalLines} שורות',
+                              en: '${report.totalLines} lines'),
+                          formatSpan(report.totalTime,
+                              english: context.l10n.isEnglish),
                           if (average != null)
-                            '${average.toStringAsFixed(1)} דק׳ לשורה',
+                            context.l10n.pick(
+                                he: '${average.toStringAsFixed(1)} דק׳ לשורה',
+                                en: '${average.toStringAsFixed(1)} min/line'),
                           report.earned.format(_currency),
                         ].join(' · '),
                         style: TextStyle(
@@ -331,9 +369,9 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen> {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                       child: Text(
-                        'ימים ללא כתיבה מופיעים ריקים. "דק׳ לשורה" מחושב רק '
-                        'מרשומות שנמדד בהן זמן — רשומה בלי זמן אינה ישיבה של '
-                        'אפס דקות, וספירתה ככזו הייתה מציגה אותך מהיר ממה שאתה.',
+                        context.l10n.pick(
+                            he: 'ימים ללא כתיבה מופיעים ריקים. "דק׳ לשורה" מחושב רק מרשומות שנמדד בהן זמן — רשומה בלי זמן אינה ישיבה של אפס דקות, וספירתה ככזו הייתה מציגה אותך מהיר ממה שאתה.',
+                            en: 'Days without writing are blank. "Min/line" uses only records with measured time; a record without time is not a zero-minute session, which would make the calculated pace look faster than it is.'),
                         style: TextStyle(
                             fontFamily: t.labelFamily,
                             fontSize: 11,

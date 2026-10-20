@@ -11,6 +11,7 @@ import '../widgets/confirm.dart';
 import '../widgets/feedback.dart';
 import '../widgets/sofer_widgets.dart';
 import 'proofread_editor.dart';
+import '../l10n/app_localizations.dart';
 
 /// Proofreading, laid out by stage.
 ///
@@ -87,37 +88,39 @@ class _ProofreadScreenState extends State<ProofreadScreen> {
     // outright also blocked correcting or deleting a record that already
     // existed, which is exactly what a writer wants after deleting the job.
     if (live.isEmpty && existing == null) {
-      showAppNote(context, "צריך פרויקט אחד לפחות כדי לרשום הגהה");
+      showAppNote(
+          context,
+          context.l10n.pick(
+              he: "צריך פרויקט אחד לפחות כדי לרשום הגהה",
+              en: "At least one project is required to record proofreading"));
       return;
     }
 
-    final result = await showProofreadEditor(
+    await showProofreadEditor(
       context: context,
       existing: existing,
       projects: live,
       currency: _currency,
       useGregorianDates: _useGregorianDates,
-      defaultProjectId:
-          _projectId ?? (live.isNotEmpty ? live.first.id : ''),
+      defaultProjectId: _projectId ?? (live.isNotEmpty ? live.first.id : ''),
+      onCommit: (result) async {
+        if (result.deleted) {
+          final sure = await confirmAction(context,
+              title: context.l10n.pick(
+                  he: 'מחיקת רשומת הגהה', en: 'Delete proofreading record'),
+              message: context.l10n.pick(
+                  he: 'הרשומה תעבור לסל המיחזור ולא תיספר בעלויות.',
+                  en: 'The record will move to the Recycle Bin and will not be included in costs.'),
+              confirmLabel: context.l10n.pick(he: 'מחק', en: 'Delete'),
+              danger: true);
+          if (!sure) return false;
+        }
+        await _save(result.deleted
+            ? result.record.copyWith(isDeleted: true)
+            : result.record);
+        return true;
+      },
     );
-    if (result == null || !mounted) return;
-
-    if (result.deleted) {
-      final sure = await confirmAction(
-        context,
-        title: "מחיקת רשומת הגהה",
-        message: "הרשומה תעבור לסל המיחזור ולא תיספר בעלויות.",
-        confirmLabel: "מחק",
-        danger: true,
-      );
-      if (!sure || !mounted) return;
-      await _save(result.record.copyWith(isDeleted: true));
-      if (mounted) showAppSuccess(context, "נמחק");
-      return;
-    }
-
-    await _save(result.record);
-    if (mounted) showAppSuccess(context, "נשמר");
   }
 
   /// Moves a batch to the next stage, stamping the date that stage happened.
@@ -138,13 +141,26 @@ class _ProofreadScreenState extends State<ProofreadScreen> {
       ProofreadStage.done => r,
     };
     if (identical(next, r)) return;
-    await _save(next);
+    try {
+      await _save(next);
+    } catch (error) {
+      if (mounted) {
+        showAppError(
+            context,
+            context.l10n.pick(
+                he: 'עדכון ההגהה נכשל: $error',
+                en: 'Proofreading update failed: $error'));
+      }
+    }
   }
 
   String get _title {
     final id = _projectId;
-    if (id == null) return "מעקב הגהה";
-    return _projectOf(id)?.name ?? "מעקב הגהה";
+    if (id == null) {
+      return context.l10n.pick(he: "מעקב הגהה", en: "Proofreading Tracker");
+    }
+    return _projectOf(id)?.name ??
+        context.l10n.pick(he: "מעקב הגהה", en: "Proofreading Tracker");
   }
 
   @override
@@ -157,7 +173,8 @@ class _ProofreadScreenState extends State<ProofreadScreen> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _edit(),
         icon: const Icon(Icons.add),
-        label: const Text("הגהה חדשה"),
+        label: Text(
+            context.l10n.pick(he: "הגהה חדשה", en: "New proofreading batch")),
       ),
       body: !_loaded
           ? const Center(child: CircularProgressIndicator())
@@ -182,12 +199,15 @@ class _ProofreadScreenState extends State<ProofreadScreen> {
         child: DropdownButtonFormField<String?>(
           initialValue: _projectId,
           isExpanded: true,
-          decoration: const InputDecoration(
-            border: UnderlineInputBorder(),
-            labelText: "פרויקט",
+          decoration: InputDecoration(
+            border: const UnderlineInputBorder(),
+            labelText: context.l10n.pick(he: "פרויקט", en: "Project"),
           ),
           items: [
-            const DropdownMenuItem(value: null, child: Text("כל הפרויקטים")),
+            DropdownMenuItem(
+                value: null,
+                child: Text(
+                    context.l10n.pick(he: "כל הפרויקטים", en: "All projects"))),
             for (final p in live)
               DropdownMenuItem(value: p.id, child: Text(p.name)),
           ],
@@ -203,9 +223,14 @@ class _ProofreadScreenState extends State<ProofreadScreen> {
     final late = board.overdue().length;
 
     final lines = <String>[
-      if (mine > 0) "$mine ממתינות לך",
-      if (out > 0) "$out אצל המגיה",
-      if (mine == 0 && out == 0 && board.records.isNotEmpty) "הכול הושלם",
+      if (mine > 0)
+        context.l10n.pick(
+            he: "$mine ממתינות לך", en: "$mine awaiting your corrections"),
+      if (out > 0)
+        context.l10n
+            .pick(he: "$out אצל המגיה", en: "$out with the proofreader"),
+      if (mine == 0 && out == 0 && board.records.isNotEmpty)
+        context.l10n.pick(he: "הכול הושלם", en: "Everything is complete"),
     ];
 
     return SoferPanel(
@@ -218,16 +243,24 @@ class _ProofreadScreenState extends State<ProofreadScreen> {
                     fontFamily: t.numeralFamily, fontSize: 19, color: t.ink)),
           if (late > 0) ...[
             const SizedBox(height: 6),
-            Text("$late יצאו לפני יותר משלושה שבועות ולא חזרו",
+            Text(
+                context.l10n.pick(
+                    he: "$late יצאו לפני יותר משלושה שבועות ולא חזרו",
+                    en: "$late have been with the proofreader for more than three weeks"),
                 style: TextStyle(fontSize: 13.5, color: t.danger)),
           ],
           if (!board.spent.isEmpty) ...[
             const SizedBox(height: 10),
-            SoferStatRow("עלות הגהה", board.spent.format(_currency),
+            SoferStatRow(
+                context.l10n.pick(he: "עלות הגהה", en: "Proofreading cost"),
+                board.spent.format(_currency),
                 last: board.averageFindings == null),
           ],
           if (board.averageFindings != null)
-            SoferStatRow("ממוצע תיקונים לאצווה",
+            SoferStatRow(
+                context.l10n.pick(
+                    he: "ממוצע תיקונים לאצווה",
+                    en: "Average corrections per batch"),
                 board.averageFindings!.toStringAsFixed(1),
                 last: true),
         ],
@@ -242,7 +275,8 @@ class _ProofreadScreenState extends State<ProofreadScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SoferSectionTitle("${stage.label} (${records.length})"),
+        SoferSectionTitle(
+            "${context.l10n.proofreadingStage(stage.label)} (${records.length})"),
         for (final r in records) _card(r),
         const SizedBox(height: 6),
       ],
@@ -253,18 +287,23 @@ class _ProofreadScreenState extends State<ProofreadScreen> {
     final t = SoferTokens.of(context);
     final project = _projectOf(r.projectId);
     final out = r.turnaround();
-    final late = r.stage == ProofreadStage.sent &&
-        out != null &&
-        out.inDays > 21;
+    final late =
+        r.stage == ProofreadStage.sent && out != null && out.inDays > 21;
 
     final facts = <String>[
       if (_projectId == null && project != null) project.name,
       if (r.proofreader.isNotEmpty) r.proofreader,
       if (r.stage == ProofreadStage.sent && out != null)
-        "בחוץ ${out.inDays} ימים",
+        context.l10n.pick(
+            he: "בחוץ ${out.inDays} ימים", en: "Out for ${out.inDays} days"),
       if (r.stage != ProofreadStage.sent && r.sentAt != null)
-        "נשלח ${formatDisplayDate(r.sentAt!, _useGregorianDates)}",
-      if (r.findings != null) "${r.findings} תיקונים",
+        context.l10n.pick(
+          he: "נשלח ${formatDisplayDate(r.sentAt!, _useGregorianDates)}",
+          en: "Sent ${formatDisplayDate(r.sentAt!, _useGregorianDates, english: true)}",
+        ),
+      if (r.findings != null)
+        context.l10n
+            .pick(he: "${r.findings} תיקונים", en: "${r.findings} corrections"),
       if (r.cost > 0) r.currency.format(r.cost),
     ];
 
@@ -278,7 +317,9 @@ class _ProofreadScreenState extends State<ProofreadScreen> {
               children: [
                 Expanded(
                   child: Text(
-                    r.scope.isEmpty ? "ללא פירוט" : r.scope,
+                    r.scope.isEmpty
+                        ? context.l10n.pick(he: "ללא פירוט", en: "No details")
+                        : r.scope,
                     style: TextStyle(
                       fontFamily: t.numeralFamily,
                       fontSize: 17,
@@ -288,7 +329,7 @@ class _ProofreadScreenState extends State<ProofreadScreen> {
                 ),
                 IconButton(
                   icon: const Icon(Icons.edit_outlined, size: 20),
-                  tooltip: "עריכה",
+                  tooltip: context.l10n.pick(he: "עריכה", en: "Edit"),
                   onPressed: () => _edit(existing: r),
                 ),
               ],
@@ -296,8 +337,7 @@ class _ProofreadScreenState extends State<ProofreadScreen> {
             if (facts.isNotEmpty)
               Text(facts.join(' · '),
                   style: TextStyle(
-                      fontSize: 13.5,
-                      color: late ? t.danger : t.inkMuted)),
+                      fontSize: 13.5, color: late ? t.danger : t.inkMuted)),
             if (r.notes.isNotEmpty) ...[
               const SizedBox(height: 6),
               Text(r.notes,
@@ -306,8 +346,10 @@ class _ProofreadScreenState extends State<ProofreadScreen> {
             if (r.stage.isOpen) ...[
               const SizedBox(height: 10),
               SoferSecondaryButton(
-                _advanceLabel(r.stage),
-                icon: Icons.arrow_back,
+                _advanceLabel(context, r.stage),
+                icon: Directionality.of(context) == TextDirection.rtl
+                    ? Icons.arrow_back
+                    : Icons.arrow_forward,
                 expand: true,
                 onPressed: () => _advance(r),
               ),
@@ -318,10 +360,14 @@ class _ProofreadScreenState extends State<ProofreadScreen> {
     );
   }
 
-  static String _advanceLabel(ProofreadStage stage) => switch (stage) {
-        ProofreadStage.waiting => "נשלח למגיה",
-        ProofreadStage.sent => "חזר מהמגיה",
-        ProofreadStage.returned => "התיקונים הושלמו",
+  static String _advanceLabel(BuildContext context, ProofreadStage stage) =>
+      switch (stage) {
+        ProofreadStage.waiting =>
+          context.l10n.pick(he: "נשלח למגיה", en: "Sent to Proofreader"),
+        ProofreadStage.sent =>
+          context.l10n.pick(he: "חזר מהמגיה", en: "Returned from Proofreader"),
+        ProofreadStage.returned =>
+          context.l10n.pick(he: "התיקונים הושלמו", en: "Corrections Completed"),
         ProofreadStage.done => "",
       };
 
@@ -331,12 +377,17 @@ class _ProofreadScreenState extends State<ProofreadScreen> {
       padding: const EdgeInsets.symmetric(vertical: 40),
       child: Column(
         children: [
-          Text("אין רשומות הגהה",
+          Text(
+              context.l10n
+                  .pick(he: "אין רשומות הגהה", en: "No proofreading records"),
               style: TextStyle(
                   fontFamily: t.numeralFamily, fontSize: 20, color: t.ink)),
           const SizedBox(height: 8),
           Text(
-            "כאן נרשם מה נשלח למגיה, מתי, מה חזר וכמה זה עלה.",
+            context.l10n.pick(
+              he: "כאן נרשם מה נשלח למגיה, מתי, מה חזר וכמה זה עלה.",
+              en: "Record what was sent to the proofreader, when it was sent, what came back, and what it cost.",
+            ),
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 14, height: 1.6, color: t.inkMuted),
           ),

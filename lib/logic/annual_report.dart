@@ -175,6 +175,7 @@ class AnnualReport {
 class ReportMonth {
   final int year;
   final int month;
+
   /// Payments received in this month.
   final MoneyTotal income;
 
@@ -192,8 +193,7 @@ class ReportMonth {
     required this.expenses,
   });
 
-  bool get isEmpty =>
-      income.isEmpty && expenses.isEmpty && workValue.isEmpty;
+  bool get isEmpty => income.isEmpty && expenses.isEmpty && workValue.isEmpty;
 
   /// Income less costs for the month, when both are in one currency.
   Money? net(Currency fallback) => _netOf(income, expenses, fallback);

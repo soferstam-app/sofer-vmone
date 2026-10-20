@@ -42,10 +42,20 @@ class MonthlyReport {
 
   int get totalLines => days.fold(0, (sum, d) => sum + d.lines);
 
+  /// Physical lines attempted in work that was later marked invalid. They are
+  /// shown separately from output, while their measured time remains in the
+  /// pace denominator.
+  int get totalInvalidLines => days.fold(0, (sum, d) => sum + d.invalidLines);
+
   /// Lines from records that carried time — the denominator of any average
   /// involving it. See [MeasuredWork].
-  int get totalMeasuredLines =>
-      days.fold(0, (sum, d) => sum + d.measuredLines);
+  int get totalMeasuredLines => days.fold(0, (sum, d) => sum + d.measuredLines);
+
+  double get totalComparableMeasuredLines =>
+      days.fold(0.0, (sum, d) => sum + d.comparableMeasuredLinesForAverage);
+
+  double get totalComparableLines =>
+      days.fold(0.0, (sum, d) => sum + d.comparableLines);
 
   Duration get totalTime =>
       days.fold(Duration.zero, (sum, d) => sum + d.worked);
@@ -55,8 +65,10 @@ class MonthlyReport {
   /// Computed from the month's totals rather than by averaging the daily
   /// averages — those weight a day of one line the same as a day of forty.
   double? get minutesPerLine {
-    if (totalMeasuredLines <= 0 || totalTime <= Duration.zero) return null;
-    return totalTime.inMinutes / totalMeasuredLines;
+    if (totalComparableMeasuredLines <= 0 || totalTime <= Duration.zero) {
+      return null;
+    }
+    return minutesWithSeconds(totalTime) / totalComparableMeasuredLines;
   }
 
   /// Some of the month's output carried no time, so the average above rests on
@@ -107,22 +119,52 @@ class MonthlyReport {
       final sessions = byDay[day] ?? const <WorkSession>[];
 
       var lines = 0;
+      var invalidLines = 0;
       var measuredLines = 0;
+      var comparableLines = 0.0;
+      var comparableMeasuredLines = 0.0;
       var worked = Duration.zero;
       final dayEarned = MoneyTotal();
 
       for (final s in sessions) {
         final owner = _projectOf(projects, project, s.projectId);
-        final theseLines = owner?.type == ProjectType.mezuza
-            ? ProductionCalculator.mezuzaLinesInSession(s)
-            : ProductionCalculator.seferLinesInSession(s);
+        final theseLines = switch (owner?.type) {
+          ProjectType.mezuza => ProductionCalculator.mezuzaLinesInSession(s),
+          ProjectType.tefillin =>
+            ProductionCalculator.tefillinPhysicalLinesInSession(s),
+          _ => ProductionCalculator.seferLinesInSession(s),
+        };
+        final attemptedLines = switch (owner?.type) {
+          ProjectType.mezuza =>
+            ProductionCalculator.mezuzaLinesInSession(s, includeInvalid: true),
+          ProjectType.tefillin =>
+            ProductionCalculator.tefillinPhysicalLinesInSession(s,
+                includeInvalid: true),
+          _ =>
+            ProductionCalculator.seferLinesInSession(s, includeInvalid: true),
+        };
         lines += theseLines;
+        if (s.isInvalid) invalidLines += attemptedLines;
+        comparableLines += owner == null
+            ? theseLines.toDouble()
+            : owner.type == ProjectType.tefillin
+                ? ProductionCalculator.tefillinSeferLines(s,
+                    includeInvalid: true)
+                : ProductionCalculator.comparableLinesInSession(owner, s,
+                    includeInvalid: true);
 
         // Both halves of the ratio, from the same records. Only the time was
         // filtered before, so measured minutes were divided by every line —
         // including lines that carried no time at all.
         if (MeasuredWork.countsForTime(s)) {
           measuredLines += theseLines;
+          if (owner != null) {
+            comparableMeasuredLines += owner.type == ProjectType.tefillin
+                ? ProductionCalculator.tefillinSeferLines(s,
+                    includeInvalid: true)
+                : ProductionCalculator.comparableLinesInSession(owner, s,
+                    includeInvalid: true);
+          }
           worked += s.duration;
         }
 
@@ -139,7 +181,10 @@ class MonthlyReport {
         hebrewDay: day,
         sittings: sessions.length,
         lines: lines,
+        invalidLines: invalidLines,
+        comparableLines: comparableLines,
         measuredLines: measuredLines,
+        comparableMeasuredLines: comparableMeasuredLines,
         worked: worked,
         earned: dayEarned,
       ));
@@ -167,31 +212,54 @@ class MonthlyReport {
   ExportTable toExportTable({
     required Currency currency,
     required bool useGregorianDates,
+    bool english = false,
   }) {
-    final name = project?.name ?? 'כל הפרויקטים';
+    final name = project?.name ?? (english ? 'All projects' : 'כל הפרויקטים');
     final monthName = formatDisplayDateMonth(
-        days.isEmpty ? DateTime.now() : days.first.date, useGregorianDates);
+        days.isEmpty ? DateTime.now() : days.first.date, useGregorianDates,
+        english: english);
 
     final average = minutesPerLine;
+    final totalLineText = project?.type == ProjectType.tefillin
+        ? _formatLineCounts(totalLines, totalComparableLines)
+        : '$totalLines';
+    final totalLineWithInvalid = totalInvalidLines > 0
+        ? '$totalLineText · $totalInvalidLines ${english ? 'invalid' : 'פסולות'}'
+        : totalLineText;
     return ExportTable(
       title: '$name · $monthName',
+      rtl: !english,
       summary: [
-        '$totalLines שורות',
-        formatSpan(totalTime),
-        if (average != null) '${average.toStringAsFixed(1)} דק׳ לשורה',
+        english ? '$totalLineWithInvalid lines' : '$totalLineWithInvalid שורות',
+        formatSpan(totalTime, english: english),
+        if (average != null)
+          english
+              ? '${average.toStringAsFixed(1)} min/line'
+              : '${average.toStringAsFixed(1)} דק׳ לשורה',
         earned.format(currency),
       ].join(' · '),
-      headings: const ['תאריך', 'ישיבות', 'שורות', 'זמן', 'דק׳ לשורה', 'רווח'],
-      note: 'ימים ללא כתיבה מופיעים ריקים. "דק׳ לשורה" מחושב רק מרשומות '
-          'שנמדד בהן זמן — רשומה בלי זמן אינה ישיבה של אפס דקות.',
+      headings: english
+          ? const ['Date', 'Sessions', 'Lines', 'Time', 'Min/line', 'Profit']
+          : const ['תאריך', 'ישיבות', 'שורות', 'זמן', 'דק׳ לשורה', 'רווח'],
+      note: english
+          ? 'Days without writing are blank. "Min/line" uses only records with measured time; a record without time is not a zero-minute session.'
+          : 'ימים ללא כתיבה מופיעים ריקים. "דק׳ לשורה" מחושב רק מרשומות שנמדד בהן זמן — רשומה בלי זמן אינה ישיבה של אפס דקות.',
       rows: [
         for (final d in days)
           ExportRow(
             [
-              '${formatHebrewNumber(d.hebrewDay)} (${d.date.day}/${d.date.month})',
+              english
+                  ? '${d.hebrewDay} (${d.date.day}/${d.date.month})'
+                  : '${formatHebrewNumber(d.hebrewDay)} (${d.date.day}/${d.date.month})',
               d.hasWork ? '${d.sittings}' : '',
-              d.hasWork ? '${d.lines}' : '',
-              d.worked > Duration.zero ? formatSpan(d.worked) : '',
+              d.hasWork
+                  ? _linesForDisplay(d,
+                      showComparable: project?.type == ProjectType.tefillin,
+                      english: english)
+                  : '',
+              d.worked > Duration.zero
+                  ? formatSpan(d.worked, english: english)
+                  : '',
               d.minutesPerLine?.toStringAsFixed(1) ?? '',
               d.earned.isEmpty ? '' : d.earned.format(currency),
             ],
@@ -199,10 +267,10 @@ class MonthlyReport {
           ),
         ExportRow(
           [
-            'סה״כ',
+            english ? 'Total' : 'סה״כ',
             '${worked.fold(0, (n, d) => n + d.sittings)}',
-            '$totalLines',
-            formatSpan(totalTime),
+            totalLineWithInvalid,
+            formatSpan(totalTime, english: english),
             average?.toStringAsFixed(1) ?? '',
             earned.format(currency),
           ],
@@ -224,8 +292,20 @@ class ReportDay {
 
   final int lines;
 
+  /// Physical lines in invalid work, kept out of [lines] so the printed
+  /// output cannot be mistaken for billable writing.
+  final int invalidLines;
+
+  /// Cross-type equivalent lines. For a tefillin report this is shown in
+  /// parentheses beside the physical ruled-line count.
+  final double comparableLines;
+
   /// Of [lines], how many came from records that carried time.
   final int measuredLines;
+
+  /// Weighted comparison lines used for a cross-type time average. The
+  /// physical [measuredLines] remains available for printed output.
+  final double comparableMeasuredLines;
 
   final Duration worked;
   final MoneyTotal earned;
@@ -235,7 +315,10 @@ class ReportDay {
     required this.hebrewDay,
     required this.sittings,
     required this.lines,
+    this.invalidLines = 0,
+    this.comparableLines = 0,
     required this.measuredLines,
+    this.comparableMeasuredLines = 0,
     required this.worked,
     required this.earned,
   });
@@ -244,7 +327,34 @@ class ReportDay {
 
   /// Minutes per line on this day, or null when nothing here was timed.
   double? get minutesPerLine {
-    if (measuredLines <= 0 || worked <= Duration.zero) return null;
-    return worked.inMinutes / measuredLines;
+    if (comparableMeasuredLinesForAverage <= 0 || worked <= Duration.zero) {
+      return null;
+    }
+    return minutesWithSeconds(worked) / comparableMeasuredLinesForAverage;
   }
+
+  double get comparableMeasuredLinesForAverage => comparableMeasuredLines > 0
+      ? comparableMeasuredLines
+      : measuredLines.toDouble();
+}
+
+String _linesForDisplay(ReportDay day,
+    {required bool showComparable, required bool english}) {
+  final output = _formatLineCounts(day.lines, day.comparableLines,
+      showComparable: showComparable);
+  if (day.invalidLines <= 0) return output;
+  return english
+      ? '$output · ${day.invalidLines} invalid'
+      : '$output · ${day.invalidLines} פסולות';
+}
+
+String _formatLineCounts(int physical, double comparable,
+    {bool showComparable = true}) {
+  if (!showComparable || comparable <= 0 || comparable == physical) {
+    return '$physical';
+  }
+  final rounded = comparable.roundToDouble() == comparable
+      ? comparable.toInt().toString()
+      : comparable.toStringAsFixed(1);
+  return '$physical ($rounded)';
 }

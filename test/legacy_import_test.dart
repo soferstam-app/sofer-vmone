@@ -130,7 +130,9 @@ void main() {
     });
 
     test('a list that is not a list', () {
-      final out = convert({'flutter.projects': jsonEncode({'not': 'a list'})});
+      final out = convert({
+        'flutter.projects': jsonEncode({'not': 'a list'})
+      });
       expect((out['projects'] as List), isEmpty);
     });
   });

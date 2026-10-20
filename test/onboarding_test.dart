@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sofer_vmone/logic/onboarding.dart';
+import 'package:sofer_vmone/l10n/app_localizations.dart';
 import 'package:sofer_vmone/onboarding/onboarding_screen.dart';
 import 'package:sofer_vmone/theme/app_theme.dart';
 
@@ -76,6 +77,14 @@ void main() {
         expect(hasBody, isTrue, reason: 'page "${page.title}" says nothing');
       }
     });
+
+    test('English has the same five-page model and keeps Hebrew page notation',
+        () {
+      expect(englishOnboardingPages.length, onboardingPages.length);
+      expect(englishOnboardingPages[1].items.map((i) => i.label),
+          containsAllInOrder(['Project', 'Writing session', 'Line']));
+      expect(englishOnboardingPages[2].items.last.text, contains('י״ד'));
+    });
   });
 
   group('on screen', () {
@@ -116,8 +125,7 @@ void main() {
       expect(asked, isTrue, reason: 'it opens what it spent five pages on');
     });
 
-    testWidgets('skipping leaves without asking for a project',
-        (tester) async {
+    testWidgets('skipping leaves without asking for a project', (tester) async {
       var asked = true;
       await tester.pumpWidget(harness(({required createProject}) {
         asked = createProject;
@@ -164,11 +172,29 @@ void main() {
         ));
         await tester.pumpAndSettle();
 
-        final tokens =
-            AppThemeBuilder.build(theme).extension<SoferTokens>()!;
+        final tokens = AppThemeBuilder.build(theme).extension<SoferTokens>()!;
         final scaffold = tester.widget<Scaffold>(find.byType(Scaffold).first);
         expect(scaffold.backgroundColor, tokens.paper, reason: theme.name);
       }
+    });
+
+    testWidgets('English onboarding is LTR and navigates in English',
+        (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        locale: const Locale('en', 'US'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: const [AppLocalizations.delegate],
+        theme: AppThemeBuilder.build(AppTheme.klaf),
+        home: OnboardingScreen(onDone: ({required createProject}) {}),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(Directionality.of(tester.element(find.byType(Scaffold))),
+          TextDirection.ltr);
+      expect(find.text('1 of 5'), findsOneWidget);
+      expect(find.text('Sofer v’Mone'), findsOneWidget);
+      expect(find.text('Next'), findsOneWidget);
+      expect(find.text('דלג'), findsNothing);
     });
   });
 }

@@ -21,6 +21,42 @@ class ExpenseCategory {
 class ExpenseLogic {
   const ExpenseLogic._();
 
+  /// Overheads for a quote are charged only for the overlapping dates, then
+  /// by the fraction of the writer's capacity reserved for this quote.
+  /// A monthly record belongs to that recorded month, not every future month.
+  static double overheadShareInRange({
+    required Expense expense,
+    required DateTime from,
+    required DateTime through,
+    required double workShare,
+  }) {
+    if (expense.isDeleted ||
+        expense.allocation == ExpenseAllocation.project ||
+        !workShare.isFinite ||
+        workShare <= 0 ||
+        workShare > 1) {
+      return 0;
+    }
+    final quoteStart = CalendarDays.midnight(from);
+    final quoteEnd = CalendarDays.midnight(through);
+    if (quoteEnd.isBefore(quoteStart)) return 0;
+    final start = expense.allocation == ExpenseAllocation.month
+        ? DateTime(expense.date.year, expense.date.month)
+        : CalendarDays.midnight(expense.periodStart ?? expense.date);
+    final recordedEnd = expense.allocation == ExpenseAllocation.month
+        ? DateTime(expense.date.year, expense.date.month + 1, 0)
+        : CalendarDays.midnight(expense.periodEnd ?? expense.date);
+    final end = recordedEnd.isBefore(start) ? start : recordedEnd;
+    final overlapStart = start.isAfter(quoteStart) ? start : quoteStart;
+    final overlapEnd = end.isBefore(quoteEnd) ? end : quoteEnd;
+    final days = CalendarDays.inclusiveLength(overlapStart, overlapEnd);
+    if (days == 0) return 0;
+    return expense.amount *
+        days /
+        CalendarDays.inclusiveLength(start, end) *
+        workShare;
+  }
+
   /// Suggested categories, each with the allocation it usually takes.
   ///
   /// The default is a starting point, not a rule — the user can change the
@@ -133,8 +169,7 @@ class ExpenseLogic {
 
   /// Portion of a period expense falling between [from] (inclusive) and [to]
   /// (exclusive), pro-rated by days.
-  static double _periodShareInRange(
-      Expense e, DateTime from, DateTime to) {
+  static double _periodShareInRange(Expense e, DateTime from, DateTime to) {
     final start = e.periodStart ?? e.date;
     final end = e.periodEnd ?? e.date;
 
@@ -173,11 +208,13 @@ class ExpenseLogic {
     var totalCost = 0.0;
     var totalUnits = 0.0;
 
-    for (final project in projects.where((p) => p.type == type && !p.isDeleted)) {
+    for (final project
+        in projects.where((p) => p.type == type && !p.isDeleted)) {
       // Averaged only across commissions whose costs are in the currency the
       // commission itself is priced in. A per-unit figure mixing two of them
       // would be a number with no unit.
-      final costs = totalForProject(project.id, expenses).single(project.currency);
+      final costs =
+          totalForProject(project.id, expenses).single(project.currency);
       final cost = costs != null && costs.currency == project.currency
           ? costs.amount
           : 0.0;

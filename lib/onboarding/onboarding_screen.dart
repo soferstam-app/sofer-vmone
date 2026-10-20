@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../logic/onboarding.dart';
+import '../l10n/app_localizations.dart';
 import '../main.dart' show themeController;
 import '../theme/app_theme.dart';
 
@@ -71,6 +72,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     final t = SoferTokens.of(context);
+    final pages = onboardingPagesFor(isEnglish: context.l10n.isEnglish);
 
     return Scaffold(
       backgroundColor: t.paper,
@@ -97,22 +99,23 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     children: [
                       _TopRow(
                         index: _index,
+                        pageCount: pages.length,
                         onSkip: () => widget.onDone(createProject: false),
                       ),
                       Expanded(
                         child: PageView.builder(
                           controller: _controller,
                           onPageChanged: (i) => setState(() => _index = i),
-                          itemCount: onboardingPages.length,
+                          itemCount: pages.length,
                           itemBuilder: (_, i) => SingleChildScrollView(
-                            padding:
-                                const EdgeInsets.fromLTRB(22, 4, 22, 12),
-                            child: _Page(page: onboardingPages[i]),
+                            padding: const EdgeInsets.fromLTRB(22, 4, 22, 12),
+                            child: _Page(page: pages[i]),
                           ),
                         ),
                       ),
                       _BottomBar(
                         index: _index,
+                        pageCount: pages.length,
                         isLast: _isLast,
                         fromSettings: widget.fromSettings,
                         onNext: _next,
@@ -136,9 +139,14 @@ class _SkipIntent extends Intent {
 
 class _TopRow extends StatelessWidget {
   final int index;
+  final int pageCount;
   final VoidCallback onSkip;
 
-  const _TopRow({required this.index, required this.onSkip});
+  const _TopRow({
+    required this.index,
+    required this.pageCount,
+    required this.onSkip,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -151,12 +159,15 @@ class _TopRow extends StatelessWidget {
           // Counted from one. A person reading "0 מתוך 5" on the first page
           // has found a bug, whatever the array says.
           Text(
-            '${index + 1} מתוך ${onboardingPages.length}',
+            context.l10n.pick(
+              he: '${index + 1} מתוך $pageCount',
+              en: '${index + 1} of $pageCount',
+            ),
             style: TextStyle(fontSize: 12, color: t.inkFaint),
           ),
           TextButton(
             onPressed: onSkip,
-            child: const Text('דלג'),
+            child: Text(context.l10n.pick(he: 'דלג', en: 'Skip')),
           ),
         ],
       ),
@@ -272,8 +283,8 @@ class _Facts extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(item.text,
-                      style: TextStyle(
-                          fontSize: 14, height: 1.6, color: t.ink)),
+                      style:
+                          TextStyle(fontSize: 14, height: 1.6, color: t.ink)),
                 ),
               ],
             ),
@@ -301,8 +312,8 @@ class _Items extends StatelessWidget {
               TextSpan(children: [
                 TextSpan(
                     text: item.label,
-                    style: TextStyle(
-                        fontWeight: FontWeight.w600, color: t.ink)),
+                    style:
+                        TextStyle(fontWeight: FontWeight.w600, color: t.ink)),
                 TextSpan(text: ' — ', style: TextStyle(color: t.inkFaint)),
                 TextSpan(text: item.text, style: TextStyle(color: t.inkMuted)),
               ]),
@@ -381,7 +392,13 @@ class _Swatch extends StatelessWidget {
             ),
           ),
           child: Text(
-            theme.label,
+            context.l10n.isEnglish
+                ? switch (theme) {
+                    AppTheme.modern => 'Modern',
+                    AppTheme.klaf => 'Parchment',
+                    AppTheme.layla => 'Night',
+                  }
+                : theme.label,
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 12.5, color: preview.ink),
           ),
@@ -393,6 +410,7 @@ class _Swatch extends StatelessWidget {
 
 class _BottomBar extends StatelessWidget {
   final int index;
+  final int pageCount;
   final bool isLast;
   final bool fromSettings;
   final VoidCallback onNext;
@@ -400,6 +418,7 @@ class _BottomBar extends StatelessWidget {
 
   const _BottomBar({
     required this.index,
+    required this.pageCount,
     required this.isLast,
     required this.fromSettings,
     required this.onNext,
@@ -416,7 +435,10 @@ class _BottomBar extends StatelessWidget {
           Row(
             children: [
               if (onBack != null) ...[
-                OutlinedButton(onPressed: onBack, child: const Text('הקודם')),
+                OutlinedButton(
+                  onPressed: onBack,
+                  child: Text(context.l10n.pick(he: 'הקודם', en: 'Back')),
+                ),
                 const SizedBox(width: 8),
               ],
               Expanded(
@@ -427,8 +449,13 @@ class _BottomBar extends StatelessWidget {
                   ),
                   child: Text(
                       isLast
-                          ? (fromSettings ? 'סיום' : 'פתיחת פרויקט ראשון')
-                          : 'הבא',
+                          ? (fromSettings
+                              ? context.l10n.pick(he: 'סיום', en: 'Done')
+                              : context.l10n.pick(
+                                  he: 'פתיחת פרויקט ראשון',
+                                  en: 'Create first project',
+                                ))
+                          : context.l10n.pick(he: 'הבא', en: 'Next'),
                       style: const TextStyle(fontSize: 15)),
                 ),
               ),
@@ -438,7 +465,7 @@ class _BottomBar extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              for (var i = 0; i < onboardingPages.length; i++)
+              for (var i = 0; i < pageCount; i++)
                 Container(
                   width: 6,
                   height: 6,

@@ -10,6 +10,11 @@ import 'package:sofer_vmone/format.dart';
 import 'package:sofer_vmone/logic/currency.dart';
 
 void main() {
+  test('averages retain seconds before converting to minutes', () {
+    expect(minutesWithSeconds(const Duration(minutes: 1, seconds: 30)), 1.5);
+    expect(minutesWithSeconds(const Duration(seconds: 45)), 0.75);
+  });
+
   group('money', () {
     test('rounds to the shekel where agorot are noise', () {
       expect(formatMoney(1234.56, Currency.ils), '₪1235');
@@ -91,14 +96,15 @@ void main() {
           'שעה ו-14 דקות');
       expect(formatSpanLong(const Duration(hours: 2, minutes: 2)),
           'שעתיים ושתי דקות');
-      expect(formatSpanLong(const Duration(hours: 3, minutes: 1)),
-          '3 שעות ודקה');
+      expect(
+          formatSpanLong(const Duration(hours: 3, minutes: 1)), '3 שעות ודקה');
     });
 
     test('an empty half is left out, not printed as zero', () {
       // What the old copy did instead: "0 שעות ו-45 דקות" for three quarters of
       // an hour, and "3 שעות ו-0 דקות" for three of them.
-      expect(formatSpanLong(const Duration(minutes: 45)), isNot(contains('0 שעות')));
+      expect(formatSpanLong(const Duration(minutes: 45)),
+          isNot(contains('0 שעות')));
       expect(formatSpanLong(const Duration(hours: 3)), isNot(contains('דקות')));
     });
 

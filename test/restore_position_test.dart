@@ -64,7 +64,8 @@ void main() {
   });
 
   group('a file that is damaged', () {
-    test('a position that is not a position is skipped, not thrown on', () async {
+    test('a position that is not a position is skipped, not thrown on',
+        () async {
       await BackupService.instance.applyBackup(preview({
         'p1': 'nonsense',
         'p2': {'page': 'twelve', 'line': 7},
@@ -86,10 +87,36 @@ void main() {
       expect(await storage.getLastPosition('p1'), isEmpty);
     });
 
-    test('no positions at all is not an error', () async {
-      await BackupService.instance.applyBackup(preview(const {}));
-      expect(await storage.getLastPosition('p1'), isEmpty);
-    });
+  test('no positions at all is not an error', () async {
+    await BackupService.instance.applyBackup(preview(const {}));
+    expect(await storage.getLastPosition('p1'), isEmpty);
+  });
+
+  test('portable user settings come back with the data', () async {
+    await storage.setAppLanguageCode('he');
+    await storage.setAskBreakLength(false);
+    await storage.setBreakChime(false);
+    await storage.setInterfaceTextScalePercent(100);
+
+    await BackupService.instance.applyBackup(BackupPreview(
+      projects: const [],
+      history: const [],
+      expenses: const [],
+      settings: const {
+        'app_language': 'en',
+        'ask_break_length': true,
+        'break_chime': true,
+        'interface_text_scale_percent': 160,
+      },
+      lastPositions: const {},
+      fileName: 'backup.json',
+    ));
+
+    expect(await storage.getAppLanguageCode(), 'en');
+    expect(await storage.getAskBreakLength(), isTrue);
+    expect(await storage.getBreakChime(), isTrue);
+    expect(await storage.getInterfaceTextScalePercent(), 160);
+  });
   });
 
   group('stored positions that cannot be read', () {
@@ -111,11 +138,12 @@ void main() {
       expect(await storage.getLastPosition('p1'), isEmpty);
     });
 
-    test('saving over an unreadable file works rather than failing', () async {
+    test('saving over an unreadable file fails closed and preserves it', () async {
       SharedPreferences.setMockInitialValues(
           {'flutter.last_positions': 'not json at all'});
-      await storage.saveLastPosition('p1', 4, 2);
-      expect(await storage.getLastPosition('p1'), {'page': 4, 'line': 2});
+      await expectLater(
+          storage.saveLastPosition('p1', 4, 2), throwsFormatException);
+      expect(await storage.getLastPosition('p1'), isEmpty);
     });
   });
 }

@@ -59,14 +59,14 @@ class PlanExport {
         margin: const pw.EdgeInsets.all(32),
         // Every page, not only the first: a table that breaks across two sheets
         // and loses its direction on the second is worse than one long page.
-        textDirection: pw.TextDirection.rtl,
+        textDirection: table.rtl ? pw.TextDirection.rtl : pw.TextDirection.ltr,
         header: (context) => context.pageNumber == 1
             ? pw.SizedBox()
             : pw.Padding(
                 padding: const pw.EdgeInsets.only(bottom: 10),
                 child: pw.Text(table.title,
-                    style: pw.TextStyle(font: sans, fontSize: 9,
-                        color: PdfColors.grey600)),
+                    style: pw.TextStyle(
+                        font: sans, fontSize: 9, color: PdfColors.grey600)),
               ),
         footer: (context) => pw.Align(
           alignment: pw.Alignment.centerLeft,
@@ -75,8 +75,7 @@ class PlanExport {
                   font: sans, fontSize: 9, color: PdfColors.grey600)),
         ),
         build: (context) => [
-          pw.Text(table.title,
-              style: pw.TextStyle(font: serif, fontSize: 17)),
+          pw.Text(table.title, style: pw.TextStyle(font: serif, fontSize: 17)),
           pw.SizedBox(height: 4),
           pw.Text(table.summary,
               style: pw.TextStyle(
@@ -84,9 +83,9 @@ class PlanExport {
           pw.SizedBox(height: 12),
           pw.TableHelper.fromTextArray(
             border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
-            headerDecoration:
-                const pw.BoxDecoration(color: PdfColors.grey200),
-            cellAlignment: pw.Alignment.centerRight,
+            headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
+            cellAlignment:
+                table.rtl ? pw.Alignment.centerRight : pw.Alignment.centerLeft,
             headers: table.headings,
             headerStyle: pw.TextStyle(font: sans, fontSize: 9),
             cellStyle: pw.TextStyle(font: serif, fontSize: 10),
@@ -110,8 +109,7 @@ class PlanExport {
             },
           ),
           pw.SizedBox(height: 10),
-          if (table.note != null)
-            cell(table.note!, heading: true, muted: true),
+          if (table.note != null) cell(table.note!, heading: true, muted: true),
         ],
       ),
     );
@@ -127,12 +125,12 @@ class PlanExport {
   static Future<Uint8List> toXlsx(ExportTable table) async {
     final book = xl.Excel.createExcel();
     final sheet = book[book.getDefaultSheet() ?? 'Sheet1'];
+    sheet.isRTL = table.rtl;
 
     sheet.appendRow([xl.TextCellValue(table.title)]);
     sheet.appendRow([xl.TextCellValue(table.summary)]);
     sheet.appendRow([]);
-    sheet.appendRow(
-        [for (final h in table.headings) xl.TextCellValue(h)]);
+    sheet.appendRow([for (final h in table.headings) xl.TextCellValue(h)]);
 
     for (final row in table.rows) {
       sheet.appendRow([

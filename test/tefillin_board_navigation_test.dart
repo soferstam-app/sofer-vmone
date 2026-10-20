@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sofer_vmone/models.dart';
+import 'package:sofer_vmone/storage_service.dart';
 import 'package:sofer_vmone/project_summary_screen.dart';
 import 'package:sofer_vmone/theme/app_theme.dart';
 
@@ -98,6 +100,10 @@ void main() {
         ),
     ];
 
+    SharedPreferences.setMockInitialValues({
+      'projects': jsonEncode([project.toJson()]),
+      'history': jsonEncode(history.map((s) => s.toJson()).toList()),
+    });
     await tester.pumpWidget(MaterialApp(
       theme: AppThemeBuilder.build(AppTheme.klaf),
       home: Directionality(
@@ -121,7 +127,13 @@ void main() {
 
     expect(find.text('נפסל'), findsOneWidget);
     expect(history[0].isDeleted, isFalse);
-    expect(history[1].isDeleted, isTrue);
-    expect(history[2].isDeleted, isTrue);
+    expect(history[1].isDeleted, isFalse,
+        reason: 'The caller list must not be mutated');
+    expect(history[2].isDeleted, isFalse);
+    final stored = await StorageService().loadHistory();
+    expect(stored.singleWhere((s) => s.id == 'p2').isDeleted, isTrue);
+    expect(stored.singleWhere((s) => s.id == 'p3').isDeleted, isTrue);
+    expect(
+        (await StorageService().loadProjects()).single.tefillinFlags, isEmpty);
   });
 }

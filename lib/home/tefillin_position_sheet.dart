@@ -4,6 +4,7 @@ import '../hebrew_utils.dart';
 import '../logic/tefillin_position.dart';
 import '../logic/tefillin_units.dart';
 import '../theme/app_theme.dart';
+import '../l10n/app_localizations.dart';
 
 /// Moving about a tefillin commission without leaving the timer.
 ///
@@ -17,6 +18,8 @@ class TefillinPositionSheet extends StatelessWidget {
   /// Real ruled lines written of [current], for the line the sheet shows
   /// against it.
   final int currentLine;
+  final int? currentWord;
+  final bool wordEntry;
 
   /// When the writer began the parshiya he is on.
   final DateTime? currentStartedOn;
@@ -34,6 +37,8 @@ class TefillinPositionSheet extends StatelessWidget {
     super.key,
     required this.current,
     required this.currentLine,
+    this.currentWord,
+    this.wordEntry = false,
     required this.picks,
     required this.onPick,
     this.currentStartedOn,
@@ -43,15 +48,19 @@ class TefillinPositionSheet extends StatelessWidget {
 
   /// "התחיל ג׳ אלול" — which job this is, said in the only terms that identify
   /// it. Empty for a slot never begun.
-  String _started(DateTime? day) =>
-      day == null ? '' : 'התחיל ${formatDisplayDate(day, useGregorianDates)}';
+  String _started(BuildContext context, DateTime? day) => day == null
+      ? ''
+      : context.l10n.pick(
+          he: 'התחיל ${formatDisplayDate(day, useGregorianDates)}',
+          en: 'Started ${formatDisplayDate(day, useGregorianDates, english: true)}',
+        );
 
   @override
   Widget build(BuildContext context) {
     final t = SoferTokens.of(context);
 
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: context.l10n.textDirection,
       child: Container(
         decoration: BoxDecoration(
           color: t.paper,
@@ -66,28 +75,36 @@ class TefillinPositionSheet extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('מה אני כותב עכשיו',
+              Text(
+                  context.l10n.pick(
+                      he: 'מה אני כותב עכשיו', en: 'What am I writing now?'),
                   style: TextStyle(
                       fontFamily: t.labelFamily,
                       fontSize: 12,
                       letterSpacing: 1.4,
                       color: t.inkMuted)),
               const SizedBox(height: 10),
-              _currentRow(t),
+              _currentRow(context, t),
               const SizedBox(height: 14),
               if (picks.stopped.isNotEmpty) ...[
-                _section(t, 'עצרתי באמצע'),
-                for (final s in picks.stopped) _row(t, s),
+                _section(
+                    t,
+                    context.l10n
+                        .pick(he: 'עצרתי באמצע', en: 'Stopped part-way')),
+                for (final s in picks.stopped) _row(context, t, s),
                 const SizedBox(height: 12),
               ],
               if (picks.stuck.isNotEmpty) ...[
-                _section(t, 'ממתין לתיקון'),
-                for (final s in picks.stuck) _row(t, s),
+                _section(
+                    t,
+                    context.l10n
+                        .pick(he: 'ממתין לתיקון', en: 'Awaiting correction')),
+                for (final s in picks.stuck) _row(context, t, s),
                 const SizedBox(height: 12),
               ],
               if (picks.nextUp.isNotEmpty) ...[
-                _section(t, 'הבא בתור'),
-                for (final s in picks.nextUp) _row(t, s),
+                _section(t, context.l10n.pick(he: 'הבא בתור', en: 'Next up')),
+                for (final s in picks.nextUp) _row(context, t, s),
               ],
               const SizedBox(height: 14),
               Container(height: 1, color: t.rule),
@@ -98,7 +115,9 @@ class TefillinPositionSheet extends StatelessWidget {
                     onTap: onOpenBoard,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Text('כל ההזמנה  ›',
+                      child: Text(
+                          context.l10n
+                              .pick(he: 'כל ההזמנה  ›', en: 'Entire order  ›'),
                           style: TextStyle(
                               fontFamily: t.labelFamily,
                               fontSize: 13,
@@ -106,7 +125,10 @@ class TefillinPositionSheet extends StatelessWidget {
                     ),
                   ),
                   const Spacer(),
-                  Text('מה שנכתב כבר לא מוצג כאן',
+                  Text(
+                      context.l10n.pick(
+                          he: 'מה שנכתב כבר לא מוצג כאן',
+                          en: 'Completed writing is not shown here'),
                       style: TextStyle(
                           fontFamily: t.labelFamily,
                           fontSize: 11,
@@ -128,7 +150,7 @@ class TefillinPositionSheet extends StatelessWidget {
       );
 
   /// Where the writer is. Marked, and not tappable — it is not a destination.
-  Widget _currentRow(SoferTokens t) => Container(
+  Widget _currentRow(BuildContext context, SoferTokens t) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           border: Border.all(color: t.accent, width: 1.4),
@@ -150,13 +172,13 @@ class TefillinPositionSheet extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(current.whereLabel,
+                Text(_where(context, current.pair, current.side),
                     style: TextStyle(
                         fontFamily: t.labelFamily,
                         fontSize: 13,
                         color: t.inkMuted)),
                 if (currentStartedOn != null)
-                  Text(_started(currentStartedOn),
+                  Text(_started(context, currentStartedOn),
                       style: TextStyle(
                           fontFamily: t.labelFamily,
                           fontSize: 11,
@@ -167,9 +189,20 @@ class TefillinPositionSheet extends StatelessWidget {
             // A parshiya not begun has not reached line one, and "line 0" is
             // a number no sofer counts. It says so in words instead.
             Text(
-                currentLine < 1
-                    ? 'טרם התחיל'
-                    : 'שורה $currentLine מתוך ${current.lineCount}',
+                wordEntry
+                    ? context.l10n.pick(
+                        he: currentWord == null
+                            ? 'לפי מילים'
+                            : 'אחרי מילה $currentWord',
+                        en: currentWord == null
+                            ? 'By words'
+                            : 'After word $currentWord')
+                    : currentLine < 1
+                        ? context.l10n.pick(he: 'טרם התחיל', en: 'Not started')
+                        : context.l10n.pick(
+                            he: 'שורה $currentLine מתוך ${current.lineCount}',
+                            en: 'Line $currentLine of ${current.lineCount}',
+                          ),
                 style: TextStyle(
                     fontFamily: t.numeralFamily,
                     fontSize: 14,
@@ -178,13 +211,22 @@ class TefillinPositionSheet extends StatelessWidget {
         ),
       );
 
-  Widget _row(SoferTokens t, TefillinSlot s) {
-    final where = 'זוג ${s.pair} · ${TefillinUnits.sideName(s.side)}';
+  Widget _row(BuildContext context, SoferTokens t, TefillinSlot s) {
+    final where = _where(context, s.pair, s.side);
     final trailing = switch (s.state) {
-      SlotState.partial =>
-        'שורה ${s.linesWritten} מתוך ${TefillinUnits.linesIn(s.side)}',
-      SlotState.stuck => 'לתיקון',
-      _ => 'מקביל ל־${TefillinUnits.seferLines[s.parshiya - 1]} שורות של ס״ת',
+      SlotState.partial => context.l10n.pick(
+          he: s.wordBoundary != null
+              ? 'אחרי מילה ${s.wordBoundary}'
+              : 'שורה ${s.linesWritten} מתוך ${TefillinUnits.linesIn(s.side)}',
+          en: s.wordBoundary != null
+              ? 'After word ${s.wordBoundary}'
+              : 'Line ${s.linesWritten} of ${TefillinUnits.linesIn(s.side)}',
+        ),
+      SlotState.stuck => context.l10n.pick(he: 'לתיקון', en: 'For correction'),
+      _ => context.l10n.pick(
+          he: 'מקביל ל־${TefillinUnits.seferLines[s.parshiya - 1]} שורות של ס״ת',
+          en: 'Equivalent to ${TefillinUnits.seferLines[s.parshiya - 1]} Sefer Torah lines',
+        ),
     };
     final trailingColor = s.state == SlotState.stuck ? t.caution : t.inkFaint;
 
@@ -214,7 +256,7 @@ class TefillinPositionSheet extends StatelessWidget {
                 // Which job this actually is. A pair number alone identifies
                 // nothing a writer remembers.
                 if (s.startedOn != null)
-                  Text(_started(s.startedOn),
+                  Text(_started(context, s.startedOn),
                       style: TextStyle(
                           fontFamily: t.labelFamily,
                           fontSize: 11,
@@ -232,6 +274,12 @@ class TefillinPositionSheet extends StatelessWidget {
       ),
     );
   }
+
+  String _where(BuildContext context, int pair, TefillinSide side) =>
+      context.l10n.pick(
+        he: 'זוג $pair · ${TefillinUnits.sideName(side)}',
+        en: 'Set $pair · ${side == TefillinSide.head ? 'Shel Rosh' : 'Shel Yad'}',
+      );
 }
 
 /// The smart-mode position, said the way tefillin wants it said.
@@ -300,14 +348,17 @@ class TefillinHero extends StatelessWidget {
           Row(
             children: [
               Text(
-                '${position.whereLabel} · שורה $currentLine מתוך ${position.lineCount}',
+                context.l10n.pick(
+                  he: '${position.whereLabel} · שורה $currentLine מתוך ${position.lineCount}',
+                  en: 'Set ${position.pair} · ${position.side == TefillinSide.head ? 'Shel Rosh' : 'Shel Yad'} · line $currentLine of ${position.lineCount}',
+                ),
                 style: TextStyle(
                     fontFamily: t.numeralFamily,
                     fontSize: 17,
                     color: t.inkMuted),
               ),
               const SizedBox(width: 10),
-              Text('שנה  ›',
+              Text(context.l10n.pick(he: 'שנה  ›', en: 'Change  ›'),
                   style: TextStyle(
                       fontFamily: t.labelFamily,
                       fontSize: 13,
@@ -319,7 +370,10 @@ class TefillinHero extends StatelessWidget {
           if (startedOn != null) ...[
             const SizedBox(height: 4),
             Text(
-              'התחיל ${formatDisplayDate(startedOn!, useGregorianDates)}',
+              context.l10n.pick(
+                he: 'התחיל ${formatDisplayDate(startedOn!, useGregorianDates)}',
+                en: 'Started ${formatDisplayDate(startedOn!, useGregorianDates, english: true)}',
+              ),
               style: TextStyle(
                   fontFamily: t.labelFamily, fontSize: 12.5, color: t.inkFaint),
             ),

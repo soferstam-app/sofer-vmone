@@ -4,6 +4,7 @@ import '../hebrew_utils.dart';
 import '../logic/mezuza_state.dart';
 import '../logic/production_calculator.dart';
 import '../theme/app_theme.dart';
+import '../l10n/app_localizations.dart';
 
 /// A short, tap-only position picker for a run of mezuzot.
 class MezuzaPositionSheet extends StatelessWidget {
@@ -41,21 +42,24 @@ class MezuzaPositionSheet extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('שינוי מיקום',
+              Text(context.l10n.pick(he: 'שינוי מיקום', en: 'Change position'),
                   style: TextStyle(
                       fontFamily: t.numeralFamily, fontSize: 21, color: t.ink)),
               const SizedBox(height: 14),
-              _section(t, 'הנוכחי'),
-              _current(t),
+              _section(t, context.l10n.pick(he: 'הנוכחי', en: 'Current')),
+              _current(context, t),
               if (picks.stopped.isNotEmpty) ...[
                 const SizedBox(height: 16),
-                _section(t, 'עצרתי באמצע'),
-                for (final slot in picks.stopped) _row(t, slot),
+                _section(
+                    t,
+                    context.l10n
+                        .pick(he: 'עצרתי באמצע', en: 'Stopped part-way')),
+                for (final slot in picks.stopped) _row(context, t, slot),
               ],
               if (picks.nextUp.isNotEmpty) ...[
                 const SizedBox(height: 16),
-                _section(t, 'הבאות בתור'),
-                for (final slot in picks.nextUp) _row(t, slot),
+                _section(t, context.l10n.pick(he: 'הבאות בתור', en: 'Next up')),
+                for (final slot in picks.nextUp) _row(context, t, slot),
               ],
             ],
           ),
@@ -71,7 +75,7 @@ class MezuzaPositionSheet extends StatelessWidget {
                 fontFamily: t.labelFamily, fontSize: 11.5, color: t.inkFaint)),
       );
 
-  Widget _current(SoferTokens t) => Container(
+  Widget _current(BuildContext context, SoferTokens t) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
         decoration: BoxDecoration(border: Border.all(color: t.accent)),
         child: Row(
@@ -83,12 +87,16 @@ class MezuzaPositionSheet extends StatelessWidget {
               decoration:
                   BoxDecoration(color: t.accent, shape: BoxShape.circle),
             ),
-            Text('מזוזה $current',
+            Text(
+                context.l10n.pick(he: 'מזוזה $current', en: 'Mezuzah $current'),
                 style: TextStyle(
                     fontFamily: t.numeralFamily, fontSize: 17, color: t.ink)),
             const Spacer(),
             Text(
-                'שורה $currentLine מתוך ${ProductionCalculator.linesPerMezuza}',
+                context.l10n.pick(
+                  he: 'שורה $currentLine מתוך ${ProductionCalculator.linesPerMezuza}',
+                  en: 'Line $currentLine of ${ProductionCalculator.linesPerMezuza}',
+                ),
                 style: TextStyle(
                     fontFamily: t.numeralFamily,
                     fontSize: 14,
@@ -97,7 +105,7 @@ class MezuzaPositionSheet extends StatelessWidget {
         ),
       );
 
-  Widget _row(SoferTokens t, MezuzaSlot slot) => InkWell(
+  Widget _row(BuildContext context, SoferTokens t, MezuzaSlot slot) => InkWell(
         onTap: () => onPick(slot),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 11),
@@ -106,13 +114,18 @@ class MezuzaPositionSheet extends StatelessWidget {
           child: Row(
             children: [
               const SizedBox(width: 17),
-              Text('מזוזה ${slot.index}',
+              Text(
+                  context.l10n.pick(
+                      he: 'מזוזה ${slot.index}', en: 'Mezuzah ${slot.index}'),
                   style: TextStyle(
                       fontFamily: t.numeralFamily, fontSize: 16, color: t.ink)),
               const SizedBox(width: 12),
               if (slot.startedOn != null)
                 Text(
-                    'התחיל ${formatDisplayDate(slot.startedOn!, useGregorianDates)}',
+                    context.l10n.pick(
+                      he: 'התחיל ${formatDisplayDate(slot.startedOn!, useGregorianDates)}',
+                      en: 'Started ${formatDisplayDate(slot.startedOn!, useGregorianDates, english: true)}',
+                    ),
                     style: TextStyle(
                         fontFamily: t.labelFamily,
                         fontSize: 11,
@@ -120,8 +133,11 @@ class MezuzaPositionSheet extends StatelessWidget {
               const Spacer(),
               Text(
                 slot.state == MezuzaSlotState.partial
-                    ? 'המשך משורה ${slot.resumeLine}'
-                    : 'התחלה',
+                    ? context.l10n.pick(
+                        he: 'המשך משורה ${slot.resumeLine}',
+                        en: 'Continue from line ${slot.resumeLine}',
+                      )
+                    : context.l10n.pick(he: 'התחלה', en: 'Start'),
                 style: TextStyle(
                     fontFamily: t.labelFamily,
                     fontSize: 12.5,

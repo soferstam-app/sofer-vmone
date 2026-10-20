@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../logic/tefillin_units.dart';
 import '../logic/tefillin_state.dart';
 import '../theme/app_theme.dart';
+import '../l10n/app_localizations.dart';
 
 /// The whole of a tefillin commission, drawn as the thing itself.
 ///
@@ -93,7 +94,7 @@ class TefillinBoard extends StatelessWidget {
     final t = SoferTokens.of(context);
 
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: context.l10n.textDirection,
       child: Container(
         color: t.paper,
         child: ListView(
@@ -145,15 +146,20 @@ class TefillinBoard extends StatelessWidget {
           children: [
             Text(
               ordered == null
-                  ? '${done.toStringAsFixed(2)} זוגות נכתבו · הזמנה פתוחה'
-                  : '${done.toStringAsFixed(2)} מתוך $ordered זוגות · '
-                      '${(done / ordered * 100).toStringAsFixed(0)}%',
+                  ? context.l10n.pick(
+                      he:
+                          '${done.toStringAsFixed(2)} זוגות נכתבו · הזמנה פתוחה',
+                      en:
+                          '${done.toStringAsFixed(2)} sets written · open order')
+                  : context.l10n.pick(
+                      he: '${done.toStringAsFixed(2)} מתוך $ordered זוגות · ${(done / ordered * 100).toStringAsFixed(0)}%',
+                      en: '${done.toStringAsFixed(2)} of $ordered sets · ${(done / ordered * 100).toStringAsFixed(0)}%'),
               style: TextStyle(
                   fontFamily: t.labelFamily, fontSize: 13, color: t.inkMuted),
             ),
             Text('  ·  ', style: TextStyle(color: t.inkFaint)),
             Text(
-              'יעד יומי: $dailyTarget',
+              '${context.l10n.pick(he: 'יעד יומי', en: 'Daily target')}: $dailyTarget',
               style: TextStyle(
                   fontFamily: t.labelFamily, fontSize: 13, color: t.inkMuted),
             ),
@@ -212,21 +218,24 @@ class TefillinBoard extends StatelessWidget {
     }
 
     return Row(mainAxisSize: MainAxisSize.min, children: [
-      tab('לפי זוג', BoardGrouping.byPair),
+      tab(context.l10n.pick(he: 'לפי זוג', en: 'By Set'), BoardGrouping.byPair),
       const SizedBox(width: 6),
-      tab('לפי פרשייה', BoardGrouping.byParshiya),
+      tab(context.l10n.pick(he: 'לפי פרשייה', en: 'By Parashah'),
+          BoardGrouping.byParshiya),
     ]);
   }
 
   Widget _continueStrip(BuildContext context, SoferTokens t) {
     final next = _next;
     if (next == null) {
-      return Text('ההזמנה הושלמה',
+      return Text(
+          context.l10n.pick(he: 'ההזמנה הושלמה', en: 'The order is complete'),
           style: TextStyle(
               fontFamily: t.labelFamily, fontSize: 13, color: t.positive));
     }
-    final where = 'זוג ${next.pair} · ${TefillinUnits.sideName(next.side)} · '
-        '${TefillinUnits.names[next.parshiya - 1]}';
+    final where = context.l10n.pick(
+        he: 'זוג ${next.pair} · ${TefillinUnits.sideName(next.side)} · ${TefillinUnits.names[next.parshiya - 1]}',
+        en: 'Set ${next.pair} · ${next.side == TefillinSide.head ? 'Shel Rosh' : 'Shel Yad'} · ${TefillinUnits.names[next.parshiya - 1]}');
 
     return Row(
       children: [
@@ -235,7 +244,7 @@ class TefillinBoard extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
             decoration: BoxDecoration(color: t.accent),
-            child: Text('המשך כאן',
+            child: Text(context.l10n.pick(he: 'המשך כאן', en: 'Continue here'),
                 style: TextStyle(
                     fontFamily: t.labelFamily, fontSize: 13, color: t.paper)),
           ),
@@ -245,7 +254,14 @@ class TefillinBoard extends StatelessWidget {
             style: TextStyle(
                 fontFamily: t.numeralFamily, fontSize: 14, color: t.ink)),
         if (next.state == SlotState.partial)
-          Text('  (עצר בשורה ${next.linesWritten})',
+          Text(
+              context.l10n.pick(
+                  he: next.wordBoundary != null
+                      ? '  (עצר במילה ${next.wordBoundary})'
+                      : '  (עצר בשורה ${next.linesWritten})',
+                  en: next.wordBoundary != null
+                      ? '  (stopped at word ${next.wordBoundary})'
+                      : '  (stopped at line ${next.linesWritten})'),
               style: TextStyle(
                   fontFamily: t.labelFamily, fontSize: 12, color: t.inkMuted)),
       ],
@@ -255,7 +271,7 @@ class TefillinBoard extends StatelessWidget {
   // --- Grouped by pair ----------------------------------------------------
 
   List<Widget> _byPair(BuildContext context, SoferTokens t) {
-    final rows = <Widget>[_pairColumnHeadings(t)];
+    final rows = <Widget>[_pairColumnHeadings(context, t)];
 
     for (var pair = 1; pair <= _maxPair; pair++) {
       rows.add(_pairRow(context, t, pair));
@@ -263,7 +279,7 @@ class TefillinBoard extends StatelessWidget {
     return rows;
   }
 
-  Widget _pairColumnHeadings(SoferTokens t) {
+  Widget _pairColumnHeadings(BuildContext context, SoferTokens t) {
     Widget side(String label) => Expanded(
           flex: TefillinUnits.seferLinesPerSet,
           child: Column(
@@ -305,9 +321,9 @@ class TefillinBoard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           const SizedBox(width: 52),
-          side('ראש'),
+          side(context.l10n.pick(he: 'ראש', en: 'Shel Rosh')),
           const SizedBox(width: 18),
-          side('יד'),
+          side(context.l10n.pick(he: 'יד', en: 'Shel Yad')),
         ],
       ),
     );
@@ -343,7 +359,7 @@ class TefillinBoard extends StatelessWidget {
         children: [
           SizedBox(
             width: 52,
-            child: Text('זוג $pair',
+            child: Text(context.l10n.pick(he: 'זוג $pair', en: 'Set $pair'),
                 style: TextStyle(
                     fontFamily: t.numeralFamily,
                     fontSize: 13,
@@ -372,7 +388,12 @@ class TefillinBoard extends StatelessWidget {
                 style: TextStyle(
                     fontFamily: t.numeralFamily, fontSize: 15, color: t.ink)),
             const SizedBox(width: 8),
-            Text('מקביל ל־${TefillinUnits.seferLines[p - 1]} שורות של ס״ת',
+            Text(
+                context.l10n.pick(
+                    he:
+                        'מקביל ל־${TefillinUnits.seferLines[p - 1]} שורות של ס״ת',
+                    en:
+                        'Equivalent to ${TefillinUnits.seferLines[p - 1]} Sefer Torah lines'),
                 style: TextStyle(
                     fontFamily: t.labelFamily,
                     fontSize: 11,
@@ -395,7 +416,12 @@ class TefillinBoard extends StatelessWidget {
             children: [
               SizedBox(
                 width: 52,
-                child: Text(TefillinUnits.sideName(side),
+                child: Text(
+                    context.l10n.pick(
+                        he: TefillinUnits.sideName(side),
+                        en: side == TefillinSide.head
+                            ? 'Shel Rosh'
+                            : 'Shel Yad'),
                     style: TextStyle(
                         fontFamily: t.labelFamily,
                         fontSize: 12,
@@ -441,8 +467,12 @@ class TefillinBoard extends StatelessWidget {
     }
 
     final label = showName
-        ? 'זוג ${s.pair}'
-        : (s.state == SlotState.partial ? '${s.linesWritten}' : '');
+        ? context.l10n.pick(he: 'זוג ${s.pair}', en: 'Set ${s.pair}')
+        : (s.state == SlotState.partial
+            ? s.wordBoundary != null
+                ? '${(s.fraction * 100).round()}%'
+                : '${s.linesWritten}'
+            : '');
 
     return InkWell(
       onTap: () => onSlotTap?.call(s),
@@ -468,7 +498,9 @@ class TefillinBoard extends StatelessWidget {
                 painter: _HatchPainter(border, s.state == SlotState.voided),
                 child: Center(
                   child: Text(
-                    s.state == SlotState.voided ? 'נפסל' : 'לתיקון',
+                    s.state == SlotState.voided
+                        ? context.l10n.pick(he: 'נפסל', en: 'Invalid')
+                        : context.l10n.pick(he: 'לתיקון', en: 'Correction'),
                     style: TextStyle(
                         fontFamily: t.labelFamily, fontSize: 10, color: text),
                   ),
@@ -521,16 +553,22 @@ class TefillinBoard extends StatelessWidget {
         Container(height: 1, color: t.rule),
         const SizedBox(height: 10),
         Wrap(spacing: 20, runSpacing: 8, children: [
-          item(box(line: t.rule), 'טרם נכתב'),
-          item(box(line: t.accent, filled: 0.55), 'בכתיבה'),
-          item(box(line: t.accent, filled: 1), 'נכתב'),
-          item(box(line: t.caution), 'ממתין לתיקון'),
-          item(box(line: t.danger), 'נפסל'),
+          item(box(line: t.rule),
+              context.l10n.pick(he: 'טרם נכתב', en: 'Not started')),
+          item(box(line: t.accent, filled: 0.55),
+              context.l10n.pick(he: 'בכתיבה', en: 'In progress')),
+          item(box(line: t.accent, filled: 1),
+              context.l10n.pick(he: 'נכתב', en: 'Written')),
+          item(box(line: t.caution),
+              context.l10n.pick(he: 'ממתין לתיקון', en: 'Awaiting Correction')),
+          item(box(line: t.danger),
+              context.l10n.pick(he: 'נפסל', en: 'Invalid')),
         ]),
         const SizedBox(height: 10),
         Text(
-          'רוחב התא הוא גודל הפרשייה בפועל — שמע מקבילה ל־7 שורות '
-          'של ס״ת, והיה אם שמע מקבילה ל־17.',
+          context.l10n.pick(
+              he: 'רוחב התא הוא גודל הפרשייה בפועל — שמע מקבילה ל־7 שורות של ס״ת, והיה אם שמע מקבילה ל־17.',
+              en: 'Cell width reflects the actual size of the Parashah — שמע is equivalent to 7 Sefer Torah lines, and והיה אם שמע to 17.'),
           style: TextStyle(
               fontFamily: t.labelFamily, fontSize: 11, color: t.inkFaint),
         ),
@@ -593,13 +631,15 @@ class TefillinShareHelp extends StatelessWidget {
     }
 
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: context.l10n.textDirection,
       child: AlertDialog(
         backgroundColor: t.paper,
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(t.panelRadius),
             side: BorderSide(color: t.ruleStrong)),
-        title: Text('כמה שווה כל פרשייה',
+        title: Text(
+            context.l10n
+                .pick(he: 'כמה שווה כל פרשייה', en: 'Parashah equivalents'),
             style: TextStyle(fontFamily: t.numeralFamily, color: t.ink)),
         content: SizedBox(
           width: 420,
@@ -608,10 +648,9 @@ class TefillinShareHelp extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'שורה של תפילין רחבה בהרבה משורה של ספר תורה: מספר השורות '
-                'קבוע, ולכן הכתב נמתח לרוחב לפי אורך הפרשייה. המספרים כאן הם '
-                'מקבילים למספר שורות של ס״ת, וכך אפשר להשוות הספק בין תפילין, '
-                'מזוזות וספר תורה.',
+                context.l10n.pick(
+                    he: 'שורה של תפילין רחבה בהרבה משורה של ספר תורה: מספר השורות קבוע, ולכן הכתב נמתח לרוחב לפי אורך הפרשייה. המספרים כאן הם מקבילים למספר שורות של ס״ת, וכך אפשר להשוות הספק בין תפילין, מזוזות וספר תורה.',
+                    en: 'A Tefillin line is much wider than a Sefer Torah line. The line count is fixed, so the writing stretches according to the length of each Parashah. These values are Sefer Torah line equivalents, allowing Output to be compared across Tefillin, Mezuzot, and Sefer Torah.'),
                 style: TextStyle(
                     fontFamily: t.labelFamily,
                     fontSize: 12.5,
@@ -628,7 +667,12 @@ class TefillinShareHelp extends StatelessWidget {
                 border:
                     TableBorder(horizontalInside: BorderSide(color: t.rule)),
                 children: [
-                  row('פרשייה', 'מקביל לשורות של ס״ת', 'חלק מהסט',
+                  row(
+                      context.l10n.pick(he: 'פרשייה', en: 'Parashah'),
+                      context.l10n.pick(
+                          he: 'מקביל לשורות של ס״ת',
+                          en: 'Sefer Torah line equivalent'),
+                      context.l10n.pick(he: 'חלק מהסט', en: 'Share of set'),
                       strong: true),
                   for (var i = 0; i < 4; i++)
                     row(
@@ -636,14 +680,27 @@ class TefillinShareHelp extends StatelessWidget {
                       '${TefillinUnits.seferLines[i]}',
                       '${(TefillinUnits.shareOfSet(i + 1) * 100).toStringAsFixed(1)}%',
                     ),
-                  row('סט שלם (ראש או יד)', '52', '100%', strong: true),
-                  row('זוג — ראש ויד', '104', '2 סטים', strong: true),
+                  row(
+                      context.l10n.pick(
+                          he: 'סט שלם (ראש או יד)',
+                          en: 'Complete set (Shel Rosh or Shel Yad)'),
+                      '52',
+                      '100%',
+                      strong: true),
+                  row(
+                      context.l10n.pick(
+                          he: 'זוג — ראש ויד',
+                          en: 'Tefillin Set — Shel Rosh and Shel Yad'),
+                      '104',
+                      context.l10n.pick(he: '2 סטים', en: '2 sets'),
+                      strong: true),
                 ],
               ),
               const SizedBox(height: 14),
               Text(
-                'זוג שלם הוא 104 שורות — כ־2.5 עמודים של ספר תורה.\n'
-                'את היעד היומי אפשר לקבוע בפרשיות או בסטים עשרוניים, בהגדרות.',
+                context.l10n.pick(
+                    he: 'זוג שלם הוא 104 שורות — כ־2.5 עמודים של ספר תורה.\nאת היעד היומי אפשר לקבוע בפרשיות או בסטים עשרוניים, בהגדרות.',
+                    en: 'A complete Tefillin Set is 104 equivalent lines — about 2.5 Sefer Torah pages.\nThe daily target can be set in Parashiyot or decimal sets in Settings.'),
                 style: TextStyle(
                     fontFamily: t.labelFamily,
                     fontSize: 12,
@@ -656,7 +713,8 @@ class TefillinShareHelp extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('סגור', style: TextStyle(color: t.accent)),
+            child: Text(context.l10n.pick(he: 'סגור', en: 'Close'),
+                style: TextStyle(color: t.accent)),
           ),
         ],
       ),

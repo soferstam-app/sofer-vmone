@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../format.dart';
+import 'json_compat.dart';
 import '../storage_service.dart';
 import '../timer_foreground_task.dart';
 
@@ -45,8 +46,6 @@ class TimerController {
   /// Called once a second while the clock runs, for the screen to rebuild on.
   final VoidCallback onTick;
 
-  final StorageService _storage;
-
   /// Injectable so the arithmetic can be tested without waiting for real
   /// seconds to pass.
   final DateTime Function() _now;
@@ -68,8 +67,7 @@ class TimerController {
     StorageService? storage,
     DateTime Function()? now,
     Duration Function()? monotonic,
-  })  : _storage = storage ?? StorageService(),
-        _now = now ?? DateTime.now,
+  })  : _now = now ?? DateTime.now,
         _monotonic = monotonic ?? _sinceProcessStart;
 
   Timer? _ticker;
@@ -90,6 +88,7 @@ class TimerController {
   Duration _banked = Duration.zero;
   bool _isPaused = false;
   Duration _lastLap = Duration.zero;
+  Duration _previousLineDuration = Duration.zero;
   Duration _lastSitting = Duration.zero;
   Duration _breakSoFar = Duration.zero;
 
@@ -129,7 +128,46 @@ class TimerController {
     return since.isNegative ? Duration.zero : since;
   }
 
-  void start() {
+  /// The elapsed reading captured by the last line mark. Smart mode uses this
+  /// as a transaction boundary: if writing the checkpoint fails, the visible
+  /// line timer must return to the line that was actually saved.
+  Duration get lastLapElapsed => _lastLap;
+
+  Duration get previousLineDuration => _previousLineDuration;
+
+  /// Compare only this sitting's unconfirmed time. Previously saved partial
+  /// line time must not be mistaken for an unattended timer.
+  bool get hasUnusualLineTime {
+    final current = sinceLastLap;
+    return current >= const Duration(hours: 1) ||
+        (current >= const Duration(minutes: 25) &&
+            _previousLineDuration > Duration.zero &&
+            current >= _previousLineDuration * 5);
+  }
+
+  /// Reclassify the unconfirmed interval as a break, keeping all confirmed
+  /// line boundaries and the current position. Works while paused or running.
+  void restartCurrentLine() {
+    final discarded = sinceLastLap;
+    _banked = elapsed - discarded;
+    _breakSoFar += discarded;
+    if (_isRunning) {
+      _runMark = _monotonic();
+      _startedAt = _now();
+    }
+  }
+
+  /// Restores the previous line boundary after a failed smart checkpoint.
+  /// This does not touch persisted timer state; the caller persists the
+  /// unchanged sitting once its UI state has been restored.
+  void restoreLastLap(Duration value, {Duration? previousLineDuration}) {
+    _lastLap = value;
+    if (previousLineDuration != null) {
+      _previousLineDuration = previousLineDuration;
+    }
+  }
+
+  void start({bool clearStoredState = false}) {
     _isPaused = false;
     if (isRunning) return;
 
@@ -141,7 +179,7 @@ class TimerController {
     _runMark = _monotonic();
     _startedAt ??= _now();
     _startTicking();
-    _storage.clearTimerState();
+    // The owner replaces/clears the durable checkpoint after its transaction.
   }
 
   void pause() {
@@ -166,34 +204,52 @@ class TimerController {
   }
 
   /// Ends the sitting and reports what it came to.
-  StoppedSitting stop() {
-    final worked = elapsed;
+  StoppedSitting stop({bool clearStoredState = false}) {
+    final sitting = previewStop();
+    _applyStop(sitting, clearStoredState: clearStoredState);
+    return sitting;
+  }
+
+  /// Reads the current end point without changing the clock. The smart
+  /// workflow uses this snapshot while it durably writes the resulting
+  /// records; if storage fails, the writer can simply retry stopping.
+  StoppedSitting previewStop() => StoppedSitting(
+        worked: elapsed,
+        onBreak: _breakSoFar + breakElapsed,
+        endedAt: _now(),
+      );
+
+  /// Commits a previously previewed stop after its history has been saved.
+  void commitPreview(StoppedSitting sitting, {bool clearStoredState = false}) {
+    _applyStop(sitting, clearStoredState: clearStoredState);
+  }
+
+  void _applyStop(StoppedSitting sitting, {required bool clearStoredState}) {
     // The break in progress counts too. Stopping straight out of a break used
     // to report the sitting as having had none, because only finished breaks
     // had been banked — and stopping from a break is the ordinary way a sitting
     // ends.
-    final onBreak = _breakSoFar + breakElapsed;
-
     _isRunning = false;
     _ticker?.cancel();
     _breakStartedAt = null;
     _isPaused = false;
-    _endedAt = _now();
-    _lastSitting = worked;
+    _endedAt = sitting.endedAt;
+    _lastSitting = sitting.worked;
     _lastLap = Duration.zero;
+    _previousLineDuration = Duration.zero;
     _startedAt = null;
     _banked = Duration.zero;
     _breakSoFar = Duration.zero;
 
-    _storage.clearTimerState();
-    return StoppedSitting(worked: worked, onBreak: onBreak, endedAt: _endedAt!);
+    // The owner replaces/clears the durable checkpoint after its transaction.
   }
 
   /// Marks a line finished, and reports how long it took.
-  Duration recordLap() {
+  Duration recordLap({Duration carried = Duration.zero}) {
     final now = elapsed;
     final lap = now - _lastLap;
     _lastLap = now;
+    _previousLineDuration = carried + lap;
     return lap;
   }
 
@@ -215,27 +271,44 @@ class TimerController {
         // checkpoint a restored timer showed the whole sitting as the current
         // line until the next press of "סיימתי שורה".
         'lastLapElapsedSeconds': _lastLap.inSeconds,
+        'previousLineDurationSeconds': _previousLineDuration.inSeconds,
       };
 
   /// Picks a sitting back up. Returns true when the clock is running again, so
   /// the screen knows to start its animation.
+  Map<String, dynamic> checkpoint() => {
+        ...toJson(),
+        'accumulatedElapsedSeconds': elapsed.inSeconds,
+        'sessionStartTime': isRunning ? _now().toIso8601String() : null,
+      };
+
   bool restoreFrom(Map<String, dynamic> state) {
+    _ticker?.cancel();
+    _breakStartedAt = null;
     final isPaused = state['isPaused'] == true;
     _banked = Duration(
-        seconds: (state['accumulatedElapsedSeconds'] as num?)?.toInt() ?? 0);
+        seconds: JsonCompat.intOrNull(state['accumulatedElapsedSeconds']) ?? 0);
     _lastLap = Duration(
-        seconds: (state['lastLapElapsedSeconds'] as num?)?.toInt() ?? 0);
+        seconds: JsonCompat.intOrNull(state['lastLapElapsedSeconds']) ?? 0);
+    _previousLineDuration = Duration(
+        seconds:
+            JsonCompat.intOrNull(state['previousLineDurationSeconds']) ?? 0);
     _breakSoFar = Duration(
-        seconds: (state['accumulatedBreakSeconds'] as num?)?.toInt() ?? 0);
-    final started = state['sessionStartTime'] as String?;
+        seconds: JsonCompat.intOrNull(state['accumulatedBreakSeconds']) ?? 0);
+    final started = state['sessionStartTime'] is String
+        ? state['sessionStartTime'] as String
+        : null;
     // A paused sitting has no start to count from: its time is all banked.
     final resumedFrom =
         started != null && !isPaused ? DateTime.tryParse(started) : null;
     _isPaused = isPaused;
+    _isRunning = false;
     _startedAt = null;
 
     if (isPaused) {
-      final breakStarted = state['breakStartedAt'] as String?;
+      final breakStarted = state['breakStartedAt'] is String
+          ? state['breakStartedAt'] as String
+          : null;
       // New states retain the original wall-clock mark so a break continues
       // while the process is closed. An older state has no recoverable mark;
       // continue from restore time instead of inventing elapsed break time.

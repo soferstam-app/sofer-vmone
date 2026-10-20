@@ -2,6 +2,7 @@ import '../theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
 import '../models.dart';
+import '../l10n/app_localizations.dart';
 import 'ruled_home_body.dart';
 
 /// Smart mode in the cards layout, used by the modern theme.
@@ -32,11 +33,14 @@ class CardsSmartBody extends StatelessWidget {
   /// Which commission to work on. Offered only before a sitting starts —
   /// changing it underneath a running clock would leave the measured time
   /// attributed to whichever project happened to be showing at the end.
-  Widget _projectPicker() => Padding(
+  Widget _projectPicker(BuildContext context) => Padding(
         padding: const EdgeInsets.all(20.0),
         child: DropdownButtonFormField<Project>(
-          decoration: const InputDecoration(
-            labelText: "בחר פרויקט להתחלת עבודה",
+          decoration: InputDecoration(
+            labelText: context.l10n.pick(
+              he: "בחר פרויקט להתחלת עבודה",
+              en: "Choose a project to start writing",
+            ),
             border: OutlineInputBorder(),
           ),
           initialValue: snapshot.project,
@@ -51,7 +55,7 @@ class CardsSmartBody extends StatelessWidget {
   Widget _position(BuildContext context) {
     return Semantics(
       button: true,
-      label: 'שינוי מיקום',
+      label: context.l10n.pick(he: 'שינוי מיקום', en: 'Change position'),
       child: InkWell(
         onTap: actions.onEditPosition,
         borderRadius: BorderRadius.circular(12),
@@ -61,7 +65,7 @@ class CardsSmartBody extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               if (!snapshot.isActive) ...[
-                const Text('ממשיך מ'),
+                Text(context.l10n.pick(he: 'ממשיך מ', en: 'Continue from')),
                 const SizedBox(height: 6),
               ],
               Text(
@@ -95,7 +99,10 @@ class CardsSmartBody extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            "בהפסקה: ${snapshot.breakElapsed}",
+            context.l10n.pick(
+              he: "בהפסקה: ${snapshot.breakElapsed}",
+              en: "On break: ${snapshot.breakElapsed}",
+            ),
             style: TextStyle(
               color: scheme.tertiary,
               fontWeight: FontWeight.bold,
@@ -107,8 +114,14 @@ class CardsSmartBody extends StatelessWidget {
           if (snapshot.breakRemaining.isNotEmpty)
             Text(
               snapshot.breakOverrun
-                  ? "חריגה: ${snapshot.breakRemaining}"
-                  : "נותרו: ${snapshot.breakRemaining}",
+                  ? context.l10n.pick(
+                      he: "חריגה: ${snapshot.breakRemaining}",
+                      en: "Overtime: ${snapshot.breakRemaining}",
+                    )
+                  : context.l10n.pick(
+                      he: "נותרו: ${snapshot.breakRemaining}",
+                      en: "Remaining: ${snapshot.breakRemaining}",
+                    ),
               style: TextStyle(
                 color: snapshot.breakOverrun
                     ? SoferTokens.of(context).danger
@@ -139,7 +152,7 @@ class CardsSmartBody extends StatelessWidget {
             children: [
               Icon(Icons.brush, color: scheme.onSecondaryContainer, size: 26),
               const SizedBox(width: 8),
-              Text("כותב...",
+              Text(context.l10n.pick(he: "כותב...", en: "Writing…"),
                   style: TextStyle(
                       color: scheme.onSecondaryContainer,
                       fontSize: 16,
@@ -189,7 +202,8 @@ class CardsSmartBody extends StatelessWidget {
         ),
         child: Row(
           children: [
-            metric('זמן כתיבה', snapshot.elapsed),
+            metric(context.l10n.pick(he: 'זמן כתיבה', en: 'Writing time'),
+                snapshot.elapsed),
             Container(
                 width: 1,
                 height: 48,
@@ -208,7 +222,7 @@ class CardsSmartBody extends StatelessWidget {
       return ElevatedButton.icon(
         onPressed: actions.onStart,
         icon: const Icon(Icons.login),
-        label: const Text("כניסה"),
+        label: Text(context.l10n.pick(he: "כניסה", en: "Start")),
         style: ElevatedButton.styleFrom(
           padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
           textStyle: const TextStyle(fontSize: 20),
@@ -225,7 +239,12 @@ class CardsSmartBody extends StatelessWidget {
               ? null
               : actions.onNextLine,
           icon: const Icon(Icons.arrow_downward),
-          label: const Text("מעבר שורה (סיימתי)"),
+          label: Text(context.l10n.pick(
+            he: snapshot.wordEntry ? 'סמן מילה אחרונה' : "מעבר שורה (סיימתי)",
+            en: snapshot.wordEntry
+                ? 'Select last word'
+                : "Finished line — next",
+          )),
           style: ElevatedButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 60, vertical: 25),
             textStyle: const TextStyle(fontSize: 22),
@@ -238,7 +257,10 @@ class CardsSmartBody extends StatelessWidget {
           OutlinedButton.icon(
             onPressed: snapshot.isPaused ? null : actions.onSkipMezuza,
             icon: const Icon(Icons.skip_next),
-            label: const Text('עבור למזוזה הבאה'),
+            label: Text(context.l10n.pick(
+              he: 'עבור למזוזה הבאה',
+              en: 'Move to next Mezuzah',
+            )),
           ),
         ],
         const SizedBox(height: 20),
@@ -253,16 +275,21 @@ class CardsSmartBody extends StatelessWidget {
                       ? actions.onResume
                       : actions.onBreak,
               icon: Icon(snapshot.isPaused ? Icons.play_arrow : Icons.coffee),
-              label: Text(snapshot.isPaused ? "המשך כתיבה" : "הפסקת קפה"),
+              label: Text(snapshot.isPaused
+                  ? context.l10n.pick(he: "המשך כתיבה", en: "Resume writing")
+                  : context.l10n.pick(he: "הפסקת קפה", en: "Take a break")),
               style: ElevatedButton.styleFrom(
                 backgroundColor: scheme.tertiaryContainer,
                 foregroundColor: scheme.onTertiaryContainer,
               ),
             ),
             ElevatedButton.icon(
-              onPressed: snapshot.isSavingLine ? null : actions.onStop,
+              // Stopping immediately after marking a line is a common two-tap
+              // sequence. The screen queues the stop behind the durable line
+              // save, so this action must remain reachable while it is saving.
+              onPressed: actions.onStop,
               icon: const Icon(Icons.logout),
-              label: const Text("יציאה"),
+              label: Text(context.l10n.pick(he: "יציאה", en: "Finish")),
               style: ElevatedButton.styleFrom(
                 backgroundColor: scheme.errorContainer,
                 foregroundColor: scheme.onErrorContainer,
@@ -281,7 +308,7 @@ class CardsSmartBody extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            if (!snapshot.isActive) _projectPicker(),
+            if (!snapshot.isActive) _projectPicker(context),
             if (snapshot.project != null) ...[
               _position(context),
               const SizedBox(height: 30),
@@ -298,7 +325,10 @@ class CardsSmartBody extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 520),
-                    child: HomeAdditionsPanel(snapshot: snapshot),
+                    child: HomeAdditionsPanel(
+                      snapshot: snapshot,
+                      onWritingTarget: actions.onWritingTarget,
+                    ),
                   ),
                 ),
               ],

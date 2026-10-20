@@ -5,6 +5,7 @@ import 'models.dart';
 import 'theme/app_theme.dart';
 import 'widgets/sofer_widgets.dart';
 import 'format.dart';
+import 'l10n/app_localizations.dart';
 
 /// Ranks projects by what they actually pay per hour.
 ///
@@ -42,14 +43,16 @@ class ProjectComparisonScreen extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
             child: Text.rich(
               TextSpan(children: [
-                const TextSpan(text: "העבודה שמשתלמת לך יותר היא "),
                 TextSpan(
-                    text: best.project.name,
-                    style: TextStyle(color: t.accent)),
+                    text: context.l10n.pick(
+                        he: "העבודה שמשתלמת לך יותר היא ",
+                        en: "Your most profitable work is ")),
                 TextSpan(
-                    text: " — ${formatMoney(best.profitPerHour!, best.project.currency)} לשעה, "
-                        "פי ${(best.profitPerHour! / (worst.profitPerHour == 0 ? 1 : worst.profitPerHour!)).toStringAsFixed(1)} "
-                        "מ${worst.project.name}."),
+                    text: best.project.name, style: TextStyle(color: t.accent)),
+                TextSpan(
+                    text: context.l10n.pick(
+                        he: " — ${formatMoney(best.profitPerHour!, best.project.currency)} לשעה, פי ${(best.profitPerHour! / (worst.profitPerHour == 0 ? 1 : worst.profitPerHour!)).toStringAsFixed(1)} מ${worst.project.name}.",
+                        en: " — ${formatMoney(best.profitPerHour!, best.project.currency)} per hour, ${(best.profitPerHour! / (worst.profitPerHour == 0 ? 1 : worst.profitPerHour!)).toStringAsFixed(1)}× ${worst.project.name}.")),
               ]),
               style: TextStyle(
                   fontFamily: t.labelFamily,
@@ -64,8 +67,9 @@ class ProjectComparisonScreen extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
           child: Text(
-            "המידה היא ₪ לשעה — רווח בניכוי הוצאות היחידה, חלקי הזמן שנמדד. "
-            "מחיר גבוה לעמוד שנכתב לאט יכול לשלם פחות ממחיר נמוך שנכתב מהר.",
+            context.l10n.pick(
+                he: "המידה היא ₪ לשעה — רווח בניכוי הוצאות היחידה, חלקי הזמן שנמדד. מחיר גבוה לעמוד שנכתב לאט יכול לשלם פחות ממחיר נמוך שנכתב מהר.",
+                en: "The measure is earnings per hour: profit after per-unit expenses, divided by measured time. A high price for a slowly written page can pay less than a lower price written quickly."),
             style: TextStyle(
                 fontFamily: t.labelFamily,
                 fontSize: 12,
@@ -77,14 +81,16 @@ class ProjectComparisonScreen extends StatelessWidget {
     );
   }
 
-  Widget _ruledRow(BuildContext context, ProjectPerformance p, int rank,
-      double top) {
+  Widget _ruledRow(
+      BuildContext context, ProjectPerformance p, int rank, double top) {
     final t = SoferTokens.of(context);
     final rate = p.profitPerHour;
-    final share = (rate == null || top <= 0) ? 0.0 : (rate / top).clamp(0.0, 1.0);
+    final share =
+        (rate == null || top <= 0) ? 0.0 : (rate / top).clamp(0.0, 1.0);
 
     return Container(
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.rule))),
+      decoration:
+          BoxDecoration(border: Border(bottom: BorderSide(color: t.rule))),
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -122,7 +128,9 @@ class ProjectComparisonScreen extends StatelessWidget {
             padding: const EdgeInsetsDirectional.only(start: 26),
             child: p.hasEnoughData
                 ? SoferProgress(share)
-                : Text("אין עוד מספיק נתונים",
+                : Text(
+                    context.l10n.pick(
+                        he: "אין עוד מספיק נתונים", en: "Not enough data yet"),
                     style: TextStyle(
                         fontFamily: t.labelFamily,
                         fontSize: 12,
@@ -133,10 +141,10 @@ class ProjectComparisonScreen extends StatelessWidget {
             Padding(
               padding: const EdgeInsetsDirectional.only(start: 26),
               child: Text(
-                "${p.units.toStringAsFixed(1)} ${p.unitNamePlural} · "
-                "${formatSpan(p.timeWorked)} · "
+                "${p.units.toStringAsFixed(1)} ${_unitPlural(context, p.project.type)} · "
+                "${formatSpan(p.timeWorked, english: context.l10n.isEnglish)} · "
                 "${formatMoney(p.profit, p.project.currency)}"
-                "${p.timePerUnit == null ? '' : ' · ${formatSpan(p.timePerUnit!)} ל${p.unitName}'}",
+                "${p.timePerUnit == null ? '' : context.l10n.pick(he: ' · ${formatSpan(p.timePerUnit!)} ל${p.unitName}', en: ' · ${formatSpan(p.timePerUnit!, english: true)} per ${_unitSingular(context, p.project.type)}')}",
                 style: TextStyle(
                     fontFamily: t.labelFamily, fontSize: 12, color: t.inkMuted),
               ),
@@ -156,9 +164,13 @@ class ProjectComparisonScreen extends StatelessWidget {
 
     if (SoferTokens.of(context).isRules) {
       return Scaffold(
-        appBar: AppBar(title: const Text("מה משתלם")),
+        appBar: AppBar(
+            title:
+                Text(context.l10n.pick(he: "מה משתלם", en: "Profitability"))),
         body: ranked.isEmpty
-            ? const Center(child: Text("אין פרויקטים להשוואה"))
+            ? Center(
+                child: Text(context.l10n.pick(
+                    he: "אין פרויקטים להשוואה", en: "No projects to compare")))
             : SoferPage(
                 maxWidth: 760,
                 child: _ruledTable(context, ranked, best, worst),
@@ -167,9 +179,14 @@ class ProjectComparisonScreen extends StatelessWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text("השוואת רווחיות"), centerTitle: true),
+      appBar: AppBar(
+          title: Text(context.l10n
+              .pick(he: "השוואת רווחיות", en: "Profitability comparison")),
+          centerTitle: true),
       body: ranked.isEmpty
-          ? const Center(child: Text("אין פרויקטים להשוואה"))
+          ? Center(
+              child: Text(context.l10n.pick(
+                  he: "אין פרויקטים להשוואה", en: "No projects to compare")))
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
@@ -186,27 +203,31 @@ class ProjectComparisonScreen extends StatelessWidget {
                               Icon(Icons.lightbulb,
                                   color: SoferTokens.of(context).accent),
                               const SizedBox(width: 8),
-                              const Text("מה משתלם יותר",
-                                  style: TextStyle(
+                              Text(
+                                  context.l10n.pick(
+                                      he: "מה משתלם יותר",
+                                      en: "Most profitable"),
+                                  style: const TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 16)),
                             ],
                           ),
                           const SizedBox(height: 10),
                           Text(
-                            "${best.project.name} מכניס לך "
-                            "${formatMoney(best.profitPerHour!, best.project.currency)} לשעה, "
-                            "מול ${formatMoney(worst.profitPerHour!, worst.project.currency)} "
-                            "ב${worst.project.name}.",
+                            context.l10n.pick(
+                                he: "${best.project.name} מכניס לך ${formatMoney(best.profitPerHour!, best.project.currency)} לשעה, מול ${formatMoney(worst.profitPerHour!, worst.project.currency)} ב${worst.project.name}.",
+                                en: "${best.project.name} earns ${formatMoney(best.profitPerHour!, best.project.currency)} per hour, compared with ${formatMoney(worst.profitPerHour!, worst.project.currency)} for ${worst.project.name}."),
                             style: const TextStyle(fontSize: 15, height: 1.4),
                           ),
                           if (worst.profitPerHour! > 0) ...[
                             const SizedBox(height: 6),
                             Text(
-                              "הפרש של פי "
-                              "${(best.profitPerHour! / worst.profitPerHour!).toStringAsFixed(1)}.",
+                              context.l10n.pick(
+                                  he: "הפרש של פי ${(best.profitPerHour! / worst.profitPerHour!).toStringAsFixed(1)}.",
+                                  en: "A ${(best.profitPerHour! / worst.profitPerHour!).toStringAsFixed(1)}× difference."),
                               style: TextStyle(
-                                  fontSize: 13, color: SoferTokens.of(context).inkMuted),
+                                  fontSize: 13,
+                                  color: SoferTokens.of(context).inkMuted),
                             ),
                           ],
                         ],
@@ -217,9 +238,11 @@ class ProjectComparisonScreen extends StatelessWidget {
                 ...ranked.map((p) => _projectCard(context, p, best)),
                 const SizedBox(height: 12),
                 Text(
-                  "החישוב מבוסס על זמן שנמדד בפועל. רשומות שהוזנו כהשלמת רקע "
-                  "אינן נכללות, מכיוון שאין להן זמן עבודה אמיתי.",
-                  style: TextStyle(fontSize: 12, color: SoferTokens.of(context).inkMuted),
+                  context.l10n.pick(
+                      he: "החישוב מבוסס על זמן שנמדד בפועל. רשומות שהוזנו כהשלמת רקע אינן נכללות, מכיוון שאין להן זמן עבודה אמיתי.",
+                      en: "The calculation uses actual measured time. Records entered as historical completion are excluded because they do not have real work time."),
+                  style: TextStyle(
+                      fontSize: 12, color: SoferTokens.of(context).inkMuted),
                 ),
               ],
             ),
@@ -234,9 +257,12 @@ class ProjectComparisonScreen extends StatelessWidget {
       return Card(
         margin: const EdgeInsets.only(bottom: 10),
         child: ListTile(
-          leading: Icon(Icons.help_outline, color: SoferTokens.of(context).inkFaint),
+          leading:
+              Icon(Icons.help_outline, color: SoferTokens.of(context).inkFaint),
           title: Text(p.project.name),
-          subtitle: const Text("אין מספיק נתונים – לא נמדד זמן עבודה"),
+          subtitle: Text(context.l10n.pick(
+              he: "אין מספיק נתונים – לא נמדד זמן עבודה",
+              en: "Not enough data — no work time measured")),
         ),
       );
     }
@@ -246,7 +272,8 @@ class ProjectComparisonScreen extends StatelessWidget {
       elevation: isBest ? 3 : 1,
       shape: isBest
           ? RoundedRectangleBorder(
-              side: BorderSide(color: SoferTokens.of(context).accent, width: 1.5),
+              side:
+                  BorderSide(color: SoferTokens.of(context).accent, width: 1.5),
               borderRadius: BorderRadius.circular(12))
           : null,
       child: Padding(
@@ -262,7 +289,9 @@ class ProjectComparisonScreen extends StatelessWidget {
                           fontWeight: FontWeight.bold, fontSize: 16)),
                 ),
                 Text(
-                  "${formatMoney(p.profitPerHour!, p.project.currency)}/שעה",
+                  context.l10n.pick(
+                      he: "${formatMoney(p.profitPerHour!, p.project.currency)}/שעה",
+                      en: "${formatMoney(p.profitPerHour!, p.project.currency)}/hour"),
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 17,
@@ -274,12 +303,19 @@ class ProjectComparisonScreen extends StatelessWidget {
               ],
             ),
             const Divider(),
-            _row(context, "הופק:",
-                "${p.units.toStringAsFixed(1)} ${p.unitNamePlural}"),
-            _row(context, "זמן עבודה:", formatSpan(p.timeWorked)),
+            _row(context, context.l10n.pick(he: "הופק:", en: "Produced:"),
+                "${p.units.toStringAsFixed(1)} ${_unitPlural(context, p.project.type)}"),
+            _row(context, context.l10n.pick(he: "זמן עבודה:", en: "Work time:"),
+                formatSpan(p.timeWorked, english: context.l10n.isEnglish)),
             if (p.timePerUnit != null)
-              _row(context, "זמן ל${p.unitName}:", formatSpan(p.timePerUnit!)),
-            _row(context, "רווח:", formatMoneyExact(p.profit, p.project.currency)),
+              _row(
+                  context,
+                  context.l10n.pick(
+                      he: "זמן ל${p.unitName}:",
+                      en: "Time per ${_unitSingular(context, p.project.type)}:"),
+                  formatSpan(p.timePerUnit!, english: context.l10n.isEnglish)),
+            _row(context, context.l10n.pick(he: "רווח:", en: "Profit:"),
+                formatMoneyExact(p.profit, p.project.currency)),
           ],
         ),
       ),
@@ -291,9 +327,26 @@ class ProjectComparisonScreen extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(label, style: TextStyle(color: SoferTokens.of(context).inkMuted)),
+            Text(label,
+                style: TextStyle(color: SoferTokens.of(context).inkMuted)),
             Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
           ],
         ),
       );
+
+  String _unitSingular(BuildContext context, ProjectType type) =>
+      switch (type) {
+        ProjectType.sefer => context.l10n.pick(he: 'עמוד', en: 'page'),
+        ProjectType.megillah => context.l10n.pick(he: 'פרויקט', en: 'project'),
+        ProjectType.mezuza => context.l10n.pick(he: 'מזוזה', en: 'Mezuzah'),
+        ProjectType.tefillin => context.l10n.pick(he: 'זוג', en: 'set'),
+      };
+
+  String _unitPlural(BuildContext context, ProjectType type) => switch (type) {
+        ProjectType.sefer => context.l10n.pick(he: 'עמודים', en: 'pages'),
+        ProjectType.megillah =>
+          context.l10n.pick(he: 'פרויקטים', en: 'projects'),
+        ProjectType.mezuza => context.l10n.pick(he: 'מזוזות', en: 'Mezuzot'),
+        ProjectType.tefillin => context.l10n.pick(he: 'זוגות', en: 'sets'),
+      };
 }

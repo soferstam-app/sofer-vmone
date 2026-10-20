@@ -2,11 +2,12 @@ import 'package:kosher_dart/kosher_dart.dart';
 
 import 'logic/hebrew_work_calendar.dart';
 
-String formatDisplayDate(DateTime date, bool useGregorian) {
+String formatDisplayDate(DateTime date, bool useGregorian,
+    {bool english = false}) {
   if (useGregorian) {
     return '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}';
   }
-  return formatHebrewDate(JewishDate.fromDateTime(date));
+  return formatHebrewDate(JewishDate.fromDateTime(date), english: english);
 }
 
 /// Formats a Hebrew date that has already been computed.
@@ -14,8 +15,8 @@ String formatDisplayDate(DateTime date, bool useGregorian) {
 /// The completion-date arithmetic works in Hebrew days throughout and hands
 /// back a [JewishDate]; formatting it directly avoids converting to Gregorian
 /// and straight back again just to print it.
-String formatHebrewDate(JewishDate date) {
-  final formatter = HebrewDateFormatter()..hebrewFormat = true;
+String formatHebrewDate(JewishDate date, {bool english = false}) {
+  final formatter = HebrewDateFormatter()..hebrewFormat = !english;
   return formatter.format(date);
 }
 
@@ -33,7 +34,22 @@ const List<String> _weekdayNames = [
 ///
 /// Which day of the week a job lands on is the first thing a sofer checks,
 /// so a bare date is less useful here than everywhere else.
-String formatDisplayDateWithWeekday(DateTime date, bool useGregorian) {
+String formatDisplayDateWithWeekday(DateTime date, bool useGregorian,
+    {bool english = false}) {
+  if (english) {
+    const weekdays = [
+      'Sunday',
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Shabbat',
+    ];
+    final jewishDate = JewishDate.fromDateTime(date);
+    return '${weekdays[jewishDate.getDayOfWeek() - 1]}, '
+        '${formatDisplayDate(date, useGregorian, english: true)}';
+  }
   final jewishDate = JewishDate.fromDateTime(date);
   final weekday = _weekdayNames[jewishDate.getDayOfWeek() - 1];
   final prefix = jewishDate.getDayOfWeek() == JewishDate.saturday
@@ -44,20 +60,52 @@ String formatDisplayDateWithWeekday(DateTime date, bool useGregorian) {
 
 /// "שבתות (12) · חול המועד (6) · צומות (2)" — why a delivery date sits where
 /// it does, longest cause first.
-String formatSkippedDays(WorkPlan plan, {int maxReasons = 3}) {
+String formatSkippedDays(WorkPlan plan,
+    {int maxReasons = 3, bool english = false}) {
   final entries = plan.skippedByImpact;
   if (entries.isEmpty) return '';
 
-  final shown = entries.take(maxReasons).map((e) => '${e.key.label} (${e.value})');
+  final shown = entries.take(maxReasons).map((e) =>
+      '${english ? _nonWorkReasonEnglish(e.key) : e.key.label} (${e.value})');
   final rest = entries.length - maxReasons;
-  return rest > 0 ? '${shown.join(' · ')} ועוד' : shown.join(' · ');
+  return rest > 0
+      ? '${shown.join(' · ')} ${english ? 'and more' : 'ועוד'}'
+      : shown.join(' · ');
 }
 
-String formatDisplayDateMonth(DateTime date, bool useGregorian) {
+String _nonWorkReasonEnglish(NonWorkReason reason) => switch (reason) {
+      NonWorkReason.shabbat => 'Shabbat',
+      NonWorkReason.yomTov => 'Yom Tov',
+      NonWorkReason.cholHamoed => 'Chol HaMoed',
+      NonWorkReason.erevYomTov => 'Erev Yom Tov',
+      NonWorkReason.purim => 'Purim',
+      NonWorkReason.tishaBeav => 'Tisha B’Av',
+      NonWorkReason.erevTishaBeav => 'Erev Tisha B’Av',
+      NonWorkReason.friday => 'Erev Shabbat',
+      NonWorkReason.motzeiShabbat => 'Motzaei Shabbat',
+      NonWorkReason.chanukah => 'Chanukah',
+      NonWorkReason.fastSeventeenTammuz => '17 Tammuz',
+      NonWorkReason.fastGedalya => 'Tzom Gedaliah',
+      NonWorkReason.fastTenthTevet => '10 Tevet',
+      NonWorkReason.fastEsther => 'Ta’anit Esther',
+      NonWorkReason.lagBaomer => 'Lag BaOmer',
+      NonWorkReason.isruChag => 'Isru Chag',
+      NonWorkReason.beforePesach => 'Before Pesach',
+      NonWorkReason.personal => 'Personal time off',
+      NonWorkReason.betweenYomKippurAndSukkot =>
+        'Between Yom Kippur and Sukkot',
+    };
+
+String formatDisplayDateMonth(DateTime date, bool useGregorian,
+    {bool english = false}) {
   if (useGregorian) {
     return '${date.month.toString().padLeft(2, '0')}.${date.year}';
   }
   final jewishDate = JewishDate.fromDateTime(date);
+  if (english) {
+    final formatter = HebrewDateFormatter()..hebrewFormat = false;
+    return formatter.format(jewishDate, pattern: 'MM yy');
+  }
   return '${getHebrewMonthName(jewishDate.getJewishMonth(), jewishDate.isJewishLeapYear())} ${formatHebrewYear(jewishDate.getJewishYear())}';
 }
 

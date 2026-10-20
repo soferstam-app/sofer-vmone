@@ -10,6 +10,7 @@
 library;
 
 import 'package:kosher_dart/kosher_dart.dart';
+import 'json_compat.dart';
 
 /// What marks the start of a new working day.
 enum DayBoundary {
@@ -84,7 +85,9 @@ class DayStart {
     final hour = json['hour'] is int ? (json['hour'] as int).clamp(0, 23) : 0;
     return DayStart(
       boundary: DayBoundary.fromName(
-        json['boundary'] as String?,
+        JsonCompat.string(json['boundary']).isEmpty
+            ? null
+            : JsonCompat.string(json['boundary']),
         // Before this setting existed there was only a rollover hour: a
         // non-zero one meant the writer had deliberately moved the boundary.
         hour > 0 ? DayBoundary.fixedHour : DayBoundary.midnight,
@@ -128,8 +131,7 @@ class HebrewClock {
   ///
   /// Used to decide when night is over, so the small hours count as night
   /// rather than as an early morning.
-  static DateTime? dawn(DateTime date) =>
-      _calendarFor(date).getAlosHashachar();
+  static DateTime? dawn(DateTime date) => _calendarFor(date).getAlosHashachar();
 
   /// The instant on [date]'s calendar day at which the working day turns over,
   /// or null when the boundary is not a time of day (midnight).
@@ -148,8 +150,8 @@ class HebrewClock {
 
   static ZmanimCalendar _calendarFor(DateTime date) {
     final midnight = DateTime(date.year, date.month, date.day);
-    final location = GeoLocation.setLocation(
-        locationName, latitude, longitude, midnight);
+    final location =
+        GeoLocation.setLocation(locationName, latitude, longitude, midnight);
     return ZmanimCalendar.intGeolocation(location);
   }
 }
