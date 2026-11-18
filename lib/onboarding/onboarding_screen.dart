@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../logic/onboarding.dart';
 import '../l10n/app_localizations.dart';
+import '../l10n/theme_labels.dart';
 import '../main.dart' show themeController;
 import '../theme/app_theme.dart';
 
@@ -72,7 +73,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     final t = SoferTokens.of(context);
-    final pages = onboardingPagesFor(isEnglish: context.l10n.isEnglish);
+    final pages = onboardingPagesFor(
+      isEnglish: context.l10n.isEnglish,
+      isYiddish: context.l10n.isYiddish,
+    );
 
     return Scaffold(
       backgroundColor: t.paper,
@@ -392,13 +396,7 @@ class _Swatch extends StatelessWidget {
             ),
           ),
           child: Text(
-            context.l10n.isEnglish
-                ? switch (theme) {
-                    AppTheme.modern => 'Modern',
-                    AppTheme.klaf => 'Parchment',
-                    AppTheme.layla => 'Night',
-                  }
-                : theme.label,
+            context.l10n.themeLabel(theme),
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 12.5, color: preview.ink),
           ),

@@ -1,10 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:kosher_dart/kosher_dart.dart';
 
 import '../hebrew_utils.dart';
+import '../logic/hebrew_month.dart';
 import '../logic/calendar_days.dart';
+import '../logic/diagnostic_report.dart';
 import '../logic/hebrew_clock.dart';
 import '../logic/hebrew_work_calendar.dart';
 import '../logic/production_plan.dart';
@@ -12,13 +13,13 @@ import '../models.dart';
 import '../storage_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/sofer_widgets.dart';
-import 'dart:io';
-import 'package:file_picker/file_picker.dart';
 import 'package:printing/printing.dart';
 import '../logic/plan_table.dart';
+import '../logic/save_user_file.dart';
 import '../widgets/feedback.dart';
 import 'plan_export.dart';
 import '../l10n/app_localizations.dart';
+import '../l10n/prior_writing_labels.dart';
 
 /// The month as a calendar, saying which page each day asks for.
 ///
@@ -56,6 +57,8 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
   final StorageService _storage = StorageService();
 
   Project? _project;
+  final Map<String, Project> _editedProjects = {};
+  bool _editingDay = false;
   DateTime _anchor = DateTime.now();
 
   /// A week or a month. The same engine answers both — they are one question
@@ -101,33 +104,7 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
       setState(() => _anchor = CalendarDays.addDays(_anchor, 7 * by));
       return;
     }
-    final jd = JewishDate.fromDateTime(_anchor);
-    var year = jd.getJewishYear();
-    var month = jd.getJewishMonth();
-    final monthsInYear = jd.isJewishLeapYear() ? 13 : 12;
-
-    // Months are numbered from Nisan, so the year turns over between Adar and
-    // Nisan rather than at the top of the count.
-    for (var i = 0; i < by.abs(); i++) {
-      if (by > 0) {
-        month++;
-        if (month > monthsInYear) {
-          month = 1;
-          year++;
-        }
-      } else {
-        month--;
-        if (month < 1) {
-          month = monthsInYear;
-          year--;
-        }
-      }
-    }
-    setState(() => _anchor = JewishDate.initDate(
-          jewishYear: year,
-          jewishMonth: month,
-          jewishDayOfMonth: 1,
-        ).getGregorianCalendar());
+    setState(() => _anchor = shiftHebrewMonth(_anchor, by));
   }
 
   /// What the stretch is called at the top of the screen.
@@ -199,7 +176,7 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
       final out = table.toExportTable(english: context.l10n.isEnglish);
       final bytes = await PlanExport.toXlsx(out);
       if (!mounted) return;
-      final path = await FilePicker.platform.saveFile(
+      final path = await saveUserFile(
         dialogTitle:
             context.l10n.pick(he: 'שמירת טבלת הספקים', en: 'Save output plan'),
         fileName: PlanExport.fileName(out, 'xlsx'),
@@ -207,11 +184,6 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
       );
       if (!mounted || path == null) return;
 
-      // Desktop hands back a path and expects the caller to write; mobile has
-      // already written the bytes itself.
-      if (!Platform.isAndroid && !Platform.isIOS) {
-        await File(path).writeAsBytes(bytes, flush: true);
-      }
       if (mounted) {
         showAppSuccess(
             context, context.l10n.pick(he: 'נשמר: $path', en: 'Saved: $path'));
@@ -233,76 +205,111 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
   /// Everything after the day moves, because the plan is a cumulative line and
   /// not a fixed one. That is the whole reason it was built that way.
   Future<void> _editDay(Project project, PlannedDay day) async {
+    if (_editingDay) return;
+    _editingDay = true;
+    try {
+      await Diagnostics.record(DiagnosticEvent.planDayTapped);
+      if (!mounted) return;
+      await _chooseAndSaveDay(project, day);
+    } catch (error, stack) {
+      unawaited(Diagnostics.record(DiagnosticEvent.planDayFailed,
+          error: error, stack: stack));
+      if (mounted) showAppError(context, context.l10n.writingChangeSaveFailed);
+    } finally {
+      _editingDay = false;
+    }
+  }
+
+  Future<void> _chooseAndSaveDay(Project project, PlannedDay day) async {
     final personal = _rules.exceptionOn(day.date);
+    var dialogReported = false;
     final chosen = await showDialog<double>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(context.l10n.pick(
-            he: 'יום ${formatHebrewNumber(day.hebrewDay)}',
-            en: 'Day ${day.hebrewDay}')),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              context.l10n.pick(
-                  he: 'כמה אתה כותב ביום הזה? כל מה שאחריו יזוז בהתאם.',
-                  en: 'How much will you write on this day? Every later target will move accordingly.'),
-              style: const TextStyle(fontSize: 13, height: 1.5),
-            ),
-            const SizedBox(height: 12),
-            if (personal != null)
-              Text(context.l10n.pick(
-                he: 'בהגדרות ימי עבודה התאריך מוגדר כ${personal.weight == DayWeight.none ? "יום חופש" : "חצי יום"}${personal.note.isEmpty ? "" : " — ${personal.note}"}. ניתן לשנות זאת שם.',
-                en: 'Workday settings limit this date to ${personal.weight == DayWeight.none ? "a day off" : "a half day"}${personal.note.isEmpty ? "" : " — ${personal.note}"}. Change that limit in settings.',
-              )),
-            for (final option in [
-              (1.0, context.l10n.pick(he: 'יום מלא', en: 'Full day')),
-              (0.5, context.l10n.pick(he: 'חצי יום', en: 'Half day')),
-              (0.0, context.l10n.pick(he: 'לא כותב', en: 'Not writing')),
-            ])
-              ListTile(
-                enabled: personal == null || option.$1 <= personal.weight.value,
-                contentPadding: EdgeInsets.zero,
-                title: Text(option.$2),
-                trailing: day.weight == option.$1
-                    ? Icon(Icons.check, color: SoferTokens.of(ctx).accent)
-                    : null,
-                onTap: personal != null && option.$1 > personal.weight.value
-                    ? null
-                    : () => Navigator.pop(ctx, option.$1),
+      builder: (ctx) {
+        if (!dialogReported) {
+          dialogReported = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (ctx.mounted) {
+              unawaited(Diagnostics.record(DiagnosticEvent.planDayDialogShown));
+            }
+          });
+        }
+        return AlertDialog(
+          scrollable: true,
+          title: Text(context.l10n.pick(
+              he: 'יום ${formatHebrewNumber(day.hebrewDay)}',
+              en: 'Day ${day.hebrewDay}')),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                context.l10n.pick(
+                    he: 'כמה אתה כותב ביום הזה? כל מה שאחריו יזוז בהתאם.',
+                    en: 'How much will you write on this day? Every later target will move accordingly.'),
+                style: const TextStyle(fontSize: 13, height: 1.5),
               ),
-            if (day.isOverridden)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: TextButton.icon(
-                  icon: const Icon(Icons.undo, size: 18),
-                  label: Text(context.l10n
-                      .pick(he: 'חזור ללוח', en: 'Use calendar setting')),
-                  onPressed: () => Navigator.pop(ctx, -1.0),
+              const SizedBox(height: 12),
+              if (personal != null)
+                Text(context.l10n.pick(
+                  he: 'בהגדרות ימי עבודה התאריך מוגדר כ${personal.weight == DayWeight.none ? "יום חופש" : "חצי יום"}${personal.note.isEmpty ? "" : " — ${personal.note}"}. ניתן לשנות זאת שם.',
+                  en: 'Workday settings limit this date to ${personal.weight == DayWeight.none ? "a day off" : "a half day"}${personal.note.isEmpty ? "" : " — ${personal.note}"}. Change that limit in settings.',
+                )),
+              for (final option in [
+                (1.0, context.l10n.pick(he: 'יום מלא', en: 'Full day')),
+                (0.5, context.l10n.pick(he: 'חצי יום', en: 'Half day')),
+                (0.0, context.l10n.pick(he: 'לא כותב', en: 'Not writing')),
+              ])
+                ListTile(
+                  enabled:
+                      personal == null || option.$1 <= personal.weight.value,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(option.$2),
+                  trailing: day.weight == option.$1
+                      ? Icon(Icons.check, color: SoferTokens.of(ctx).accent)
+                      : null,
+                  onTap: personal != null && option.$1 > personal.weight.value
+                      ? null
+                      : () => Navigator.pop(ctx, option.$1),
                 ),
-              ),
+              if (day.isOverridden)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: TextButton.icon(
+                    icon: const Icon(Icons.undo, size: 18),
+                    label: Text(context.l10n
+                        .pick(he: 'חזור ללוח', en: 'Use calendar setting')),
+                    onPressed: () => Navigator.pop(ctx, -1.0),
+                  ),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(context.l10n.cancel)),
           ],
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(context.l10n.cancel)),
-        ],
-      ),
+        );
+      },
     );
     if (chosen == null || !mounted) return;
 
     final key = Project.planDay(day.date);
-    final next = Map<DateTime, double>.from(project.planOverrides);
+    final latest = _editedProjects[project.id] ?? project;
+    final next = Map<DateTime, double>.from(latest.planOverrides);
     // -1 is "forget my decision", which is not the same as "do not write":
     // one hands the day back to the calendar, the other overrules it with zero.
     chosen < 0 ? next.remove(key) : next[key] = chosen;
 
-    final updated = project.copyWith(planOverrides: next);
+    final updated = latest.copyWith(planOverrides: next);
+    await Diagnostics.record(DiagnosticEvent.planDaySaveStarted);
     await _storage.saveProjects([updated]);
+    unawaited(Diagnostics.record(DiagnosticEvent.planDaySaved));
     if (!mounted) return;
-    setState(() => _project = updated);
+    setState(() {
+      _editedProjects[updated.id] = updated;
+      if (_project?.id == updated.id) _project = updated;
+    });
     await widget.onProjectUpdated?.call(updated);
   }
 
@@ -538,8 +545,11 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
                       if (widget.projects.length > 1)
                         Padding(
                           padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                          child: DropdownButtonFormField<Project>(
-                            initialValue: project,
+                          child: DropdownButtonFormField<String>(
+                            initialValue:
+                                widget.projects.any((p) => p.id == project.id)
+                                    ? project.id
+                                    : null,
                             decoration: InputDecoration(
                               labelText: context.l10n
                                   .pick(he: 'פרויקט', en: 'Project'),
@@ -548,9 +558,14 @@ class _ProductionPlanScreenState extends State<ProductionPlanScreen> {
                             ),
                             items: widget.projects
                                 .map((p) => DropdownMenuItem(
-                                    value: p, child: Text(p.name)))
+                                    value: p.id, child: Text(p.name)))
                                 .toList(),
-                            onChanged: (p) => setState(() => _project = p),
+                            onChanged: (id) {
+                              if (id == null) return;
+                              setState(() => _project = _editedProjects[id] ??
+                                  widget.projects
+                                      .firstWhere((p) => p.id == id));
+                            },
                           ),
                         ),
                       Padding(

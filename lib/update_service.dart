@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
+import 'package:sofer_voice_model/sofer_voice_model.dart'
+    show voiceModelIncluded;
 
 import 'logic/version_check.dart';
 import 'version.dart';
@@ -126,6 +128,7 @@ class UpdateService {
         json: Map<String, dynamic>.from(decoded),
         running: running,
         platform: platform,
+        withVoiceModel: voiceModelIncluded,
         english: english,
       );
     } on TimeoutException {

@@ -25,7 +25,8 @@ class IdGenerator {
     final millis = DateTime.now().millisecondsSinceEpoch;
     // 32 bits of randomness, base36 — short, and collision-free in practice
     // for a single user's record volume.
-    final random = _random.nextInt(1 << 32).toRadixString(36);
+    // JavaScript shifts are 32-bit, so use the bound directly on every target.
+    final random = _random.nextInt(4294967296).toRadixString(36);
     final base = '$millis-$random';
     return suffix == null ? base : '$base-$suffix';
   }

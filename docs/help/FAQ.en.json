@@ -1,0 +1,3108 @@
+{
+  "schemaVersion": 1,
+  "documentId": "sofer-vmone-help-en",
+  "locale": "en",
+  "direction": "ltr",
+  "title": "Sofer v’Mone — Frequently asked questions",
+  "updatedAt": "2026-10-15",
+  "appVersion": "0.6.0+7",
+  "status": "integrated-as-native-help",
+  "releaseStage": "development",
+  "introductionMarkdown": "Built-in help for Sofer v’Mone. Some features may be absent in older versions. If you are new to the app, start with First steps, Projects, and Writing, timing, and breaks. If you see an error, search for a few words from the message.",
+  "sections": [
+    {
+      "id": "start",
+      "title": "First steps",
+      "questions": [
+        {
+          "id": "start-purpose",
+          "question": "What does Sofer v’Mone do?",
+          "answerMarkdown": "The app tracks STaM writing by project, progress, and time spent. It also includes goals, planning, profitability, expenses, payments, orders, proofreading records, and reports. It cannot assess the quality or kashrut of your writing.",
+          "keywords": [
+            "beginning",
+            "Registration",
+            "Internet",
+            "starting"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "start-account",
+          "question": "Do I need an account or a subscription?",
+          "answerMarkdown": "You can use the installed app without an account or payment. Its data stays on your device. The website requires an account to store your workspace online and link it to the phone system. You can donate from the About screen.",
+          "keywords": [
+            "beginning",
+            "Registration",
+            "Internet",
+            "starting"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "start-offline",
+          "question": "Can I work without an internet connection?",
+          "answerMarkdown": "Yes, in the installed app. The Writing Journal, timer, summaries, and calculations work offline. Checking for updates, using the website, sending email, and sharing through other services require a connection.",
+          "keywords": [
+            "beginning",
+            "Registration",
+            "Internet",
+            "starting"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "start-platforms",
+          "question": "What devices can be used?",
+          "answerMarkdown": "The distribution platforms of the project are Android 7.0 and above and Windows 10 and above. The guide refers to both. Floating window and keyboard shortcuts are described below as options of the PC version.",
+          "keywords": [
+            "beginning",
+            "Registration",
+            "Internet",
+            "starting"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "start-first-session",
+          "question": "How do you start writing for the first time?",
+          "answerMarkdown": "Open \"Projects\", create a project and select the type of work and its structure. Return to the writing screen and select the project. In Smart Mode make sure the position is correct, start the timer and press \"done row\" after each completed row. When taking a break, use the break button; When you have finished the session, click \"Finish Writing\".",
+          "keywords": [
+            "beginning",
+            "Registration",
+            "Internet",
+            "starting"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": [
+            "project-create",
+            "start-modes"
+          ]
+        },
+        {
+          "id": "start-modes",
+          "question": "What is the difference between Smart Mode, Regular Mode and manual entry?",
+          "answerMarkdown": "In Smart Mode, you mark each completed line, and the software saves progress and advances position. In Regular Mode, the timer measures the session duration, and at the end you enter what was written. With manual entry you record work that has already been done, with date and time if they are known. All three ways update the same work history.",
+          "keywords": [
+            "beginning",
+            "Registration",
+            "Internet",
+            "starting"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "start-away-from-device",
+          "question": "I write without a computer next to me. How should it be recorded?",
+          "answerMarkdown": "You can use manual input or open \"tools\" then \"writing diary\" and enter the work by days. In the diary, you can also print an empty table, fill it out on paper and then copy it to the software. The data on the paper will enter the summaries only after entering and saving.",
+          "keywords": [
+            "beginning",
+            "Registration",
+            "Internet",
+            "starting"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "start-navigation",
+          "question": "Where are the initial tools and explanations?",
+          "answerMarkdown": "The \"Tools\" button on the home screen opens the writing diary, orders, supply schedule, reports, proofreading tracking and the quote calculator. The expenses and the turnover basket can be reached from the projects screen. To read the initial explanation again, open \"Settings\" and then \"Start Screen\".",
+          "keywords": [
+            "beginning",
+            "Registration",
+            "Internet",
+            "starting"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        }
+      ]
+    },
+    {
+      "id": "projects",
+      "title": "Projects and the Project Center",
+      "questions": [
+        {
+          "id": "project-purpose",
+          "question": "Why do you need to open a project before registering a job?",
+          "answerMarkdown": "The project defines what the writing belongs to, what the work unit is, how much work was ordered and what the price is. Without these details, it is impossible to correctly interpret a line, page, mezuzah or verse. You can open several projects and switch between them according to the actual work.",
+          "keywords": [
+            "project",
+            "invitation",
+            "structure",
+            "price"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "project-create",
+          "question": "How do you create a project and what must be filled in?",
+          "answerMarkdown": "On the \"Projects\" screen, select \"New Project\". Enter a name, select a Torah scroll, megillah, mezuzah or tefillin and fill in the required structure and fields in the form. Enter a numeric price; If currently only write tracking is required, you can enter 0. Customer email and due date are permission fields.",
+          "keywords": [
+            "project",
+            "invitation",
+            "structure",
+            "price"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "project-price-unit",
+          "question": "Is the price per page or for the entire job?",
+          "answerMarkdown": "In the Sefer Torah, the basic price and expenses are per page. in the mezuzah - to the mezuzah; In tefillin - for a pair that includes a head and a hand; And in the Megillah - for the whole project. Check the \"Funds\" heading above the fields before saving. For example, the price of a complete book does not fit into the field defined as \"per page\".",
+          "keywords": [
+            "project",
+            "invitation",
+            "structure",
+            "price"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "project-center",
+          "question": "What is at the center of the project?",
+          "answerMarkdown": "Clicking on a project opens the \"Project Center\". \"Overview\" shows progress and summary data, \"Writing\" allows you to check and correct the work by units or records, and \"Details\" shows the details of the order and structure. You can edit the details from the center.",
+          "keywords": [
+            "project",
+            "invitation",
+            "structure",
+            "price"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "project-edit",
+          "question": "Is it possible to change project details after I have started?",
+          "answerMarkdown": "Yes. Open the project center and select edit details. You can update, for example, name, price, expenses, destinations and customer details. A change in price or expenses can change the summaries calculated according to the details of the project; This is not a system that sets an invoice for each meeting.",
+          "keywords": [
+            "project",
+            "invitation",
+            "structure",
+            "price"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "project-structure",
+          "question": "What happens if the number of pages or lines is changed?",
+          "answerMarkdown": "The structure affects progress, writing spans and completion expectations. Before a significant change an impact message is displayed. New records retain the page structure at the time of registration, but old records that are missing information may be recalculated. Read the message and back up before modifying an existing job.",
+          "keywords": [
+            "project",
+            "invitation",
+            "structure",
+            "price"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "project-select",
+          "question": "How do you change a project while working?",
+          "answerMarkdown": "Select the desired project in the project selector on the writing screen. If there is an active session, finish and save it before moving on to another project. This way the time and location remain associated with the right work. The software usually returns to the last project selected.",
+          "keywords": [
+            "project",
+            "invitation",
+            "structure",
+            "price"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "project-existing-work",
+          "question": "How do you insert a project that I have already written part of before installing the software?",
+          "answerMarkdown": "Create the project with the full scope of work, then enter the already written part. If the dates and times are known, you can write them down. If it is an undated past completion, select \"no date (general)\": the work will be included in the progress, but not in the profit, averages or daily target.",
+          "keywords": [
+            "project",
+            "invitation",
+            "structure",
+            "price"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        }
+      ]
+    },
+    {
+      "id": "timer",
+      "title": "Writing, timing, and breaks",
+      "questions": [
+        {
+          "id": "timer-start",
+          "question": "What to check before activating the timer?",
+          "answerMarkdown": "Check that the right project is selected and that the work mode suits you. In Smart Mode check also the page and the line, or the mezuzah or the Tefillin portion. The position shown is where the software will reference the next write.",
+          "keywords": [
+            "Timer",
+            "clock",
+            "row",
+            "break",
+            "sitting"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "timer-two-clocks",
+          "question": "What is the difference between \"write time\" and \"line time\"?",
+          "answerMarkdown": "\"Writing time\" measures the net writing time in the current session. \"Line time\" measures the time spent in the current line, without breaks. In Smart Mode, it can also include time from a previous session that stopped in the middle of the same row, so sometimes it is greater than the time of the new session.",
+          "keywords": [
+            "Timer",
+            "clock",
+            "row",
+            "break",
+            "sitting"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "timer-smart-line",
+          "question": "What is saved when I click \"Finished line\"?",
+          "answerMarkdown": "In Smart Mode, pressing records a completed line, assigns the writing time to it, and updates the power and position. There is no need to wait for the end of the session for the marked lines to be saved. Click once for each row actually completed.",
+          "keywords": [
+            "Timer",
+            "clock",
+            "row",
+            "break",
+            "sitting"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "timer-regular-line",
+          "question": "Why does it say \"row time reset\" in Regular Mode?",
+          "answerMarkdown": "In Regular Mode, pressing only resets the row clock for pace tracking. It does not add a row to the power and does not promote smart placement. The amount of work is entered in the summary form at the end of the meeting.",
+          "keywords": [
+            "Timer",
+            "clock",
+            "row",
+            "break",
+            "sitting"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "timer-break",
+          "question": "How do you take a break and get back to writing?",
+          "answerMarkdown": "Press the pause button when you stop writing, and resume using the continue button. The pause time is measured separately and is not added to the write time or the line time. Choosing a pause duration is used for tracking and alerting; It does not return you to writing automatically.\n\nIn tefillin and mezuzos, you can turn on \"Enable reading and correction time measurement\" in \"Settings → Additions to the home screen\". The \"read / correct\" button stops the line clock and the metronome and displays a separate time; \"Back to writing\" continues from the same place. This time is included in the working time and power for pricing purposes, and is shown separately from the breaks in the summary and history. The situation is preserved even in closing. Ending from a call saves the line time for continuation and does not mark it as complete. The option is off by default and is also available in Regular Mode and in the floating window.",
+          "keywords": [
+            "Timer",
+            "clock",
+            "row",
+            "break",
+            "sitting"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "timer-break-question",
+          "question": "How do you cancel the question \"How long is the break\"?",
+          "answerMarkdown": "Open \"Settings\" then \"Additions to the home screen\", and turn off \"Ask how long the break is\". The break itself is still running and being measured. If you selected a duration and exceeded it, the overrun is displayed so you can see how long the break was.",
+          "keywords": [
+            "Timer",
+            "clock",
+            "row",
+            "break",
+            "sitting"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "timer-background",
+          "question": "Does closing the window or switching to another application stop time?",
+          "answerMarkdown": "No. The timer relies on start times that are saved and can calculate the time even after returning to the software. Active pause also continues to be measured. When you stop working, press pause or finish; Just closing the window is not a message to the software that you have stopped writing.\n\nIf you forgot to activate a break, before the line operation or the end of writing, an \"exceptional line time\" question will be displayed when the unconfirmed time is at least 25 minutes and five times the previous line, or an hour or more even without a previous line. \"Yes, save the time\" confirms the measurement and continues with the action you requested. \"Restart measurement\" moves only the time of the current row to pause and starts measuring again at the same position; Rows and time already saved remain. \"Cancel\" leaves the time unchanged. The confirmation waiting time is not counted as a write.",
+          "keywords": [
+            "Timer",
+            "clock",
+            "row",
+            "break",
+            "sitting"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "timer-finish-partial",
+          "question": "I ended up sitting in the middle of a row. what to do",
+          "answerMarkdown": "In Smart Mode, press \"End writing\". By default the time of the partial row is preserved, and the position remains on the same row. The time is included in the working time, but no line is added to the power yet. When you return to the same row and complete it, it will be counted only once.",
+          "keywords": [
+            "Timer",
+            "clock",
+            "row",
+            "break",
+            "sitting"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": [
+            "timer-two-clocks",
+            "timer-finish-completes",
+            "timer-partial-dates"
+          ]
+        },
+        {
+          "id": "timer-partial-dates",
+          "question": "I wrote half a line yesterday and completed it today. What day does it belong to?",
+          "answerMarkdown": "The time spent each day remains on the same working day. The row as a power is recorded at completion. For example, 3 minutes yesterday and 2 minutes today is 5 minutes of work on one line, not two lines. That's why on the first day you can see writing time without another whole line.",
+          "keywords": [
+            "Timer",
+            "clock",
+            "row",
+            "break",
+            "sitting"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "timer-finish-completes",
+          "question": "I always stop at the end of a line. Is it possible for the ending to also mark the line?",
+          "answerMarkdown": "Yes. In \"Settings\" and then \"Additions to the home screen\" you can turn on \"Complete line completion\". In Smart Mode the ending will complete the line and advance the position. Only enable this if this is your work habit: when enabled, pausing in the middle of a line may register it as complete.",
+          "keywords": [
+            "Timer",
+            "clock",
+            "row",
+            "break",
+            "sitting"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "timer-line-then-stop",
+          "question": "Is it possible to click \"I finished a line\" and immediately \"Finish writing\"?",
+          "answerMarkdown": "Yes. If the row is still being saved, the termination request waits for it and terminates after it. In this sequence, the software should not complete the next line as well. Check after finishing that the location and the power correspond to what is written.",
+          "keywords": [
+            "Timer",
+            "clock",
+            "row",
+            "break",
+            "sitting"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "timer-forgot-line",
+          "question": "I forgot to mark some lines in Smart Mode. How do you complete the report?",
+          "answerMarkdown": "You can switch to Regular Mode during the session and confirm the switch. The lines that have already been marked remain, and at the end of the summary form you only receive the time that has not yet been assigned to them. Enter in it the rows that have not yet been recorded, without including again the rows that have already been saved in Smart Mode.",
+          "keywords": [
+            "Timer",
+            "clock",
+            "row",
+            "break",
+            "sitting"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": [
+            "timer-switch-mode",
+            "manual-page-range"
+          ]
+        },
+        {
+          "id": "timer-switch-mode",
+          "question": "Why can't you switch from normal to smart during a session?",
+          "answerMarkdown": "In Regular Mode, what was written has not yet been entered, so the software does not have a safe location from which to automatically continue. Finish and save the session, switch to smart and check the location before starting a new one. When the timer is off, you can change modes without transition confirmation.",
+          "keywords": [
+            "Timer",
+            "clock",
+            "row",
+            "break",
+            "sitting"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "timer-forgot-stop",
+          "question": "I forgot to stop the timer and it ran for a long time. How to fix?",
+          "answerMarkdown": "End the session and check its records in history. Fix record times that don't reflect actual writes. In Smart Mode, it is possible that part of the time is already associated with lines and part is saved as a partial line segment; A partial segment is not edited as a normal write range, and its incorrect timestamp can be deleted.",
+          "keywords": [
+            "Timer",
+            "clock",
+            "row",
+            "break",
+            "sitting"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        }
+      ]
+    },
+    {
+      "id": "manual",
+      "title": "Manual entries and completing records",
+      "questions": [
+        {
+          "id": "manual-open",
+          "question": "How do you register a writing that was done before?",
+          "answerMarkdown": "Open \"Manual entry\" from the writing screen, or select the appropriate day in the writing diary. Select a project, fill in what is written, set a date and enter a time if known. Save only after checking the project, writing range and date.",
+          "keywords": [
+            "feeding",
+            "manually",
+            "Date",
+            "keeping",
+            "a draft"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "manual-time-modes",
+          "question": "How do you enter the working time?",
+          "answerMarkdown": "You can enter a total duration, or choose \"from hour to hour\". Total duration is appropriate when it is known how long you worked net; Start and end times are appropriate when the range of hours is known. If there were breaks, make sure you don't show the entire time range as net writing time — you can split into writing segments.",
+          "keywords": [
+            "feeding",
+            "manually",
+            "Date",
+            "keeping",
+            "a draft"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "manual-midnight",
+          "question": "How do you register work that ended after midnight?",
+          "answerMarkdown": "In the \"hour to hour\" mode, select a start time and an end time and check the \"the next day\" mark and the calculated work duration. Don't just save based on the hours: make sure the date and duration shown are correct too. The assignment of the working day is also affected by the definition of \"day pass\".",
+          "keywords": [
+            "feeding",
+            "manually",
+            "Date",
+            "keeping",
+            "a draft"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "manual-no-time",
+          "question": "I know what I wrote and on what day, but not how long. Can I register?",
+          "answerMarkdown": "Yes. Choose a date and list the work without hours. It may be included in the appropriate power and progress, but shall not be used as if written in zero minutes. Time averages and hourly wages are based on records in which time is measured.",
+          "keywords": [
+            "feeding",
+            "manually",
+            "Date",
+            "keeping",
+            "a draft"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": [
+            "manual-no-date",
+            "money-hourly"
+          ]
+        },
+        {
+          "id": "manual-no-date",
+          "question": "What is the difference between \"no date\" and work without time?",
+          "answerMarkdown": "\"Undated (general)\" is used to complete the past tense: the work is included in the progress, but does not enter into the averages, profit or target of a particular day. A record with a date and no time associated with a known day; Only the measurement of time is missing in it. Choose the option that describes the information you really know.",
+          "keywords": [
+            "feeding",
+            "manually",
+            "Date",
+            "keeping",
+            "a draft"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "manual-page-range",
+          "question": "How do you enter parts of pages or a range that crosses a page?",
+          "answerMarkdown": "Enter \"from page\", \"to page\", \"from line\" and \"to line\". If \"up to page\" is empty, it is a single page. In a page of 42 lines, the range from page mag line 1 to page meter line 21 is 63 lines. The time is divided between the pages in proportion to the number of lines in each.",
+          "keywords": [
+            "feeding",
+            "manually",
+            "Date",
+            "keeping",
+            "a draft"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "manual-hebrew-pages",
+          "question": "Is it possible to enter page numbers in Hebrew letters?",
+          "answerMarkdown": "yes. The page fields receive numbers or Hebrew letters, for example 43 or Mag. Make sure the page is within the project boundaries and the line spacing matches the number of lines defined for the page.",
+          "keywords": [
+            "feeding",
+            "manually",
+            "Date",
+            "keeping",
+            "a draft"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "manual-add-another",
+          "question": "What is the difference between \"Add more\" and \"Save and close\"?",
+          "answerMarkdown": "\"Add more\" saves the current entry and leaves an option for another entry. \"Save\" or \"Save and close\" finish the entry and close the form. If the form is opened from a timer summary and the session duration has already been saved in the first entry, it should not be counted again in the next entry; Check the time notice on the form.",
+          "keywords": [
+            "feeding",
+            "manually",
+            "Date",
+            "keeping",
+            "a draft"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "manual-save-error",
+          "question": "I clicked save and the form remained open. What to check?",
+          "answerMarkdown": "Scroll to the top of the form content and look for an error message. Check selected project, date and times, correct numbers, line range and overlap with existing work. While saving, the buttons are temporarily locked. If a storage error appears, handle it according to the message and try again; Don't assume the form is saved just because you clicked.",
+          "keywords": [
+            "feeding",
+            "manually",
+            "Date",
+            "keeping",
+            "a draft"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": [
+            "manual-recovery",
+            "support-storage"
+          ]
+        },
+        {
+          "id": "manual-recovery",
+          "question": "The software closed in the middle of the summary form. Can we continue?",
+          "answerMarkdown": "At the end of a regular sitting, a recovery draft of the session duration is saved. With manual entry, a draft is saved when trying to save, before checking the fields. An incomplete draft can be opened again on the next session. Fields typed without a save attempt are not guaranteed to be recovered, and explicitly canceling the entry deletes the draft.",
+          "keywords": [
+            "feeding",
+            "manually",
+            "Date",
+            "keeping",
+            "a draft"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        }
+      ]
+    },
+    {
+      "id": "paged",
+      "title": "Sifrei Torah and Megillot",
+      "questions": [
+        {
+          "id": "paged-position",
+          "question": "How to change a page or row in Smart Mode?",
+          "answerMarkdown": "Click on the large location or on the name of the provision that appears on the writing screen and select the desired location. Repositioning determines where writing will continue; It doesn't automatically feed the pages you skipped. Previous work that has not yet been registered must be entered separately.",
+          "keywords": [
+            "Sefer Torah",
+            "scroll",
+            "column",
+            "overlap"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "paged-map",
+          "question": "How do you see what has already been written on each page?",
+          "answerMarkdown": "Open the project center and go to the \"writing\" or to the \"work map\" in the overview. Each page is displayed as a separate unit and you can also open an unwritten page. From a page you can check the registered lines and correct an incorrect registration.",
+          "keywords": [
+            "Sefer Torah",
+            "scroll",
+            "column",
+            "overlap"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "paged-skip",
+          "question": "Why did the position jump over a page or several lines?",
+          "answerMarkdown": "In a Sefer Torah or Megillah, the Smart Mode searches for the next available position. A full page that has already been registered is skipped, and on a partial page the first gap that has not yet been registered is selected. Read the skip message and check the history if you don't remember the job has already been entered.",
+          "keywords": [
+            "Sefer Torah",
+            "scroll",
+            "column",
+            "overlap"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "paged-overlap",
+          "question": "What does a warning that the lines have already been written mean?",
+          "answerMarkdown": "There is a record that covers the range you asked to enter. You may have already bookmarked it in Smart Mode, entered it manually, or imported it from a backup. Check the page in the center of the project and correct the incorrect registration before further input. Changing the location alone does not delete a previous registration.",
+          "keywords": [
+            "Sefer Torah",
+            "scroll",
+            "column",
+            "overlap"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "megillah-formats",
+          "question": "What structures of a scroll exist?",
+          "answerMarkdown": "When creating a Megillah project, you can choose 11 lines and 38 pages, 21 lines and 20 pages, or 28 lines and 16 pages. The tracking is according to the pages and rows of the selected structure. There is also a special option of 14.5 lines, which is explained in the next question.",
+          "keywords": [
+            "Sefer Torah",
+            "scroll",
+            "column",
+            "overlap"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "megillah-special",
+          "question": "I chose a 14.5-line Megillah and the percentage is over 100%. why?",
+          "answerMarkdown": "This is a special track added at the request of the project owner, with 399 pages and 15 complete lines to choose from in the listing. The percentage of progress shown in it starts after the beginning of writing is close to 150% and goes down to 100%. This is a special indicator, not a normal index; The remaining work and financial calculations continue according to the actual progress.",
+          "keywords": [
+            "Sefer Torah",
+            "scroll",
+            "column",
+            "overlap"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "megillah-profit",
+          "question": "How is the profit calculated in a partially written scroll?",
+          "answerMarkdown": "The price of the Megillah and the base expenses are defined for the entire project. The calculated profit is accumulated according to the part written: if 10% of the work is written, 10% of the price minus the base expenses is credited. For time, the physical lines are used; A base of 420 lines in a price comparison is a unit of comparison and does not change the number of lines in the Megillah.",
+          "keywords": [
+            "Sefer Torah",
+            "scroll",
+            "column",
+            "overlap"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        }
+      ]
+    },
+    {
+      "id": "mezuza",
+      "title": "Mezuzot",
+      "questions": [
+        {
+          "id": "mezuza-lines",
+          "question": "By how many lines is a mezuzah calculated?",
+          "answerMarkdown": "A mezuzah is calculated in the software according to 22 lines. It is possible to register complete mezuzot or progress in a partial mezuzah. That is why some summaries can show a fragment of a mezuzah, depending on the number of lines written.",
+          "keywords": [
+            "mezuzah",
+            "mezuzahs",
+            "22",
+            "Continue"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "mezuza-manual-partial",
+          "question": "How do I write down a mezuzah that I reached row 16 with?",
+          "answerMarkdown": "In manual entry, select a new mezuzah, quantity 1 and \"up to row\" 16. In the next session, select \"continue mezuzah\" of that mezuzah and enter the cumulative row you reached, for example 22. The addition will only be rows 17-22, and the mezuzah will be counted as one physical unit.",
+          "keywords": [
+            "mezuzah",
+            "mezuzahs",
+            "22",
+            "Continue"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "mezuza-choose-partial",
+          "question": "How do you choose which partial mezuzah to continue?",
+          "answerMarkdown": "In the input form, select the mezuzah by number in the drop-down list. If there is one partial mezuzah it is selected by default. Check the explanation showing how many of 22 lines have already been written and which line to continue.",
+          "keywords": [
+            "mezuzah",
+            "mezuzahs",
+            "22",
+            "Continue"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "mezuza-switch",
+          "question": "Is it possible to switch to another mezuzah without finishing the current one?",
+          "answerMarkdown": "Yes. In Smart Mode you can use \"go to the next mezuzah\" or select the location. The partial mezuzah remains registered and can be returned to. Moving to another mezuzah is not a sign that the previous mezuzah has been completed.",
+          "keywords": [
+            "mezuzah",
+            "mezuzahs",
+            "22",
+            "Continue"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "mezuza-double",
+          "question": "Two sessions on the same mezuzah appear as two mezuzot. How do I fix that?",
+          "answerMarkdown": "Check whether the second entry was saved as a new mezuzah. In the Project Center, check both mezuzot, delete the incorrect entry, and re-enter it as a continuation of the correct mezuzah. The app cannot tell on its own that two entries belong to one mezuzah.",
+          "keywords": [
+            "mezuzah",
+            "mezuzahs",
+            "22",
+            "Continue"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": [
+            "mezuza-manual-partial",
+            "correction-delete-invalid"
+          ]
+        },
+        {
+          "id": "mezuza-batch-correction",
+          "question": "I registered several mezuzot together and one was registered by mistake. Should I delete everything?",
+          "answerMarkdown": "not. In the \"writing\" section at the center of the project, you can act on the particular mezuzah. If necessary, the software separates it from the common registration and divides the time according to the number of lines. Check if you need to delete a registration error or mark a rejected job - these are different actions.",
+          "keywords": [
+            "mezuzah",
+            "mezuzahs",
+            "22",
+            "Continue"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        }
+      ]
+    },
+    {
+      "id": "tefillin",
+      "title": "Tefillin",
+      "questions": [
+        {
+          "id": "tefillin-structure",
+          "question": "How does the software arrange a tefillin order?",
+          "answerMarkdown": "Each episode is identified by the number of a pair, head or hand, and its place in the four episodes. A pair includes a head and a hand. In the tefillin board you can see what has not yet been started, what is partial, what has been completed and what has been marked as awaiting correction or as invalid.",
+          "keywords": [
+            "tefillin",
+            "an affair",
+            "an affair",
+            "Affaires",
+            "head",
+            "hand"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "tefillin-order",
+          "question": "Why can't you start a certain affair?",
+          "answerMarkdown": "The software preserves the sequence of the four passages in the same set: Kadesh, and Hakeh because he will bring you, Shema, and Hakeh if he hears. The previous episode should be complete before starting the next one. Check the pair, the side and the previous affair; Partial or missing registration can explain the block.",
+          "keywords": [
+            "tefillin",
+            "an affair",
+            "an affair",
+            "Affaires",
+            "head",
+            "hand"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "tefillin-physical-lines",
+          "question": "How many rows do you feed in a row of a head or a hand?",
+          "answerMarkdown": "In the structure supported by the software, a chapter of a head is 4 lines long and a chapter of a hand is 7 lines long. These are the physical lines for positioning and continuation. For the purpose of time calculations and comparison, there is also a parallel to the lines of a Torah book, which is not the same as this number.",
+          "keywords": [
+            "tefillin",
+            "an affair",
+            "an affair",
+            "Affaires",
+            "head",
+            "hand"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "tefillin-continue",
+          "question": "How do I resume a Tefillin project?",
+          "answerMarkdown": "Choose the parashah by pair and side in the writing position selector. The list includes unfinished parashiyot and the next parashah in each pair where the preceding one is complete. Check the selected parashah and line before starting.",
+          "keywords": [
+            "tefillin",
+            "an affair",
+            "an affair",
+            "Affaires",
+            "head",
+            "hand"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "tefillin-switch",
+          "question": "Can I switch to another pair and come back later?",
+          "answerMarkdown": "yes. You can change location through the large location on the smart screen and choose a different pair and side. The partial work is saved. When returning, check that the same physical address is selected and that you continue from the correct line.",
+          "keywords": [
+            "tefillin",
+            "an affair",
+            "an affair",
+            "Affaires",
+            "head",
+            "hand"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "tefillin-comparable",
+          "question": "Why do two line numbers appear, for example 2 (8)?",
+          "answerMarkdown": "The first number is the physical lines in the parashah. The number in parentheses shows the equivalent in the lines of the Sefer Torah. For example, two lines out of four in Rosh's Kadesh episode are half of the 16 basic lines, and are therefore shown as 2 (8). In the tefillin report and in the average project center, this base is used without adding 1.3 weight; The weight is used to compare types of work.",
+          "keywords": [
+            "tefillin",
+            "an affair",
+            "an affair",
+            "Affaires",
+            "head",
+            "hand"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": [
+            "tefillin-pair-value",
+            "quote-weights"
+          ]
+        },
+        {
+          "id": "tefillin-pair-value",
+          "question": "Why is one affair not always one eighth of the profit of a couple?",
+          "answerMarkdown": "The calculation takes into account the amount of text of the episode. The basis of the Sefer Torah for the four chapters is 16, 12, 7 and 17 lines, together 52 per head or lead and 104 per pair. Therefore Kadesh and Shema do not receive the same part of the couple's marriage or its financial value.",
+          "keywords": [
+            "tefillin",
+            "an affair",
+            "an affair",
+            "Affaires",
+            "head",
+            "hand"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "tefillin-restart",
+          "question": "What does \"remove the parashah and start over\" do?",
+          "answerMarkdown": "The operation removes the parashah and also the parashiyot after it in the same set, so that it is possible to start again in a proper sequence. It is not limited to the case you clicked on. Read the action confirmation and check the pair and side before confirming. To mark a disqualification without deleting work time, use the appropriate disqualification route.",
+          "keywords": [
+            "tefillin",
+            "an affair",
+            "an affair",
+            "Affaires",
+            "head",
+            "hand"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        }
+      ]
+    },
+    {
+      "id": "corrections",
+      "title": "Corrections, invalid work, and the Recycle Bin",
+      "questions": [
+        {
+          "id": "correction-delete-invalid",
+          "question": "When do you mark \"the work has been rejected\" and when \"delete incorrect registration\"?",
+          "answerMarkdown": "If the work was actually written but rejected, mark disqualification: the time spent remains, and the work is not considered a normal product or profit. If the record itself is a mistake, for example a double report, choose delete a wrong record: it is also excluded from the time calculations.",
+          "keywords": [
+            "correction",
+            "deletion",
+            "disqualification",
+            "disqualified",
+            "recycling basket"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": [
+            "reports-invalid-time",
+            "correction-restore"
+          ]
+        },
+        {
+          "id": "correction-lines",
+          "question": "How do you delete only certain lines that were entered by mistake?",
+          "answerMarkdown": "Open \"Project Center\", \"Writing\" and the desired page. Select the incorrect rows and perform the appropriate deletion operation. If the original record has a large range, it can be split to save the rest of the work. The time of the parts is divided in relation to the rows.",
+          "keywords": [
+            "correction",
+            "deletion",
+            "disqualification",
+            "disqualified",
+            "recycling basket"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "correction-history",
+          "question": "Where do you fix the date or time of a record?",
+          "answerMarkdown": "Open the record view or history editor from the summary and project center screens, and select the record to edit. Also check the project and write range before saving. A partial row time segment is not a normal range record and therefore should not be edited as if it had completed rows.",
+          "keywords": [
+            "correction",
+            "deletion",
+            "disqualification",
+            "disqualified",
+            "recycling basket"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "correction-restore",
+          "question": "How do you recover a deleted project or writing record?",
+          "answerMarkdown": "Open the \"Recycle Bin\" from the projects screen and select \"Restore\" next to the item. The basket shows projects, writing records, orders, proofs, expenses and payments that have been deleted in the last 30 days. Project recovery alone does not recover deleted records individually; Check them out too.",
+          "keywords": [
+            "correction",
+            "deletion",
+            "disqualification",
+            "disqualified",
+            "recycling basket"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": [
+            "correction-bin-limits",
+            "backup-old-delete"
+          ]
+        },
+        {
+          "id": "correction-split-restore",
+          "question": "Will restoring a split record create duplicates?",
+          "answerMarkdown": "In a repair that splits a record, the software preserves the connection between the original and the new parts. Restoring the source removes the swap parts created in that patch, so you don't count the lines and time twice. After recovery check the job map and summary.",
+          "keywords": [
+            "correction",
+            "deletion",
+            "disqualification",
+            "disqualified",
+            "recycling basket"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "correction-bin-limits",
+          "question": "How do you restore a deleted order or verification record?",
+          "answerMarkdown": "The basket also shows orders, proofs, expenses and payments. Open it from the projects screen and select \"restore\". An item that has been deleted for more than 30 days may be hidden from the basket. A canceled order remains in the order book; To return it, select \"Return to activity\".",
+          "keywords": [
+            "correction",
+            "deletion",
+            "disqualification",
+            "disqualified",
+            "recycling basket"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "correction-active-project",
+          "question": "Why is deleting a project blocked?",
+          "answerMarkdown": "You cannot delete a project whose timer is active, so as not to lose the session. Finish and save your work, then return to delete. Do not use reset all data to bypass the block.",
+          "keywords": [
+            "correction",
+            "deletion",
+            "disqualification",
+            "disqualified",
+            "recycling basket"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "correction-reset",
+          "question": "Where do you reset all the data and what is the difference from a normal deletion?",
+          "answerMarkdown": "\"Reset all data\" is in the top menu of actions on the projects screen and requires explicit approval and typing in a confirmation word. This is a broad action that is not intended to correct a single record. Before resetting, save a separate backup and check that it is available; Do not rely on the recycle bin for reset recovery.",
+          "keywords": [
+            "correction",
+            "deletion",
+            "disqualification",
+            "disqualified",
+            "recycling basket"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        }
+      ]
+    },
+    {
+      "id": "journal",
+      "title": "Writing Journal",
+      "questions": [
+        {
+          "id": "journal-open",
+          "question": "What is the writing diary and where do you open it?",
+          "answerMarkdown": "Open \"Tools\" then \"Writing Journal\". This is a weekly look at the writing from Sunday to Saturday, especially suitable for filling in retrospect. On a wide screen a table is displayed, and on a narrow screen the records are grouped by days.",
+          "keywords": [
+            "diary",
+            "a week",
+            "table",
+            "Parsha of the week"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "journal-add",
+          "question": "How do you add work to a specific day in the calendar?",
+          "answerMarkdown": "Go to the desired week and click on \"Add entry\" on the appropriate day. An editor will open inside the diary: select a project, fill in a range of pages and lines or quantity, time if known and comments, and click \"Save line\". For a partial mezuzah, a tefillin passage or a choice of words, click \"full form\". You can create the first project in it; The selected day is saved.",
+          "keywords": [
+            "diary",
+            "a week",
+            "table",
+            "Parsha of the week"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": [
+            "manual-open",
+            "support-journal-rows"
+          ]
+        },
+        {
+          "id": "journal-edit-cells",
+          "question": "Is it possible to type directly in the journal cells like in Excel?",
+          "answerMarkdown": "Yes. Click on an existing row to open the editor within the calendar. You can edit page range, simple amount, time and notes and save. Complex listings offer time change and comments alongside a \"full form\" for editing the writing details. An input that has been split into segments is displayed in one line with the sum of the write times. The comment also appears in PDF and Excel.",
+          "keywords": [
+            "diary",
+            "a week",
+            "table",
+            "Parsha of the week"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "journal-home",
+          "question": "How do you make the writing diary the home screen?",
+          "answerMarkdown": "In \"Settings\" open \"Writing Journal\" and activate the option to display it as the home screen. From the diary you can go to the timer screen using the dedicated button. An active timer remains accessible and is not hidden by the calendar preference.",
+          "keywords": [
+            "diary",
+            "a week",
+            "table",
+            "Parsha of the week"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "journal-columns",
+          "question": "How do you change the calendar columns and dates?",
+          "answerMarkdown": "In \"Settings\" and then \"Writing Diary\" you can choose columns, number of empty lines per day and Hebrew, foreign date display or both. These settings are used by the log and its output. Selecting a view does not change the write records themselves.",
+          "keywords": [
+            "diary",
+            "a week",
+            "table",
+            "Parsha of the week"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "journal-parasha",
+          "question": "Why is the Shavuot Parsha in Yoman not suitable for where I live?",
+          "answerMarkdown": "Check in the calendar settings if the Israel calendar or the foreign calendar is selected. In certain periods the reading is different between the plates. This is an explicit choice in the log settings; Don't assume that changing a place setting on another screen has changed it too.",
+          "keywords": [
+            "diary",
+            "a week",
+            "table",
+            "Parsha of the week"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "journal-print",
+          "question": "How do you print a weekly page or export to Excel?",
+          "answerMarkdown": "Select the week and use the action of printing an empty table, printing a full week or exporting to Excel. An empty table is intended for manual filling. An Excel file is an output for reference and processing; There is no general route in the current interface to import a table compiled by external software back into the journal.",
+          "keywords": [
+            "diary",
+            "a week",
+            "table",
+            "Parsha of the week"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        }
+      ]
+    },
+    {
+      "id": "orders",
+      "title": "Orders and customers",
+      "questions": [
+        {
+          "id": "orders-vs-project",
+          "question": "What is the difference between an order and a project?",
+          "answerMarkdown": "A project documents the writing and calculations of a particular job. An order documents a commitment to the customer and can include several types of work together, for example mezuzot and scrolls. It is possible to link an item in an order to an existing project, but the link does not automatically create a write-up, payment or delivery.",
+          "keywords": [
+            "orders",
+            "customer",
+            "Supply",
+            "delivery",
+            "Email"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "orders-create",
+          "question": "How to register a new order?",
+          "answerMarkdown": "Open \"Tools\" then \"Orders\". Add an order and fill in the details of the orderer, date, delivery date and items. For each item you can determine the type of work, quantity and comments; You can add requirements, total price and currency to the order.",
+          "keywords": [
+            "orders",
+            "customer",
+            "Supply",
+            "delivery",
+            "Email"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "orders-partial",
+          "question": "How to mark partial delivery?",
+          "answerMarkdown": "Edit the order and update in each item how many units have been supplied. This is how you can track an order that has already been partially delivered and that is still open. Marking \"supplied\" is only appropriate when the order has been delivered according to its details; Completion of project writing is not a substitute for delivery registration.",
+          "keywords": [
+            "orders",
+            "customer",
+            "Supply",
+            "delivery",
+            "Email"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "orders-search",
+          "question": "How do you find orders for a specific month?",
+          "answerMarkdown": "On the order screen, use the search and filter by delivery month. Check the delivery date saved in the order if it does not appear in the month you expected. The order book is also intended for proactive checking of upcoming commitments. A canceled order remains visible, but is not counted as open or overdue. In the order menu, you can choose \"cancel order\" or \"return to activity\"; Details and quantities supplied are retained.",
+          "keywords": [
+            "orders",
+            "customer",
+            "Supply",
+            "delivery",
+            "Email"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "orders-reminders",
+          "question": "Does an order automatically send a reminder before delivery?",
+          "answerMarkdown": "No. The current order book does not activate automatic notifications about delivery dates. The daily writing reminders are a separate option and are not reminders for orders.",
+          "keywords": [
+            "orders",
+            "customer",
+            "Supply",
+            "delivery",
+            "Email"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "client-update",
+          "question": "How do you prepare a progress update for the client?",
+          "answerMarkdown": "In the center of the project, select \"Send an update to the client\". You can browse the wording, copy it or open it in the mail program. Set the \"author's name\" in the settings so that it appears in the signature, and add a client email to the project if you want to open mail to him. The software does not send the message itself.",
+          "keywords": [
+            "orders",
+            "customer",
+            "Supply",
+            "delivery",
+            "Email"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        }
+      ]
+    },
+    {
+      "id": "goals",
+      "title": "Goals, pace, and planning",
+      "questions": [
+        {
+          "id": "goals-set",
+          "question": "How do you define a daily and monthly goal?",
+          "answerMarkdown": "Edit the project details and fill in the goal fields. In a Sefer Torah or Megillah, you can choose a daily destination in the pages or in the rows; In mezuzos the unit is mezuzos and tefillin parshiyot per day. Check the unit on the form. A writing amount goal is different from a session duration goal.",
+          "keywords": [
+            "destination",
+            "Butcher",
+            "Planning",
+            "expected",
+            "termination"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "goals-no-target",
+          "question": "Do you have to set a goal to work?",
+          "answerMarkdown": "No. You can record writing and view summaries even without a destination. Options like the supplier schedule and target compliance need a suitable target. If the board says there is nothing to plan, open the project details and set a daily goal.",
+          "keywords": [
+            "destination",
+            "Butcher",
+            "Planning",
+            "expected",
+            "termination"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "goals-estimate",
+          "question": "How is the expected finish determined?",
+          "answerMarkdown": "The expectation depends on the remaining work, the rate available for calculation or the defined goal and the working days. An overall scope is also required, such as the number of pages or the amount of mezuzot or pairs in the order. When scope or pace is missing, no useful forecast can be produced.",
+          "keywords": [
+            "destination",
+            "Butcher",
+            "Planning",
+            "expected",
+            "termination"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "goals-deadline",
+          "question": "I changed the due date. Why didn't the end result change?",
+          "answerMarkdown": "The target date is when you want to finish; The finish indicator describes when you will finish according to the pace. Changing the date does not change the measured write rate. The field that needs to be updated is \"required to meet the deadline\". Different dates that include the same number of working days can show the same demand per day.",
+          "keywords": [
+            "destination",
+            "Butcher",
+            "Planning",
+            "expected",
+            "termination"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": [
+            "goals-estimate",
+            "calendar-workdays"
+          ]
+        },
+        {
+          "id": "goals-plan",
+          "question": "What does the power board show?",
+          "answerMarkdown": "Open \"Tools\" then \"Supplier Schedule\", select a project and a week or month view. Each day shows where you need to get to by the end, and not just how much to write that day. The board takes into account working days and also allows printing, saving as PDF and exporting to Excel.",
+          "keywords": [
+            "destination",
+            "Butcher",
+            "Planning",
+            "expected",
+            "termination"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "goals-behind",
+          "question": "What happens in planning if I'm late or I don't work on a certain day?",
+          "answerMarkdown": "The backlog is divided by the remaining working days, while the number of days that have already passed remains for comparison. In the calendar you can select a day and mark a full day, half a day or \"not writing\", and return to the general calendar setting. This change belongs to the selected project and also affects the completion expectations and the pace required for its target date.\n\nFor a personal event in all projects, open \"Settings\" → \"Working days\" → \"Add an unusual date\". A day off or a personal half day also limits changing days within a project. Changing a plan does not add records as if the work had already been done.",
+          "keywords": [
+            "destination",
+            "Butcher",
+            "Planning",
+            "expected",
+            "termination"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "goals-pace",
+          "question": "Why is there no average or information about my best writing hours yet?",
+          "answerMarkdown": "Open \"Tools → Writing conditions and pace\", or the link from the project summary. You can combine a period, a project, a day of the week, a range of hours (even past midnight), type of writing, company and paper processing, writing height and room conditions. In tefillin you can also filter a parshaya and head/hand. The graph shows lines equal to hours per hour, measurement time and number of identified sessions. You can compare according to the total working time or according to the writing time without reading and correction. Less than three sessions or half an hour of measurement is marked \"little data\"; A session saved in several records is not counted several times. A relationship in the data is not proof of causation.\n\nIn the project form, you can add card company, hand/machine processing and letter height in mm. In the seating conditions in the input form, you can change them to seating and add manual temperature and humidity. For the timer, you can activate the \"statistical seating conditions\" in \"Home screen additions\" and prepare the next session. The conditions are captured at the beginning of the meeting and are kept in the records; Editing the project does not change the previous data. Automatic connection to humidity and temperature meter is not active at this time.\n\naverage needs proper writing time. Hour analysis uses known time segments; A total duration without an hour does not show when you wrote. In new measurements, the actual sections are kept, and breaks do not fill working hours. Old records with unknown hours are marked as missing for hourly analysis, and data such as unrecorded parchment and humidity are automatically incomplete.",
+          "keywords": [
+            "destination",
+            "Butcher",
+            "Planning",
+            "expected",
+            "termination"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "goals-minute-format",
+          "question": "Does 1.50 minutes per line mean one minute and fifty seconds?",
+          "answerMarkdown": "No. This is a decimal number of minutes: 1.50 minutes is a minute and a half, that is, one minute and 30 seconds. A clock display like 1:30 uses a colon and shows minutes and seconds. The calculation includes the measured seconds even when the result is displayed in decimal minutes.",
+          "keywords": [
+            "destination",
+            "Butcher",
+            "Planning",
+            "expected",
+            "termination"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        }
+      ]
+    },
+    {
+      "id": "calendar",
+      "title": "Dates and workdays",
+      "questions": [
+        {
+          "id": "calendar-display",
+          "question": "How do you switch between a Hebrew date and a Luezi date?",
+          "answerMarkdown": "In the settings, you can change the display of dates using \"foreign dates\". Calculations of holidays and working days continue to use the Hebrew calendar. The writing journal has a separate date selection, and the annual report uses a foreign year.",
+          "keywords": [
+            "Date",
+            "board",
+            "day",
+            "holidays",
+            "sand"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "calendar-day-boundary",
+          "question": "What is the definition of \"day pass\"?",
+          "answerMarkdown": "The definition determines when a new working day begins for the purposes of associating records and summaries. You can choose midnight, sunset, sunrise or a fixed time. For example, a fixed time later than midnight can allow writing after midnight to remain on the previous workday.",
+          "keywords": [
+            "Date",
+            "board",
+            "day",
+            "holidays",
+            "sand"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "calendar-history",
+          "question": "Will changing \"day transfer\" also transfer old records to another day?",
+          "answerMarkdown": "In the new records, the working day is set and saved at the time of registration, so changing the definition should not re-associate them. Older records that do not have a reserved work day may use the eligibility calculation. If in doubt, check the record itself before manually changing dates.",
+          "keywords": [
+            "Date",
+            "board",
+            "day",
+            "holidays",
+            "sand"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "calendar-sunset",
+          "question": "Are the sunset and sunrise calculated based on my location?",
+          "answerMarkdown": "The software uses a reference point of the Land of Israel and not the device's GPS. This is a calculation for the needs of a day pass and design, and not a personal schedule for your place of residence. If the calculation does not fit your work routine, you can choose a fixed time for day shift.",
+          "keywords": [
+            "Date",
+            "board",
+            "day",
+            "holidays",
+            "sand"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "calendar-workdays",
+          "question": "How do you determine which days you write?",
+          "answerMarkdown": "Open \"Settings\" then \"Workdays\". In the categories that can be changed, you can choose a full day, a half day or not to work, for example on Friday, Saturday night and the times that appear on the screen.\n\nFor a wedding, seven blessings or another event, in \"Personal exceptions by date\" click \"Add an exception date\". Choose a Hebrew or foreign date and a year, a day off or a half day, and add a note if you wish. For example, it is possible to mark Tu in the tribe of the desired year as a holiday and the days of the seven blessings as half days. You can edit an exception by clicking on it or delete it using the trash.\n\nThe deviations apply to all projects and are included in the supply schedule, in the completion expectations, at the rate required for the target, in monthly targets and price offers. They are kept in backup, do not return next year and do not change writing that has already been saved or the measured pace. Half a day does not open a day that is already closed in the calendar. The upcoming month view helps to check the result before relying on the forecast.",
+          "keywords": [
+            "Date",
+            "board",
+            "day",
+            "holidays",
+            "sand"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "calendar-fixed-days",
+          "question": "Why are some days not workable as normal working days?",
+          "answerMarkdown": "The software regularly excludes Shabbat, Yom Tov, Chol HaMoed, Christmas Eve, Purim and Shoshan Purim, Tisha B'Av and Eve Tisha B'Av. These exclusions override other categories in planning. This is the behavior of the software's desktop; The question here deals with planning and not with a halachic ruling.",
+          "keywords": [
+            "Date",
+            "board",
+            "day",
+            "holidays",
+            "sand"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "calendar-diaspora",
+          "question": "I'm abroad What needs to be changed?",
+          "answerMarkdown": "On \"working days\" check the choice \"in Eretz Yisrael\", which affects the holiday days in the planning. In the writing diary, select separately the schedule of overseas affairs. Also check that the time of day pass is suitable for you, because the sunset calculation is not based on your personal location.",
+          "keywords": [
+            "Date",
+            "board",
+            "day",
+            "holidays",
+            "sand"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        }
+      ]
+    },
+    {
+      "id": "money",
+      "title": "Profit, expenses, payments, and currency",
+      "questions": [
+        {
+          "id": "money-profit-vs-payment",
+          "question": "Does \"profit\" mean that the customer has already paid?",
+          "answerMarkdown": "No. The profit is calculated from the registered work and the defined price and expenses. Money actually received is recorded separately in \"payments\". Therefore, it is possible that a profit has been accrued according to the writing but payment has not yet been received, or an advance has been received before the writing.",
+          "keywords": [
+            "money",
+            "funds",
+            "Profit",
+            "expenses",
+            "payment",
+            "currency"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": [
+            "money-payment-record",
+            "reports-annual-income"
+          ]
+        },
+        {
+          "id": "money-base-profit",
+          "question": "How is the profit from writing calculated?",
+          "answerMarkdown": "The base calculation is the amount of qualifying work times the price per unit, minus the base expenses per unit. In some of the summary screens, associated expenses and net balance after additional expenses are shown separately. Check the heading of the figure: \"Profit\", \"Associated expenses\" and \"Net\" are not always the same amount.",
+          "keywords": [
+            "money",
+            "funds",
+            "Profit",
+            "expenses",
+            "payment",
+            "currency"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "money-hourly",
+          "question": "How is the hourly wage calculated?",
+          "answerMarkdown": "The hourly wage divides the profit corresponding to the measured records by their working time. A record without time is not considered a zero minute record. Time spent on rejected work remains real time without adding profit. The figure is a measure from your documentation, not a payment received from the client.",
+          "keywords": [
+            "money",
+            "funds",
+            "Profit",
+            "expenses",
+            "payment",
+            "currency"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "money-expense-add",
+          "question": "How do you register an expense?",
+          "answerMarkdown": "Open the \"Expenses\" screen and add an expense with a product or category, date and amount. Choose whether to associate it with a project, a period or a month. It is possible to edit an existing expense if it turns out that the amount or association is incorrect.",
+          "keywords": [
+            "money",
+            "funds",
+            "Profit",
+            "expenses",
+            "payment",
+            "currency"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "money-expense-allocation",
+          "question": "What is the difference between spending by project, period and month?",
+          "answerMarkdown": "Expenditure by project associated with the jobs you selected; When choosing several projects, the amount is divided between them. Spending by period is spread over the days between two dates. Expenditure by month is credited to the month in which it was made. An expense marked by project without selecting a project is not included in the calculation of a particular job.",
+          "keywords": [
+            "money",
+            "funds",
+            "Profit",
+            "expenses",
+            "payment",
+            "currency"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "money-double-expense",
+          "question": "I have already written expenses in the project. Should I register the same purchase again?",
+          "answerMarkdown": "The base expenses in the project form are used to estimate the profit per unit, while the total expenses document detailed expenses. Check that you have not deducted the same cost twice in the calculation you are using. The annual report does not add the estimate of the unit's expenses as an actual expense; It uses the expense records and the appropriate proofing costs.",
+          "keywords": [
+            "money",
+            "funds",
+            "Profit",
+            "expenses",
+            "payment",
+            "currency"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": [
+            "money-expense-allocation",
+            "proofread-cost"
+          ]
+        },
+        {
+          "id": "money-payment-record",
+          "question": "How do you register an advance or payment from the customer?",
+          "answerMarkdown": "Open the payments area in the project center and select \"payment registration\". Fill in the amount, date of receipt and you can add payment method and comments. You can register several payments for the same project. The registry records money you received; He does not collect money and does not send a payment request.",
+          "keywords": [
+            "money",
+            "funds",
+            "Profit",
+            "expenses",
+            "payment",
+            "currency"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "money-outstanding",
+          "question": "What does \"due\" and \"paid in advance\" mean?",
+          "answerMarkdown": "The balance compares the recorded payments to the value of the work already written, and not necessarily to the price of the entire future order. If more than the write value has been received so far, the difference is shown as a prepayment. If there are payments in currencies that cannot be added, no single numeric balance will be displayed.",
+          "keywords": [
+            "money",
+            "funds",
+            "Profit",
+            "expenses",
+            "payment",
+            "currency"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "money-currency",
+          "question": "How do you exchange currency? Will the existing amounts be converted?",
+          "answerMarkdown": "In \"Settings\" and then \"Currency\" you can choose shekel, dollar, euro or pound sterling. The selection sets the currency to new amounts. Existing amounts retain the currency in which they were recorded; The software does not convert rates and does not combine amounts in different currencies into a single amount.",
+          "keywords": [
+            "money",
+            "funds",
+            "Profit",
+            "expenses",
+            "payment",
+            "currency"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "money-zero-profit",
+          "question": "Why does the power increase but the profit does not increase?",
+          "answerMarkdown": "Check that the price in the project is not 0, that the record is not \"without date\" as past completion, and that the work has not been marked as invalid. A partial line time segment adds time but not product or profit until the line is completed. Also check if the base expenses are equal to or higher than the price.",
+          "keywords": [
+            "money",
+            "funds",
+            "Profit",
+            "expenses",
+            "payment",
+            "currency"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        }
+      ]
+    },
+    {
+      "id": "proofreading",
+      "title": "Proofreading",
+      "questions": [
+        {
+          "id": "proofread-add",
+          "question": "How do you register a job sent to a proofreader?",
+          "answerMarkdown": "Open \"Tools\" then \"Proof Tracking\" and add a record. Select a project and fill in what is sent, who proofreads, stage, date and cost if known. You can write a description such as the range of pages or the number of mezuzot, and add comments and the number of corrections found.",
+          "keywords": [
+            "proofreading",
+            "proofreader",
+            "corrections",
+            "kosher"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "proofread-stages",
+          "question": "How do you update that the work is back and that the repairs have been completed?",
+          "answerMarkdown": "In the proofreading tracking, you can update the stages of the work, for example \"sent to the proofreader\", \"returned from the proofreader\" and \"corrections completed\". Make sure the dates are correct too. The summary distinguishes between work that is still with the proofreader and work that is waiting for your attention.",
+          "keywords": [
+            "proofreading",
+            "proofreader",
+            "corrections",
+            "kosher"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "proofread-cost",
+          "question": "How does the proofing cost enter the reports?",
+          "answerMarkdown": "A cost recorded in the proofreading tracking is associated with the project and appears in the relevant calculations. In the annual report it is associated according to the date of completion of the repairs if any, and otherwise according to the return date. There is no separate field here for the proofing payment date; Check the fit of the data when generating a report.",
+          "keywords": [
+            "proofreading",
+            "proofreader",
+            "corrections",
+            "kosher"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "proofread-long-time",
+          "question": "Why is it shown that working at the proofreader takes a long time?",
+          "answerMarkdown": "The screen compares the time of sending to the status of the record. A job that came out more than three weeks ago and was not marked as recurring can appear in the appropriate indicator. If already returned, update the stage and return date.",
+          "keywords": [
+            "proofreading",
+            "proofreader",
+            "corrections",
+            "kosher"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "proofread-not-validation",
+          "question": "Does marking \"all completed\" confirm that the writing is kosher?",
+          "answerMarkdown": "No. The marking describes the treatment status as recorded in the software. She does not read the writing, does not proofread and does not give kosher certification. The tracking is intended to record the work and tests done outside the software.",
+          "keywords": [
+            "proofreading",
+            "proofreader",
+            "corrections",
+            "kosher"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        }
+      ]
+    },
+    {
+      "id": "quotes",
+      "title": "Quotes and profitability",
+      "questions": [
+        {
+          "id": "quote-open",
+          "question": "How do you use the quote calculator?",
+          "answerMarkdown": "Open \"Tools\" then \"Quote Calculator\". Choose a work type and amount, and in the Megillah also a structure. Fill in the requested work and expense data on the screen and check the calculated pace, time, price and completion expectations. The result depends on the data you entered and the available history.",
+          "keywords": [
+            "an offer",
+            "Calculator",
+            "price",
+            "profitability"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "quote-no-history",
+          "question": "I don't have that kind of history yet. How does the calculator estimate time?",
+          "answerMarkdown": "The calculator prefers time data of the same job type. If there is no suitable figure, it can rely on another type of work according to the defined order of precedence, using units of comparison. Check what the assessment basis is; A pace learned from another type is an estimate, and the estimate should be updated after experience has been gained in that type.",
+          "keywords": [
+            "an offer",
+            "Calculator",
+            "price",
+            "profitability"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "quote-weights",
+          "question": "What are the comparison weights between the types of writing?",
+          "answerMarkdown": "In the axis of comparison, a Torah row and a scroll receive a weight of 1, a mezuzah row 1.1 and a Tefillin 1.3 on a basis corresponding to the Torah rows. A pair of tefillin is 104 basic lines, or 135.2 after the weight. These are the calculation rules of the software; They do not change the number of physical lines recorded.",
+          "keywords": [
+            "an offer",
+            "Calculator",
+            "price",
+            "profitability"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "quote-overhead",
+          "question": "Does the offer include all my general expenses?",
+          "answerMarkdown": "not automatically. The screen shows general expenses and allows you to edit them, and an explicit switch allows you to spread them on the offer in the appropriate currency. Expenses that feed into the offer itself remain separate. Check if the amount is per unit or the entire job and what is included before you use the price.",
+          "keywords": [
+            "an offer",
+            "Calculator",
+            "price",
+            "profitability"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "quote-create-project",
+          "question": "Is it possible to turn a quote into a project?",
+          "answerMarkdown": "Yes. Select \"Create a project from the offer\" and name the project. The price and expenses are kept in the appropriate unit for the type of work. The project is a normal project and can be edited later; Creating it does not send the offer to the customer.",
+          "keywords": [
+            "an offer",
+            "Calculator",
+            "price",
+            "profitability"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "quote-compare",
+          "question": "What do you learn from \"comparing profitability\"?",
+          "answerMarkdown": "The screen compares projects according to the profit in relation to the measured time. A high price per unit is not necessarily a high hourly wage if its writing is slow. Check how much metered data each project has and what currency is displayed. Amounts in different currencies should not be interpreted as having been converted to the same currency.",
+          "keywords": [
+            "an offer",
+            "Calculator",
+            "price",
+            "profitability"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        }
+      ]
+    },
+    {
+      "id": "reports",
+      "title": "Summaries and reports",
+      "questions": [
+        {
+          "id": "reports-types",
+          "question": "What is the difference between daily summary, monthly summary and project center?",
+          "answerMarkdown": "The daily summary centers the selected work day, the monthly summary centers the month, and the project center shows the same work throughout the life of the project. Project and period filters affect what is included. To compare two numbers, make sure they both refer to the same period and the same project.",
+          "keywords": [
+            "Summary",
+            "report",
+            "reports",
+            "Annual report",
+            "PDF",
+            "Excel",
+            "Excel"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "reports-monthly",
+          "question": "What does the detailed monthly report include?",
+          "answerMarkdown": "Open \"Tools\" then \"Monthly report\". Select a month and project or all projects. The report shows day by day amount of writing, time, average and profit; Days without writing remain empty. You can print or save as a PDF and export to Excel.",
+          "keywords": [
+            "Summary",
+            "report",
+            "reports",
+            "Annual report",
+            "PDF",
+            "Excel",
+            "Excel"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "reports-annual",
+          "question": "Why is the annual report from January to December?",
+          "answerMarkdown": "The annual report is organized by foreign year, unlike the software sections that concentrate work in Hebrew months. Select the desired year and check the details of the months. Changing the date display in the settings does not turn the annual report into a Hebrew year.",
+          "keywords": [
+            "Summary",
+            "report",
+            "reports",
+            "Annual report",
+            "PDF",
+            "Excel",
+            "Excel"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "reports-annual-income",
+          "question": "Why is the income of the annual report different from the value of writing this year?",
+          "answerMarkdown": "Revenues in the annual report are payments recorded according to the date of their receipt. Work written but not yet paid is not payment, and payment received this year could be for work from a previous year. In order for the report to reflect money received, you need to record payments and not just writing.",
+          "keywords": [
+            "Summary",
+            "report",
+            "reports",
+            "Annual report",
+            "PDF",
+            "Excel",
+            "Excel"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "reports-invalid-time",
+          "question": "Why is there time left on the report after I rejected a job?",
+          "answerMarkdown": "The disqualification removes the work from the normal product and the profit, but the time spent on it remains. It can affect rate and hourly wages and is shown separately in the appropriate place. If there was no work at all but a registration error, deleting the record is the appropriate action.",
+          "keywords": [
+            "Summary",
+            "report",
+            "reports",
+            "Annual report",
+            "PDF",
+            "Excel",
+            "Excel"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "reports-export-backup",
+          "question": "Is PDF or Excel a backup of the software?",
+          "answerMarkdown": "No. These are reports of the data selected for presentation, and do not necessarily include all the projects, settings and information to restore. To transfer to another device or to protect the data, use the \"data backup\" and save the backup file.",
+          "keywords": [
+            "Summary",
+            "report",
+            "reports",
+            "Annual report",
+            "PDF",
+            "Excel",
+            "Excel"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "reports-language",
+          "question": "In what language are the reports and the update to the client created?",
+          "answerMarkdown": "They are created according to the selected interface language. In the English interface the intended output is displayed from left to right. Project names, comments and data you entered are not retranslated; The numbers of the Torah pages and the names of the tefillin passages can remain in Hebrew.",
+          "keywords": [
+            "Summary",
+            "report",
+            "reports",
+            "Annual report",
+            "PDF",
+            "Excel",
+            "Excel"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        }
+      ]
+    },
+    {
+      "id": "backup",
+      "title": "Backup, restore, and device transfer",
+      "questions": [
+        {
+          "id": "backup-local",
+          "question": "Where is my data stored?",
+          "answerMarkdown": "The active data is saved locally on the device. There is no cloud account of the software that you can connect to and get them again. To protect them from losing a device or deleting the application data, you should also keep an external backup.",
+          "keywords": [
+            "Backup",
+            "reconstruction",
+            "Transfer",
+            "synchronization",
+            "cloud",
+            "JSON"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "backup-manual",
+          "question": "How do you create a manual backup?",
+          "answerMarkdown": "Open \"Settings\", \"Data backup\" and select \"Save to device\". Choose a location for the file and check that the save was successful and that the file is there. You can also use \"sharing\" to transfer the file through another application. It's a good idea to keep an extra copy outside of the device you're working on.",
+          "keywords": [
+            "Backup",
+            "reconstruction",
+            "Transfer",
+            "synchronization",
+            "cloud",
+            "JSON"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "backup-contents",
+          "question": "What is included in the backup file?",
+          "answerMarkdown": "The backup includes projects, work history, expenses, proofs, payments, orders and information to restore the work environment. Portable user settings such as language, formatting, accessibility and work rules are included and restored in the current version. The backup file is a data file, not a PDF or Excel report.",
+          "keywords": [
+            "Backup",
+            "reconstruction",
+            "Transfer",
+            "synchronization",
+            "cloud",
+            "JSON"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "backup-exclusions",
+          "question": "What doesn't work with the backup to another device?",
+          "answerMarkdown": "An active timer and an incomplete draft form do not pass as an active session on the second device. Folder paths, system permissions and window size are also device details. Finish and save the session before moving on, and on the new device select a backup folder again and confirm necessary permissions.",
+          "keywords": [
+            "Backup",
+            "reconstruction",
+            "Transfer",
+            "synchronization",
+            "cloud",
+            "JSON"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "backup-live-enable",
+          "question": "How to activate automatic live backup?",
+          "answerMarkdown": "In the settings select \"automatic backup\" and select a folder. On Android, access is authorized through the system's folder selector; In Windows, select a normal folder. The mechanism is designed to update the file after saving data and settings. After activation, actually check that the file is created and updated - the inscription \"active\" alone is not a recovery test.",
+          "keywords": [
+            "Backup",
+            "reconstruction",
+            "Transfer",
+            "synchronization",
+            "cloud",
+            "JSON"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": [
+            "backup-live-failure",
+            "backup-live-file"
+          ]
+        },
+        {
+          "id": "backup-live-file",
+          "question": "Why is there only one automatic backup file?",
+          "answerMarkdown": "The live backup uses the \"sofer-vmone-live.json\" file which is replaced with a recent copy. It is not an archive of daily versions. To keep a previous point that you can go back and check, occasionally create a separate manual backup, especially before a large change or update.",
+          "keywords": [
+            "Backup",
+            "reconstruction",
+            "Transfer",
+            "synchronization",
+            "cloud",
+            "JSON"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "backup-live-failure",
+          "question": "The automatic backup is active but the file is not updated. What do we do?",
+          "answerMarkdown": "In the \"automatic backup\" settings, the last successful date and errors, including consecutive failures, are displayed. Check that the folder exists and is accessible and that there is free space. On Android, select it again after renewing permission; In Windows check that the drive is connected. Also create a manual backup to an available location. Failure of the external backup does not mean that the local backup has failed; Corrupt storage blocks export and does not replace the previous file with an empty backup.",
+          "keywords": [
+            "Backup",
+            "reconstruction",
+            "Transfer",
+            "synchronization",
+            "cloud",
+            "JSON"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "backup-disable",
+          "question": "How do you turn off automatic backup?",
+          "answerMarkdown": "Select \"Automatic backup\" again in the settings and confirm the shutdown. Subsequent updates to the file will stop. Files already saved in the folder remain in it and are not deleted by the shutdown itself.",
+          "keywords": [
+            "Backup",
+            "reconstruction",
+            "Transfer",
+            "synchronization",
+            "cloud",
+            "JSON"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "backup-restore",
+          "question": "How do you restore a backup?",
+          "answerMarkdown": "Open \"Settings\", \"Data backup\" and then \"Restore from a backup file\". Select a file, review the preview details and warnings if any, and confirm restore. Then check projects, history, finances and settings. Save the source file even after importing.",
+          "keywords": [
+            "Backup",
+            "reconstruction",
+            "Transfer",
+            "synchronization",
+            "cloud",
+            "JSON"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": [
+            "backup-merge",
+            "backup-exclusions",
+            "support-backup-unreadable"
+          ]
+        },
+        {
+          "id": "backup-merge",
+          "question": "Does restoring a backup overwrite all data on the device?",
+          "answerMarkdown": "The recovery merges according to the record IDs: an item is not deleted just because it is not in the imported file. If the same record exists on both sides, the later edited content prevails, and deletion and recovery information is also preserved. Portability settings may vary by backup. This is not a button to restore the entire device to a previous point in time.",
+          "keywords": [
+            "Backup",
+            "reconstruction",
+            "Transfer",
+            "synchronization",
+            "cloud",
+            "JSON"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": [
+            "backup-old-delete",
+            "backup-repeat-import"
+          ]
+        },
+        {
+          "id": "backup-old-delete",
+          "question": "Why didn't an old backup import return a record I deleted?",
+          "answerMarkdown": "The merge also preserves the fact of deletion, so that an old file does not repeatedly return items you removed. To recover a recently deleted project or note, use the Recycle Bin. In another case save the old backup and ask for clarification before resetting or re-entering.",
+          "keywords": [
+            "Backup",
+            "reconstruction",
+            "Transfer",
+            "synchronization",
+            "cloud",
+            "JSON"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "backup-repeat-import",
+          "question": "If I import the same file twice, will everything be duplicated?",
+          "answerMarkdown": "Reimporting the same records with the same IDs should not create additional copies. However, work typed separately on two devices can have different identifiers and be considered two records, even if they describe the same writing. Avoid double documentation of the same work.",
+          "keywords": [
+            "Backup",
+            "reconstruction",
+            "Transfer",
+            "synchronization",
+            "cloud",
+            "JSON"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "backup-transfer",
+          "question": "How do you transfer work from a phone to a computer or a new device?",
+          "answerMarkdown": "Finish and save the session on the source device, create a backup and transfer the file to the destination device. Open a compatible or newer version there and import the backup. Check the data before proceeding, then set up permissions and its own backup folder on the new device.",
+          "keywords": [
+            "Backup",
+            "reconstruction",
+            "Transfer",
+            "synchronization",
+            "cloud",
+            "JSON"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": [
+            "backup-exclusions",
+            "backup-sync"
+          ]
+        },
+        {
+          "id": "backup-sync",
+          "question": "Does backing up to a cloud folder automatically sync two devices?",
+          "answerMarkdown": "No. The cloud service can transfer the file, but the software does not automatically read and merge it on each device. The live backup is an export of the device state. Use a separate folder for each device so they don't overwrite each other's files, and perform a proactive import before switching jobs.",
+          "keywords": [
+            "Backup",
+            "reconstruction",
+            "Transfer",
+            "synchronization",
+            "cloud",
+            "JSON"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "backup-legacy",
+          "question": "I have data from an old version that does not have a backup screen. What do we do?",
+          "answerMarkdown": "In the \"data backup\" screen there is \"import from previous installation\". The option is for old data files that can be obtained from the previous installation. Do not remove the old installation or delete its data before there is a file that can be read and imported.",
+          "keywords": [
+            "Backup",
+            "reconstruction",
+            "Transfer",
+            "synchronization",
+            "cloud",
+            "JSON"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "backup-private",
+          "question": "Is the backup file encrypted or password protected?",
+          "answerMarkdown": "The backup is a readable JSON file, and is not a password-encrypted backup from the software. It may include names, customer details and amounts. Keep it in an appropriate place and share it only with those you intended to give access to the information. File integrity checking is not encryption.",
+          "keywords": [
+            "Backup",
+            "reconstruction",
+            "Transfer",
+            "synchronization",
+            "cloud",
+            "JSON"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        }
+      ]
+    },
+    {
+      "id": "settings",
+      "title": "Customization, sounds, and accessibility",
+      "questions": [
+        {
+          "id": "settings-theme",
+          "question": "How do you change the appearance of the software?",
+          "answerMarkdown": "Open \"Settings\" then \"Design\" and choose Modern, Card or Night. The actions and data are common to the kits, even when the layout is different. You can activate an automatic transition to the night from the stargazing until dawn according to the software's calculation.",
+          "keywords": [
+            "definitions",
+            "Design",
+            "Accessibility",
+            "sound",
+            "Metronome",
+            "alert"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "settings-text-size",
+          "question": "The inscription is small for me. How do you increase it?",
+          "answerMarkdown": "Open \"Settings\" then \"Accessibility\" and select 100%, 125%, 160% or 200%. The change applies immediately. If the font magnification on the device is higher, it takes priority; The two magnifications are not multiplied. On a crowded screen you may have to scroll to get to all the actions.",
+          "keywords": [
+            "definitions",
+            "Design",
+            "Accessibility",
+            "sound",
+            "Metronome",
+            "alert"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "settings-language",
+          "question": "How do you switch to English? Will the data be translated?",
+          "answerMarkdown": "Select the language in settings. The change applies to the interface and display direction, and does not overwrite project names, comments or records that have already been saved. In a new installation, choose a language at the opening; An old installation does not switch to English just because of an update.",
+          "keywords": [
+            "definitions",
+            "Design",
+            "Accessibility",
+            "sound",
+            "Metronome",
+            "alert"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "settings-additions",
+          "question": "Why don't I see a metronome, time target or celebration when reaching the target?",
+          "answerMarkdown": "Add-ons are turned off by default. Open \"Settings\" then \"Home screen additions\" and activate only the desired options. The settings include, among others, a celebration at a daily target, a time target for a row, a metronome, a seating target and an end time.",
+          "keywords": [
+            "definitions",
+            "Design",
+            "Accessibility",
+            "sound",
+            "Metronome",
+            "alert"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "settings-line-target",
+          "question": "What does a red line target or a negative number mean?",
+          "answerMarkdown": "A time per row target compares the time spent in the row to the duration you selected. After exceeding the limit, it displays red and a minus time, to show how much you exceeded the target. This is not negative work time and does not delete measured time.",
+          "keywords": [
+            "definitions",
+            "Design",
+            "Accessibility",
+            "sound",
+            "Metronome",
+            "alert"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "settings-session-target",
+          "question": "How do you set a goal of 45 minutes of writing?",
+          "answerMarkdown": "Turn on the display of the session target in the home screen add-ons, then select the target duration on the home screen itself. You can choose 30, 45, 60 or 90 minutes, another time or remove a destination. The target measures net writing without breaks and resets at the end of the session; The last choice is a proposal for the next meeting.",
+          "keywords": [
+            "definitions",
+            "Design",
+            "Accessibility",
+            "sound",
+            "Metronome",
+            "alert"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": [
+            "settings-target-sound",
+            "settings-end-time"
+          ]
+        },
+        {
+          "id": "settings-target-sound",
+          "question": "I reached the meeting point and did not hear a sound. why?",
+          "answerMarkdown": "\"Sound on reaching the seating destination\" is a separate switch, off by default. Turn it on and check the sound with the test button. Reaching the destination indicates that the duration of the writing you selected has been completed; She does not finish and keeps the yeshiva in your place.",
+          "keywords": [
+            "definitions",
+            "Design",
+            "Accessibility",
+            "sound",
+            "Metronome",
+            "alert"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "settings-metronome",
+          "question": "How do you activate a metronome and change the volume?",
+          "answerMarkdown": "In the home screen addons, play a metronome, adjust the tempo and volume, and use the test button. The intensity can be defined between 0 and 100; At 0 you will not hear a beat. The metronome runs while writing and stops when you pause. The sound does not require internet.",
+          "keywords": [
+            "definitions",
+            "Design",
+            "Accessibility",
+            "sound",
+            "Metronome",
+            "alert"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "settings-end-time",
+          "question": "What is the difference between an end time and a session target?",
+          "answerMarkdown": "End time is an hour on the clock, for example 22:00. A session target is an amount of net writing time, for example 45 minutes, so breaks delay reaching it. On Android, the end time notification can be used by the system notifications; In Windows, the notification is inside the software.",
+          "keywords": [
+            "definitions",
+            "Design",
+            "Accessibility",
+            "sound",
+            "Metronome",
+            "alert"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "settings-reminder",
+          "question": "How do you activate a daily reminder or a reminder based on habits?",
+          "answerMarkdown": "In the reminder options in the settings, you can activate a daily alert and choose a time. The \"Reminder according to my habits\" option uses the data of the start of writing hours when a suitable pattern is accumulated. Without enough suitable data, don't expect the system to already know your working time.",
+          "keywords": [
+            "definitions",
+            "Design",
+            "Accessibility",
+            "sound",
+            "Metronome",
+            "alert"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        }
+      ]
+    },
+    {
+      "id": "desktop",
+      "title": "Desktop and keyboard shortcuts",
+      "questions": [
+        {
+          "id": "desktop-shortcuts",
+          "question": "What are the common keyboard shortcuts?",
+          "answerMarkdown": "In the computer version, the default is F2 to start and end a session, F3 to pause and continue, and F4 to operate the row. In Smart Mode the line operation registers line completion; In Regular Mode, it only resets the row time. On some keyboards you also need to hold down Fn to activate the F key.",
+          "keywords": [
+            "computer",
+            "Windows",
+            "Windows",
+            "keyboard",
+            "floating window"
+          ],
+          "platforms": [
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "desktop-custom-shortcuts",
+          "question": "How to change a keyboard shortcut?",
+          "answerMarkdown": "Open \"Settings\" then \"Keyboard Shortcuts\" and assign the keys to actions. You can use combinations with Ctrl, Shift or Alt. A letter or number alone is not a suitable abbreviation, so that a timer is not activated while typing. Use a separate conjunction for each action.",
+          "keywords": [
+            "computer",
+            "Windows",
+            "Windows",
+            "keyboard",
+            "floating window"
+          ],
+          "platforms": [
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "desktop-shortcut-focus",
+          "question": "Why does Shortcut not respond when I type in the form?",
+          "answerMarkdown": "The shortcuts are limited so that they do not activate the timer while typing or simultaneously activate a button that receives a zip code. Return to the writing screen and click in an area that is not an input field. If a combination has been defined, press exactly the saved auxiliary keys.",
+          "keywords": [
+            "computer",
+            "Windows",
+            "Windows",
+            "keyboard",
+            "floating window"
+          ],
+          "platforms": [
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "desktop-copilot",
+          "question": "Is it possible to use the Copilot key or a combination like Ctrl+Shift+F23?",
+          "answerMarkdown": "The combination can be set if the operating system passes it to the software. If Windows runs its own action and captures the key, the software does not accept the click. In that case, choose another shortcut that reaches the writing screen.",
+          "keywords": [
+            "computer",
+            "Windows",
+            "Windows",
+            "keyboard",
+            "floating window"
+          ],
+          "platforms": [
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "desktop-floating",
+          "question": "What is the floating window in Windows?",
+          "answerMarkdown": "The \"floating window\" button on the home screen allows you to work in a small and accessible window of the timer while using the computer. This is the same write mode and the same data, not an additional timer. It is also necessary to be careful about choosing a project, pausing and finishing writing.",
+          "keywords": [
+            "computer",
+            "Windows",
+            "Windows",
+            "keyboard",
+            "floating window"
+          ],
+          "platforms": [
+            "windows"
+          ],
+          "relatedIds": []
+        }
+      ]
+    },
+    {
+      "id": "support",
+      "title": "Installation, updates, and troubleshooting",
+      "questions": [
+        {
+          "id": "support-version",
+          "question": "How do you check which version is installed?",
+          "answerMarkdown": "Open \"Settings\" then \"About\" and check the version number. If an option from the manual does not appear, first check if your version is earlier than 0.6.0. The document describes the current development version and does not indicate that all options have already been published for download.",
+          "keywords": [
+            "fault",
+            "malfunctions",
+            "error",
+            "Update",
+            "Installation",
+            "help"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "support-install-windows",
+          "question": "I downloaded a ZIP for Windows. How do you open the software?",
+          "answerMarkdown": "Extract the entire package to a folder and run the software file from it. Don't just copy the EXE file: it also needs the files and folders in the package. If you get a missing directory error, first check that the extraction is complete and that the package has been saved intact.",
+          "keywords": [
+            "fault",
+            "malfunctions",
+            "error",
+            "Update",
+            "Installation",
+            "help"
+          ],
+          "platforms": [
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "support-update",
+          "question": "How do you update from within the software?",
+          "answerMarkdown": "In the version that includes the mechanism, open \"Settings\" and select \"Check and Update\". If a version is found, check the details and confirm \"Download and Update\". On Android, the installation confirmation must be completed on the system screen; In Windows, the software closes and opens as part of the update. Before updating finish and save work and create a backup.",
+          "keywords": [
+            "fault",
+            "malfunctions",
+            "error",
+            "Update",
+            "Installation",
+            "help"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": [
+            "backup-manual",
+            "support-android-install"
+          ]
+        },
+        {
+          "id": "support-auto-update",
+          "question": "Does the software check or install updates by itself?",
+          "answerMarkdown": "No. Checking for updates is initiated by the user, and downloading an update requires additional approval. There is no automatic update check every time you open it. On Android, the installation also requires the approval of the operating system.",
+          "keywords": [
+            "fault",
+            "malfunctions",
+            "error",
+            "Update",
+            "Installation",
+            "help"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "support-update-network",
+          "question": "The update check or download failed. What do we do?",
+          "answerMarkdown": "Read the message: Missing connection, network filtering, certificate problem, missing package and authentication failure are different situations. Check connection and try again through an appropriate authorized network. An unverified file is not intended for installation. If the problem recurs, report the exact wording and software version.",
+          "keywords": [
+            "fault",
+            "malfunctions",
+            "error",
+            "Update",
+            "Installation",
+            "help"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "support-android-install",
+          "question": "Android asks for permission to install or refuses to update. why?",
+          "answerMarkdown": "Installation from this source may need to be confirmed on the system screen. If the installer still refuses, there may be a mismatch between the update package and the existing installation. Do not uninstall the software to try to resolve this before having a verified backup; Save the system message and contact for clarification.",
+          "keywords": [
+            "fault",
+            "malfunctions",
+            "error",
+            "Update",
+            "Installation",
+            "help"
+          ],
+          "platforms": [
+            "android"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "support-notifications",
+          "question": "Notifications do not arrive or arrive late. What to check?",
+          "answerMarkdown": "Check that the desired alert is enabled in the software. On Android, also check notification permission and \"notifications and reminders\" permission, if required on the device, as well as system restrictions on the application. In Windows, do not rely on the end time alert when the software is closed, because it is displayed within the software.",
+          "keywords": [
+            "fault",
+            "malfunctions",
+            "error",
+            "Update",
+            "Installation",
+            "help"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "support-sound",
+          "question": "The metronome or end sound is not heard. What to check?",
+          "answerMarkdown": "Check that the appropriate option is enabled, that the volume in the software and device is not zero and that the desired audio output is active. Try the sound test button. The metronome only sounds during active writing. If the sound test fails, indicate in the report whether it is Android or Windows and which version.",
+          "keywords": [
+            "fault",
+            "malfunctions",
+            "error",
+            "Update",
+            "Installation",
+            "help"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "support-missing-record",
+          "question": "A record I saved does not appear in the summary. How are you looking for her?",
+          "answerMarkdown": "Check the project, the selected day and month, and the day shift setting. Search the project records and not just the daily summary. Check if this is an undated past completion, invalid work or a record that has been deleted to the trash. If the form is still open or an error message appears, the save may not have completed.",
+          "keywords": [
+            "fault",
+            "malfunctions",
+            "error",
+            "Update",
+            "Installation",
+            "help"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": [
+            "manual-no-date",
+            "calendar-day-boundary",
+            "correction-restore"
+          ]
+        },
+        {
+          "id": "support-storage",
+          "question": "A storage or save error occurred. What to do first?",
+          "answerMarkdown": "Read the message and keep the screen open when it says the save has not started. Check free space and storage availability and try again. A recovery draft may be saved in the input form, but it should not be assumed that every screen saves a draft. If data is missing, save existing backups separately before attempting a reset or restore.",
+          "keywords": [
+            "fault",
+            "malfunctions",
+            "error",
+            "Update",
+            "Installation",
+            "help"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "support-backup-unreadable",
+          "question": "Why is a backup file not opened or some records are not read?",
+          "answerMarkdown": "The file may not be a proper backup, corrupted, created in a newer version, or contain records that the current version does not recognize. Save the original file, read the preview message, and try a compatible version. Do not manually modify the backup content: such a modification may impair the integrity check and the ability to recover.",
+          "keywords": [
+            "fault",
+            "malfunctions",
+            "error",
+            "Update",
+            "Installation",
+            "help"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "support-journal-rows",
+          "question": "One entry appears on several lines in the log. Is this duplication?",
+          "answerMarkdown": "Segments of the same feed on the same day and in the same project are grouped by the feed ID and displayed in one row with the sum of the writing time. Old records without an ID remain independent rows; Separate entries are also not merged by similarity in text. You can edit a line from the diary or open the full form.",
+          "keywords": [
+            "fault",
+            "malfunctions",
+            "error",
+            "Update",
+            "Installation",
+            "help"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        },
+        {
+          "id": "support-report",
+          "question": "What details to send when reporting a problem?",
+          "answerMarkdown": "Specify software version, device and operating system type, project type, smart or Regular Mode and what you were doing before the fault. Add what you expected to see, what was received and the text of the error. A screenshot is helpful if it doesn't contain information you don't want to share. Provide a backup file only if it is required and after checking the personal information in it.",
+          "keywords": [
+            "fault",
+            "malfunctions",
+            "error",
+            "Update",
+            "Installation",
+            "help"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": [
+            "support-version",
+            "backup-private"
+          ]
+        },
+        {
+          "id": "support-contact",
+          "question": "Where do you find the project page to report or suggest an improvement?",
+          "answerMarkdown": "On the \"About\" screen there are links to the app's website and its GitHub repository. You can use the project page for reporting or contacting the developer in the way you are in contact with him. An improvement proposal will be clearer if you describe a practical task you would like to perform and an example of the desired result.",
+          "keywords": [
+            "fault",
+            "malfunctions",
+            "error",
+            "Update",
+            "Installation",
+            "help"
+          ],
+          "platforms": [
+            "android",
+            "windows"
+          ],
+          "relatedIds": []
+        }
+      ]
+    }
+  ]
+}

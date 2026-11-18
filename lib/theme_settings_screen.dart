@@ -5,6 +5,7 @@ import 'main.dart' show themeController;
 import 'theme/app_theme.dart';
 import 'widgets/sofer_widgets.dart';
 import 'l10n/app_localizations.dart';
+import 'l10n/theme_labels.dart';
 
 /// Picking the app's look, and whether it changes itself after dark.
 ///
@@ -89,13 +90,7 @@ class ThemeSettingsScreen extends StatelessWidget {
   }
 
   String _themeLabel(BuildContext context, AppTheme theme) =>
-      context.l10n.isEnglish
-          ? switch (theme) {
-              AppTheme.modern => 'Modern',
-              AppTheme.klaf => 'Parchment',
-              AppTheme.layla => 'Night',
-            }
-          : theme.label;
+      context.l10n.themeLabel(theme);
 }
 
 /// One look, shown as itself.
@@ -135,13 +130,7 @@ class _ThemeOption extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                      context.l10n.isEnglish
-                          ? switch (theme) {
-                              AppTheme.modern => 'Modern',
-                              AppTheme.klaf => 'Parchment',
-                              AppTheme.layla => 'Night',
-                            }
-                          : theme.label,
+                      context.l10n.themeLabel(theme),
                       style: TextStyle(
                         fontFamily: t.numeralFamily,
                         fontSize: 17,
@@ -149,16 +138,7 @@ class _ThemeOption extends StatelessWidget {
                       )),
                   const SizedBox(height: 2),
                   Text(
-                      context.l10n.isEnglish
-                          ? switch (theme) {
-                              AppTheme.modern =>
-                                'Cards, color, and system dark mode',
-                              AppTheme.klaf =>
-                                'Warm paper, ruling lines, and no cards',
-                              AppTheme.layla =>
-                                'Charcoal and brass for writing at night',
-                            }
-                          : theme.description,
+                      context.l10n.themeDescription(theme),
                       style: TextStyle(
                         fontFamily: t.labelFamily,
                         fontSize: 12,

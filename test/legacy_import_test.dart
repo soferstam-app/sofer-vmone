@@ -81,6 +81,31 @@ void main() {
       expect(p.totalPages, 245);
     });
 
+    test('later store files restore all six record lists', () {
+      const keys = [
+        'projects',
+        'history',
+        'expenses',
+        'proofreads',
+        'payments',
+        'orders'
+      ];
+      final data = {
+        for (final key in keys)
+          key: [
+            {'id': key, 'extension': 1}
+          ]
+      };
+      final out = convert(store(extra: {
+        for (final entry in data.entries)
+          'flutter.${entry.key}': jsonEncode(entry.value),
+      }));
+      for (final key in keys) {
+        expect(out[key], data[key]);
+        expect((out['settings'] as Map).containsKey(key), isFalse);
+      }
+    });
+
     test('the stored positions', () {
       final out = convert(store());
       expect((out['lastPositions'] as Map)['p1'], {'page': 12, 'line': 7});

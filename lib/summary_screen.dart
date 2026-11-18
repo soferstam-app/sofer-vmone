@@ -1,18 +1,22 @@
+import 'logic/work_time_breakdown.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:kosher_dart/kosher_dart.dart';
+import 'logic/calendar_days.dart';
 import 'logic/date_logic.dart';
 import 'logic/hebrew_clock.dart';
 import 'logic/hebrew_work_calendar.dart';
 import 'logic/measured_work.dart';
 import 'logic/production_calculator.dart';
 import 'logic/profit_calculator.dart';
+import 'logic/writing_journal.dart';
 import 'models.dart';
 import 'project_summary_screen.dart';
 import 'hebrew_utils.dart';
 import 'storage_service.dart';
 import 'theme/app_theme.dart';
+import 'widgets/hebrew_date_picker.dart';
 import 'widgets/sofer_widgets.dart';
 import 'format.dart';
 import 'summary/history_editor.dart';
@@ -20,6 +24,8 @@ import 'summary/monthly_summary.dart';
 import 'logic/tefillin_summary.dart';
 import 'logic/currency.dart';
 import 'l10n/app_localizations.dart';
+
+enum _SummaryPeriod { day, week, month }
 
 class SummaryScreen extends StatefulWidget {
   final List<Project> projects;
@@ -51,8 +57,11 @@ class SummaryScreen extends StatefulWidget {
 class _SummaryScreenState extends State<SummaryScreen> {
   late List<Project> _projects;
   late List<WorkSession> _history;
-  DateTime _selectedDate = DateTime.now();
-  bool _viewByMonth = false;
+  final DateTime _openedAt = DateTime.now();
+  DateTime? _pickedDate;
+  DateTime get _selectedDate =>
+      _pickedDate ?? DateLogic.effectiveDate(_openedAt, _dayStart);
+  _SummaryPeriod _period = _SummaryPeriod.day;
   final StorageService _storage = StorageService();
 
   /// Kept in sync with the setting so this screen files a session under the
@@ -91,14 +100,22 @@ class _SummaryScreenState extends State<SummaryScreen> {
   }
 
   List<WorkSession> _getSessionsForDate(DateTime date) {
+    final weekStart = _period == _SummaryPeriod.week
+        ? WritingJournalLogic.weekStart(date)
+        : null;
     return _history.where((session) {
       if (session.backlogOnly || session.isDeleted) {
         return false;
       }
-      if (_viewByMonth) {
+      if (_period == _SummaryPeriod.month) {
         return DateLogic.sessionIsInMonth(session, date, _dayStart);
       }
-      return DateLogic.sessionIsOnDay(session, date, _dayStart);
+      if (weekStart != null) {
+        final filed = DateLogic.workingDateOf(session, _dayStart);
+        final offset = CalendarDays.between(weekStart, filed);
+        return offset >= 0 && offset < 7;
+      }
+      return DateLogic.sessionIsFiledOnDate(session, date, _dayStart);
     }).toList();
   }
 
@@ -116,8 +133,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final dailySessions = _getSessionsForDate(_selectedDate);
-    final groupedSessions = _groupSessionsByProject(dailySessions);
+    final periodSessions = _getSessionsForDate(_selectedDate);
+    final groupedSessions = _groupSessionsByProject(periodSessions);
 
     return Scaffold(
       appBar: AppBar(
@@ -135,7 +152,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
         children: [
           _dateHeader(),
           Expanded(
-            child: dailySessions.isEmpty
+            child: periodSessions.isEmpty
                 ? _buildEmptyState()
                 : ListView(
                     // The ruled entries carry their own padding so their rules
@@ -179,71 +196,113 @@ class _SummaryScreenState extends State<SummaryScreen> {
   /// on the heavier rule — rather than a coloured line with an icon beside it.
   Widget _dateHeader() {
     final t = SoferTokens.of(context);
-    final label = widget.useGregorianDates
-        ? (_viewByMonth
-            ? formatDisplayDateMonth(_selectedDate, true)
-            : formatDisplayDate(_selectedDate, true))
-        : _getHebrewDate(_selectedDate, _viewByMonth);
-
-    if (t.isCards) {
-      return Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.today_rounded, color: t.accent, size: 24),
-            const SizedBox(width: 10),
-            Text(label,
-                style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: t.accent)),
-            const SizedBox(width: 8),
-            // Both layouts get the same way in. See the ruled header.
-            TextButton(
-              onPressed: () => setState(() => _viewByMonth = !_viewByMonth),
-              child: Text(
-                  _viewByMonth
-                      ? context.l10n.pick(he: "חודש ▾", en: "Month ▾")
-                      : context.l10n.pick(he: "יום ▾", en: "Day ▾"),
-                  style: TextStyle(fontSize: 13, color: t.accent)),
-            ),
-          ],
-        ),
-      );
-    }
-
+    final label = switch (_period) {
+      _SummaryPeriod.day => _getHebrewDate(_selectedDate),
+      _SummaryPeriod.month => _getHebrewDate(_selectedDate, true),
+      _SummaryPeriod.week => _weekLabel(),
+    };
+    final isWeek = _period == _SummaryPeriod.week;
+    final rtl = Directionality.of(context) == TextDirection.rtl;
     return Container(
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: t.ruleStrong)),
-      ),
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 12),
+      decoration: t.isCards
+          ? null
+          : BoxDecoration(
+              border: Border(bottom: BorderSide(color: t.ruleStrong))),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
         children: [
+          if (isWeek)
+            IconButton(
+              tooltip: context.l10n.pick(
+                  he: 'השבוע הקודם',
+                  en: 'Previous week',
+                  yi: 'פֿריִערדיקע וואָך'),
+              icon: Icon(rtl ? Icons.chevron_right : Icons.chevron_left),
+              onPressed: () => _moveWeek(-7),
+            )
+          else if (t.isCards) ...[
+            Icon(Icons.today_rounded, color: t.accent),
+            const SizedBox(width: 8),
+          ],
           Expanded(
             child: Text(label,
+                textAlign: isWeek ? TextAlign.center : TextAlign.start,
                 style: TextStyle(
-                    fontFamily: t.numeralFamily, fontSize: 23, color: t.ink)),
+                    fontFamily: t.numeralFamily,
+                    fontSize: isWeek ? 16 : 20,
+                    color: t.isCards ? t.accent : t.ink)),
           ),
-          // Tappable. It was a label, and the only way to see a whole month was
-          // a switch inside a dialog called "בחר תאריך עברי" — so writers
-          // reported that the monthly summary showed them a single day, which
-          // is exactly what it does when nobody can find the switch.
-          TextButton(
-            onPressed: () => setState(() => _viewByMonth = !_viewByMonth),
-            child: Text(
-                _viewByMonth
-                    ? context.l10n.pick(he: "חודש ▾", en: "Month ▾")
-                    : context.l10n.pick(he: "יום ▾", en: "Day ▾"),
-                style: TextStyle(
-                    fontFamily: t.labelFamily,
-                    fontSize: 12,
-                    letterSpacing: 1.5,
-                    color: t.accent)),
+          if (isWeek)
+            IconButton(
+              tooltip: context.l10n.pick(
+                  he: 'השבוע הבא', en: 'Next week', yi: 'קומענדיקע וואָך'),
+              icon: Icon(rtl ? Icons.chevron_left : Icons.chevron_right),
+              onPressed: () => _moveWeek(7),
+            ),
+          PopupMenuButton<_SummaryPeriod>(
+            initialValue: _period,
+            tooltip: context.l10n.pick(
+                he: 'תקופת סיכום',
+                en: 'Summary period',
+                yi: 'צײַט־אָפּשניט פֿונעם סיכום'),
+            onSelected: (period) => setState(() => _period = period),
+            itemBuilder: (context) => [
+              for (final period in _SummaryPeriod.values)
+                PopupMenuItem(value: period, child: Text(_periodLabel(period))),
+            ],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+              child: Text('${_periodLabel(_period)} ▾',
+                  style: TextStyle(fontSize: 13, color: t.accent)),
+            ),
           ),
         ],
       ),
     );
+  }
+
+  String _periodLabel(_SummaryPeriod period) => switch (period) {
+        _SummaryPeriod.day =>
+          context.l10n.pick(he: 'יום', en: 'Day', yi: 'טאָג'),
+        _SummaryPeriod.week =>
+          context.l10n.pick(he: 'שבוע', en: 'Week', yi: 'וואָך'),
+        _SummaryPeriod.month =>
+          context.l10n.pick(he: 'חודש', en: 'Month', yi: 'חודש'),
+      };
+
+  String _weekLabel() {
+    final first = WritingJournalLogic.weekStart(_selectedDate);
+    final start = _getHebrewDate(first);
+    final end = _getHebrewDate(CalendarDays.addDays(first, 6));
+    return context.l10n.pick(
+        he: '$start עד $end', en: '$start to $end', yi: '$start ביז $end');
+  }
+
+  void _moveWeek(int days) =>
+      setState(() => _pickedDate = CalendarDays.addDays(_selectedDate, days));
+
+  String _writingTimeLabel(Duration worked, bool someWithoutTime) {
+    final time = formatClock(worked, seconds: false);
+    if (!someWithoutTime) return time;
+    final l10n = context.l10n;
+    return worked == Duration.zero
+        ? l10n.pick(
+            he: 'לא נרשם זמן',
+            en: 'No time recorded',
+            yi: 'קיין צײַט פֿאַרשריבן')
+        : l10n.pick(
+            he: '$time · חלק ללא זמן',
+            en: '$time · some records have no time',
+            yi: '$time · אַ טייל רעקאָרדס האָבן נישט קיין צײַט');
+  }
+
+  String _timeBreakdownLabel(WorkTimeBreakdown details) {
+    final l10n = context.l10n;
+    if (!l10n.isYiddish) return details.label(english: l10n.isEnglish);
+    final writing = formatClock(details.work - details.reading);
+    final reading = formatClock(details.reading);
+    final breaks = formatClock(details.breaks);
+    return 'שרײַבן: $writing · לייענען / פֿאַרריכטן: $reading · הפסקות: $breaks';
   }
 
   Widget _buildEmptyState() {
@@ -287,6 +346,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
     required Project project,
     required String outputText,
     required Duration worked,
+    required WorkTimeBreakdown timeDetails,
     required bool someWithoutTime,
     required String avgTimeText,
     required double profit,
@@ -329,7 +389,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
                   color: t.ink)),
           const SizedBox(height: 12),
           SoferStatRow(context.l10n.pick(he: "זמן עבודה", en: "Writing time"),
-              workedLabel(worked, someWithoutTime)),
+              _writingTimeLabel(worked, someWithoutTime)),
+          if (timeDetails.hasDetails) Text(_timeBreakdownLabel(timeDetails)),
           if (avgTimeText.isNotEmpty)
             SoferStatRow(
                 context.l10n.pick(he: "ממוצע", en: "Average"), avgTimeText),
@@ -375,6 +436,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
     // divided by lines that had never been timed.
     final measured = MeasuredWork.only(sessionsForStats);
     final totalDuration = MeasuredWork.time(measured);
+    final timeDetails = WorkTimeBreakdown.of(measured);
     // Plenty of sofrim record what they wrote and never how long it took. The
     // total is then true but incomplete, and saying so is the difference
     // between a figure that is partial and a figure that is wrong.
@@ -435,7 +497,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
       int targetLines = project.dailyGoalInLines
           ? project.targetDaily
           : (project.targetDaily * linesPerPage);
-      if (targetLines > 0) {
+      if (_period != _SummaryPeriod.week && targetLines > 0) {
         progressPercent = linesForStats / targetLines;
         int linesLeft = targetLines - linesForStats;
         if (linesLeft > 0) {
@@ -509,7 +571,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
         }
       }
 
-      if (project.targetDaily > 0) {
+      if (_period != _SummaryPeriod.week && project.targetDaily > 0) {
         double currentAmount = unitsForStats.toDouble();
         if (project.type == ProjectType.mezuza) {
           currentAmount =
@@ -538,6 +600,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
         project: project,
         outputText: outputText,
         worked: totalDuration,
+        timeDetails: timeDetails,
         someWithoutTime: someWithoutTime,
         avgTimeText: avgTimeText,
         profit: profit,
@@ -565,7 +628,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
             _buildInfoRow(
                 Icons.timer,
                 context.l10n.pick(he: "זמן עבודה:", en: "Writing time:"),
-                workedLabel(totalDuration, someWithoutTime)),
+                _writingTimeLabel(totalDuration, someWithoutTime)),
+            if (timeDetails.hasDetails) Text(_timeBreakdownLabel(timeDetails)),
             if (avgTimeText.isNotEmpty)
               _buildInfoRow(Icons.speed,
                   context.l10n.pick(he: "ממוצע:", en: "Average:"), avgTimeText),
@@ -581,30 +645,32 @@ class _SummaryScreenState extends State<SummaryScreen> {
                     he: "${formatMoney(hourlyRate, project.currency)} לשעה",
                     en: "${formatMoney(hourlyRate, project.currency)} per hour",
                   )),
-            const SizedBox(height: 10),
-            Text(
-                context.l10n
-                    .pick(he: "עמידה ביעד יומי:", en: "Daily target progress:"),
-                style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 5),
-            LinearProgressIndicator(
-              value: progressPercent > 1 ? 1 : progressPercent,
-              backgroundColor: SoferTokens.of(context).rule,
-              color: progressPercent >= 1
-                  ? SoferTokens.of(context).positive
-                  : SoferTokens.of(context).accent,
-              minHeight: 8,
-            ),
-            const SizedBox(height: 5),
-            Text(
-              remainingText,
-              style: TextStyle(
+            if (_period != _SummaryPeriod.week) ...[
+              const SizedBox(height: 10),
+              Text(
+                  context.l10n.pick(
+                      he: "עמידה ביעד יומי:", en: "Daily target progress:"),
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 5),
+              LinearProgressIndicator(
+                value: progressPercent > 1 ? 1 : progressPercent,
+                backgroundColor: SoferTokens.of(context).rule,
                 color: progressPercent >= 1
                     ? SoferTokens.of(context).positive
-                    : SoferTokens.of(context).danger,
-                fontWeight: FontWeight.bold,
+                    : SoferTokens.of(context).accent,
+                minHeight: 8,
               ),
-            ),
+              const SizedBox(height: 5),
+              Text(
+                remainingText,
+                style: TextStyle(
+                  color: progressPercent >= 1
+                      ? SoferTokens.of(context).positive
+                      : SoferTokens.of(context).danger,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -618,8 +684,12 @@ class _SummaryScreenState extends State<SummaryScreen> {
         children: [
           Icon(icon, size: 20, color: SoferTokens.of(context).inkMuted),
           const SizedBox(width: 8),
-          Text("$label ", style: const TextStyle(fontWeight: FontWeight.w500)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
+          Flexible(
+            child: Wrap(spacing: 4, children: [
+              Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
+              Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
+            ]),
+          ),
         ],
       ),
     );
@@ -707,9 +777,15 @@ class _SummaryScreenState extends State<SummaryScreen> {
   }
 
   Future<void> _pickDate() async {
+    if (_period == _SummaryPeriod.week) {
+      final date =
+          await showHebrewDatePicker(context, initialDate: _selectedDate);
+      if (date != null && mounted) setState(() => _pickedDate = date);
+      return;
+    }
     DateTime currentGregorian = _selectedDate;
     JewishDate jewishDate = JewishDate.fromDateTime(currentGregorian);
-    bool tempViewByMonth = _viewByMonth;
+    bool tempViewByMonth = _period == _SummaryPeriod.month;
 
     await showDialog(
       context: context,
@@ -815,8 +891,10 @@ class _SummaryScreenState extends State<SummaryScreen> {
                 ElevatedButton(
                   onPressed: () {
                     this.setState(() {
-                      _viewByMonth = tempViewByMonth;
-                      _selectedDate = jewishDate.getGregorianCalendar();
+                      _period = tempViewByMonth
+                          ? _SummaryPeriod.month
+                          : _SummaryPeriod.day;
+                      _pickedDate = jewishDate.getGregorianCalendar();
                     });
                     Navigator.pop(context);
                   },

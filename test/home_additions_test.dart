@@ -329,7 +329,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('תחילת כתיבה'));
       await tester.pump(const Duration(milliseconds: 100));
-      expect(find.text('יעד לשורה'), findsOneWidget);
+      expect(find.text('יעד זמן לשורה ס"ת'), findsOneWidget);
       expect(find.text('בחירת יעד לישיבה'), findsOneWidget);
       expect(find.textContaining('72 פעימות'), findsOneWidget);
       await tester.pumpWidget(const SizedBox.shrink());
@@ -353,13 +353,13 @@ void main() {
     });
   });
 
-  testWidgets('the dedicated settings screen exposes seven switches',
+  testWidgets('the dedicated settings screen exposes nine switches',
       (tester) async {
     StorageService.demoStore = MemoryStore({});
     await pumpBody(tester, const HomeAdditionsScreen(), AppTheme.modern);
     await tester.pumpAndSettle();
     expect(find.text('תוספות למסך הבית'), findsOneWidget);
-    expect(find.byType(Switch), findsNWidgets(7));
+    expect(find.byType(Switch), findsNWidgets(9));
     final switches = tester.widgetList<Switch>(find.byType(Switch)).toList();
     expect(switches.first.value, isTrue,
         reason: 'the existing break prompt remains on by default');

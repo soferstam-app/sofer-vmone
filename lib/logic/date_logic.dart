@@ -101,12 +101,19 @@ class DateLogic {
         effectiveDate(session.startTime, dayStart);
   }
 
-  /// Whether [session] was filed under the working day containing [day].
+  /// Whether [session] was filed under the working day containing [moment].
   static bool sessionIsOnDay(
-      WorkSession session, DateTime day, DayStart dayStart) {
-    final a = workingDateOf(session, dayStart);
-    final b = effectiveDate(day, dayStart);
-    return a.year == b.year && a.month == b.month && a.day == b.day;
+          WorkSession session, DateTime moment, DayStart dayStart) =>
+      sessionIsFiledOnDate(session, effectiveDate(moment, dayStart), dayStart);
+
+  /// Matches an already chosen working date, such as a calendar selection or
+  /// the result of [effectiveDate]. Its time of day has no meaning here.
+  static bool sessionIsFiledOnDate(
+      WorkSession session, DateTime date, DayStart dayStart) {
+    final filed = workingDateOf(session, dayStart);
+    return filed.year == date.year &&
+        filed.month == date.month &&
+        filed.day == date.day;
   }
 
   /// Whether [session] was filed under a day in the same month as [month].

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>סופר ומונה · פיילוט מקומי</title>
+</head>
+<body style="font-family: system-ui, sans-serif">
+  <p id="status" role="status">הפיילוט נטען…</p>
+  <script>
+    const statusLine = document.querySelector("#status");
+
+    // The shared storage journal assumes a single writer. Hold this lock
+    // until the tab closes so another tab cannot overwrite the draft or data.
+    if (navigator.locks) {
+      navigator.locks.request("sofer-web-pilot", { ifAvailable: true }, async lock => {
+        if (!lock) {
+          statusLine.textContent = "הפיילוט פתוח בכרטיסייה אחרת. סגור אותה ורענן את הדף.";
+          return;
+        }
+        const script = document.createElement("script");
+        script.src = "flutter_bootstrap.js";
+        script.async = true;
+        script.onerror = () => {
+          statusLine.textContent = "טעינת הפיילוט נכשלה. רענן את הדף כדי לנסות שוב.";
+        };
+        window.addEventListener("flutter-first-frame", () => statusLine.remove(), { once: true });
+        document.body.append(script);
+        await new Promise(() => {});
+      }).catch(() => {
+        statusLine.textContent = "פתיחת האחסון נכשלה. רענן את הדף כדי לנסות שוב.";
+      });
+    } else {
+      statusLine.textContent = "יש לפתוח את הפיילוט ב־Chrome או ב־Edge עדכניים, דרך כתובת השרת המקומי.";
+    }
+  </script>
+</body>
+</html>

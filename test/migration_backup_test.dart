@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -33,9 +34,28 @@ class MigrationFolderPicker extends FilePicker {
   }
 }
 
+// Widget tests drive frames on a fake clock. Keep filesystem operations and
+// the shared storage queue in the real zone across those tests.
+class MigrationTestBackupService extends BackupService {
+  MigrationTestBackupService() : super.forTesting();
+
+  final Zone _ioZone = Zone.current;
+  bool verifying = false;
+
+  @override
+  Future<bool> verifyAutoBackup() => _ioZone.run(() async {
+        verifying = true;
+        try {
+          return await super.verifyAutoBackup();
+        } finally {
+          verifying = false;
+        }
+      });
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  late BackupService service;
+  late MigrationTestBackupService service;
   FilePicker? originalPicker;
   late Directory directory;
   late MigrationFolderPicker picker;
@@ -55,7 +75,7 @@ void main() {
       linesPerPage: 42);
 
   setUp(() {
-    service = BackupService.forTesting();
+    service = MigrationTestBackupService();
     try {
       originalPicker = FilePicker.platform;
     } catch (_) {}
@@ -102,7 +122,8 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 20));
       });
       await tester.pump(const Duration(milliseconds: 20));
-      if (find.byType(CircularProgressIndicator).evaluate().isEmpty &&
+      if (!service.verifying &&
+          find.byType(CircularProgressIndicator).evaluate().isEmpty &&
           find.byType(LinearProgressIndicator).evaluate().isEmpty) {
         break;
       }
@@ -172,6 +193,12 @@ void main() {
       })
     });
     await tester.pumpWidget(host());
+    await io(tester);
+    expect(find.text('application-ready'), findsOneWidget);
+    expect(find.byKey(dialog), findsNothing);
+    expect(find.byKey(const ValueKey('backup-migration-background-failed')),
+        findsOneWidget);
+    await tester.tap(find.text('טיפול בגיבוי'));
     await io(tester);
     expect(find.byKey(dialog), findsOneWidget);
     expect(find.textContaining('לא נוצר גיבוי חיצוני מאומת'), findsOneWidget);
@@ -415,8 +442,9 @@ void main() {
     expect(checksum, sha256.convert(utf8.encode(jsonEncode(raw))).toString());
 
     // Every later durable write refreshes the same external file.
-    StorageService.onChanged = service.writeAutoBackup;
+    StorageService.onChanged = service.scheduleAutoBackup;
     await StorageService().setSoferName('שם מעודכן');
+    await service.flushScheduledAutoBackup();
     final updated = jsonDecode(file.readAsStringSync());
     expect(updated['settings']['sofer_name'], 'שם מעודכן');
     expect(directory.listSync().whereType<File>().length, 1);

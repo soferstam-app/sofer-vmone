@@ -18,10 +18,20 @@ class HelpScreen extends StatefulWidget {
 
 class _HelpScreenState extends State<HelpScreen> {
   final TextEditingController _searchController = TextEditingController();
-  late final Future<HelpCatalog> _catalog = widget.catalog == null
-      ? HelpCatalog.load()
-      : Future.value(widget.catalog);
+  late Future<HelpCatalog> _catalog;
+  String? _language;
   String _query = '';
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final language = context.l10n.locale.languageCode;
+    if (_language == language) return;
+    _language = language;
+    _catalog = widget.catalog == null
+        ? HelpCatalog.load(language: language)
+        : Future.value(widget.catalog);
+  }
 
   @override
   void dispose() {
@@ -130,7 +140,8 @@ class _HelpScreenState extends State<HelpScreen> {
                     )
                   : context.l10n.pick(
                       he: '${catalog.questionCount} שאלות ב־${catalog.sections.length} נושאים',
-                      en: '${catalog.questionCount} questions in ${catalog.sections.length} topics · Hebrew content',
+                      en: '${catalog.questionCount} questions in ${catalog.sections.length} topics',
+                      yi: '${catalog.questionCount} פֿראַגעס אין ${catalog.sections.length} טעמעס',
                     ),
               style: TextStyle(color: t.inkMuted),
             ),

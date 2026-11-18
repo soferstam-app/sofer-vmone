@@ -1,0 +1,7 @@
+zipformer2-66m-streaming-he, developed by Yakov Kolani
+Source: https://huggingface.co/ivrit-ai/zipformer2-66m-streaming-he
+License: Creative Commons Attribution 4.0 International
+https://creativecommons.org/licenses/by/4.0/
+
+This package uses the source project's INT8 sherpa-onnx export unchanged.
+sherpa-onnx and ONNX Runtime are included under their respective licenses.

@@ -29,6 +29,18 @@ void main() {
     expect(reopened.hasExplicitChoice, isTrue);
   });
 
+  test('the browser choice takes precedence without writing the account',
+      () async {
+    StorageService.demoStore = MemoryStore({'app_language': 'en'});
+    final controller = LocaleController();
+
+    await controller.load(browserLanguage: AppLanguage.hebrew);
+
+    expect(controller.language, AppLanguage.hebrew);
+    expect(controller.hasExplicitChoice, isTrue);
+    expect(await StorageService().getAppLanguageCode(), 'en');
+  });
+
   test('only a genuinely fresh installation asks before onboarding', () {
     expect(
       shouldAskForLanguage(

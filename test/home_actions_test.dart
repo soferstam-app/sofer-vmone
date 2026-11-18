@@ -90,7 +90,7 @@ void main() {
 
       expect(find.widgetWithText(SoferPrimaryButton, 'סיימתי שורה'),
           findsOneWidget);
-      expect(find.text('זמן כתיבה'), findsOneWidget);
+      expect(find.text('זמן עבודה'), findsOneWidget);
       expect(find.text('זמן השורה'), findsOneWidget);
       expect(find.text('00:03:12'), findsOneWidget);
     });

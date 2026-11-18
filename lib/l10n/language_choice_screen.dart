@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 import 'app_localizations.dart';
+import 'yiddish_preview.dart';
 
-/// The only deliberately bilingual screen: it appears before a fresh
+/// This appears before a fresh
 /// installation has a language in which to explain itself.
 class LanguageChoiceScreen extends StatelessWidget {
   final Future<void> Function(AppLanguage language) onSelected;
@@ -37,7 +38,8 @@ class LanguageChoiceScreen extends StatelessWidget {
                   const SizedBox(height: 10),
                   Text(
                     'אפשר לשנות בכל עת בהגדרות\n'
-                    'You can change this at any time in Settings',
+                    'You can change this at any time in Settings'
+                    '${yiddishPreview ? '\nאיר קענט דאָס אַלע מאָל בײַטן אין די אײַנשטעלונגען' : ''}',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: t.inkMuted),
                   ),
@@ -57,6 +59,16 @@ class LanguageChoiceScreen extends StatelessWidget {
                       child: const Text('English'),
                     ),
                   ),
+                  if (yiddishPreview) ...[
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        onPressed: () => onSelected(AppLanguage.yiddish),
+                        child: Text(AppLanguage.yiddish.label),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

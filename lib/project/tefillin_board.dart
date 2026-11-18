@@ -421,7 +421,8 @@ class TefillinBoard extends StatelessWidget {
                         he: TefillinUnits.sideName(side),
                         en: side == TefillinSide.head
                             ? 'Shel Rosh'
-                            : 'Shel Yad'),
+                            : 'Shel Yad',
+                        yi: side == TefillinSide.head ? 'של ראש' : 'של יד'),
                     style: TextStyle(
                         fontFamily: t.labelFamily,
                         fontSize: 12,

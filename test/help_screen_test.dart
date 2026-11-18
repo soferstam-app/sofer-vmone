@@ -27,6 +27,24 @@ void main() {
     );
   });
 
+  test('English and Yiddish help keep the same question identifiers', () async {
+    final catalogs = await Future.wait([
+      for (final language in ['he', 'en', 'yi'])
+        HelpCatalog.load(language: language),
+    ]);
+    final original =
+        catalogs.first.sections.expand((s) => s.questions).toList();
+    for (final catalog in catalogs.skip(1)) {
+      final translated = catalog.sections.expand((s) => s.questions).toList();
+      expect(translated.map((question) => question.id),
+          original.map((question) => question.id));
+      for (var i = 0; i < original.length; i++) {
+        expect(translated[i].question, isNot(original[i].question));
+        expect(translated[i].answer, isNot(original[i].answer));
+      }
+    }
+  });
+
   testWidgets('search finds an answer and clears back to all topics',
       (tester) async {
     const catalog = HelpCatalog([

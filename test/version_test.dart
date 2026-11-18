@@ -23,6 +23,7 @@ void main() {
 
   test('the app reports the version it was built as', () {
     expect(appVersion, declaredInPubspec().name);
+    expect(appBuildNumber, declaredInPubspec().code);
   });
 
   test('and the changelog documents it', () {

@@ -1,16 +1,14 @@
-import 'dart:io';
-
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:kosher_dart/kosher_dart.dart';
 import 'package:printing/printing.dart';
 
 import '../format.dart';
 import '../hebrew_utils.dart';
+import '../logic/hebrew_month.dart';
 import '../logic/currency.dart';
 import '../logic/export_table.dart';
 import '../logic/hebrew_clock.dart';
 import '../logic/monthly_report.dart';
+import '../logic/save_user_file.dart';
 import '../models.dart';
 import '../plan/plan_export.dart';
 import '../storage_service.dart';
@@ -73,31 +71,7 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen> {
   /// One Hebrew month back or forward, walked through the Hebrew calendar
   /// rather than by adding thirty days, which drifts.
   void _shift(int by) {
-    final jd = JewishDate.fromDateTime(_anchor);
-    var year = jd.getJewishYear();
-    var month = jd.getJewishMonth();
-    final monthsInYear = jd.isJewishLeapYear() ? 13 : 12;
-
-    for (var i = 0; i < by.abs(); i++) {
-      if (by > 0) {
-        month++;
-        if (month > monthsInYear) {
-          month = 1;
-          year++;
-        }
-      } else {
-        month--;
-        if (month < 1) {
-          month = monthsInYear;
-          year--;
-        }
-      }
-    }
-    setState(() => _anchor = JewishDate.initDate(
-          jewishYear: year,
-          jewishMonth: month,
-          jewishDayOfMonth: 1,
-        ).getGregorianCalendar());
+    setState(() => _anchor = shiftHebrewMonth(_anchor, by));
   }
 
   MonthlyReport _report() => MonthlyReport.forMonth(
@@ -136,18 +110,13 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen> {
     try {
       final bytes = await PlanExport.toXlsx(table);
       if (!mounted) return;
-      final path = await FilePicker.platform.saveFile(
+      final path = await saveUserFile(
         dialogTitle: context.l10n
             .pick(he: 'שמירת הדוח החודשי', en: 'Save monthly report'),
         fileName: PlanExport.fileName(table, 'xlsx'),
         bytes: bytes,
       );
       if (!mounted || path == null) return;
-      // Desktop hands back a path and expects the caller to write; mobile has
-      // already written the bytes itself.
-      if (!Platform.isAndroid && !Platform.isIOS) {
-        await File(path).writeAsBytes(bytes, flush: true);
-      }
       if (mounted) {
         showAppSuccess(
             context, context.l10n.pick(he: 'נשמר: $path', en: 'Saved: $path'));

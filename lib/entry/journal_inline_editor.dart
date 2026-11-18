@@ -1,3 +1,6 @@
+import '../logic/writing_conditions.dart';
+import '../logic/writing_timeline.dart';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
@@ -275,13 +278,29 @@ class _JournalInlineEditorState extends State<JournalInlineEditor> {
         break;
       }
     }
-    if (match == null) return next;
+    if (match == null) {
+      if (original.isEmpty) return next;
+      final first = original.first.extraFields[WritingConditions.key];
+      final same = original.every((s) =>
+          jsonEncode(s.extraFields[WritingConditions.key]) ==
+          jsonEncode(first));
+      return next.copyWith(extraFields: {
+        ...next.extraFields,
+        WritingConditions.key: same ? first : null,
+        WritingTimeline.key: <dynamic>[]
+      });
+    }
     used.add(match.id);
     // Notes/time editing retains every output and extension field. A rebuilt
     // range retains its new output and carries old extensions and identity.
     return WorkSession.fromJson({
       ...match.extraFields,
       ...next.toJson(),
+      WritingConditions.key: match.extraFields[WritingConditions.key],
+      WritingTimeline.key:
+          (next.startTime == match.startTime && next.endTime == match.endTime)
+              ? match.extraFields[WritingTimeline.key]
+              : <dynamic>[],
       'id': match.id,
       'deletedAt': match.deletedAt?.toIso8601String(),
       'restoredAt': match.restoredAt?.toIso8601String(),
@@ -289,7 +308,7 @@ class _JournalInlineEditorState extends State<JournalInlineEditor> {
   }
 
   Widget _field(
-          TextEditingController controller, String he, String en) =>
+          TextEditingController controller, String he, String en, String yi) =>
       SizedBox(
           width: 155,
           child: TextField(
@@ -297,7 +316,7 @@ class _JournalInlineEditorState extends State<JournalInlineEditor> {
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
               decoration: InputDecoration(
-                  labelText: context.l10n.pick(he: he, en: en),
+                  labelText: context.l10n.pick(he: he, en: en, yi: yi),
                   border: const OutlineInputBorder())));
 
   @override
@@ -334,12 +353,12 @@ class _JournalInlineEditorState extends State<JournalInlineEditor> {
                 if (_simpleOutput)
                   Wrap(spacing: 8, runSpacing: 8, children: [
                     if (_project?.type.isPaged == true) ...[
-                      _field(_from, 'מעמוד', 'From page'),
-                      _field(_to, 'עד עמוד', 'Through page'),
-                      _field(_firstLine, 'משורה', 'From line'),
-                      _field(_lastLine, 'עד שורה', 'Through line'),
+                      _field(_from, 'מעמוד', 'From page', 'פון עמוד'),
+                      _field(_to, 'עד עמוד', 'Through page', 'ביז עמוד'),
+                      _field(_firstLine, 'משורה', 'From line', 'פון שורה'),
+                      _field(_lastLine, 'עד שורה', 'Through line', 'ביז שורה'),
                     ] else ...[
-                      _field(_amount, 'כמות', 'Quantity'),
+                      _field(_amount, 'כמות', 'Quantity', 'צאל'),
                       if (_project?.type == ProjectType.tefillin)
                         SizedBox(
                             width: 180,
@@ -374,7 +393,8 @@ class _JournalInlineEditorState extends State<JournalInlineEditor> {
                     title: Text(context.l10n.pick(
                         he: 'כולל זמן כתיבה', en: 'Include writing time')),
                     onChanged: (v) => setState(() => _recordTime = v ?? false)),
-                if (_recordTime) _field(_minutes, 'זמן בדקות', 'Minutes'),
+                if (_recordTime)
+                  _field(_minutes, 'זמן בדקות', 'Minutes', 'צייט אין מינוט'),
                 const SizedBox(height: 8),
                 TextField(
                     controller: _notes,

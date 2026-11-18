@@ -16,6 +16,10 @@ class HomeSnapshot {
 
   final bool isRunning;
   final bool isPaused;
+  final bool showSessionConditions;
+  final bool isReadingCorrection;
+  final bool showReadingCorrection;
+  final String readingCorrectionElapsed;
 
   /// Already formatted, because how a duration reads is a decision the home
   /// screen already makes for the other layout.
@@ -92,6 +96,10 @@ class HomeSnapshot {
     required this.hebrewDate,
     required this.isRunning,
     required this.isPaused,
+    this.showSessionConditions = false,
+    this.isReadingCorrection = false,
+    this.showReadingCorrection = false,
+    this.readingCorrectionElapsed = '',
     required this.elapsed,
     this.breakElapsed = '',
     this.breakRemaining = '',
@@ -126,6 +134,8 @@ class HomeSnapshot {
   String get shownLineLabel => lineClockLabel ?? 'זמן השורה';
   String get shownLineValue => lineClockValue ?? sinceLastLap;
   bool get hasHomeAdditions =>
+      showSessionConditions ||
+      showReadingCorrection ||
       showWritingTargetButton ||
       writingTargetStatus != null ||
       endTimeStatus != null ||
@@ -154,6 +164,8 @@ class HomeActions {
   /// Pausing and resuming are the same button in the cards layout, so it needs
   /// resuming as its own action rather than as "start".
   final VoidCallback onResume;
+  final VoidCallback? onSessionConditions;
+  final VoidCallback? onReadingCorrection;
   final VoidCallback? onWritingTarget;
 
   const HomeActions({
@@ -167,6 +179,8 @@ class HomeActions {
     required this.onSkipMezuza,
     required this.onProjectChanged,
     required this.onResume,
+    this.onSessionConditions,
+    this.onReadingCorrection,
     this.onWritingTarget,
   });
 }
@@ -270,12 +284,15 @@ class _WorkColumn extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SoferSectionTitle(
-            s.isActive
-                ? context.l10n.pick(he: "כותב כעת", en: "Writing now")
-                : context.l10n.pick(
-                    he: "הפרויקט הנבחר",
-                    en: "Selected project",
-                  ),
+            s.isReadingCorrection
+                ? context.l10n
+                    .pick(he: 'קריאה / תיקון', en: 'Reading / correction')
+                : s.isActive
+                    ? context.l10n.pick(he: "כותב כעת", en: "Writing now")
+                    : context.l10n.pick(
+                        he: "הפרויקט הנבחר",
+                        en: "Selected project",
+                      ),
             padding: EdgeInsets.zero,
           ),
           const SizedBox(height: 5),
@@ -322,6 +339,8 @@ class _WorkColumn extends StatelessWidget {
             const SizedBox(height: 16),
             HomeAdditionsPanel(
               snapshot: s,
+              onSessionConditions: actions.onSessionConditions,
+              onReadingCorrection: actions.onReadingCorrection,
               onWritingTarget: actions.onWritingTarget,
             ),
           ],
@@ -368,7 +387,7 @@ class _PositionHero extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  if (s.isRunning && !s.isPaused) ...[
+                  if (s.isRunning && !s.isPaused && !s.isReadingCorrection) ...[
                     Container(
                       width: 7,
                       height: 7,
@@ -494,14 +513,17 @@ class _ClockHero extends StatelessWidget {
           ),
         const SizedBox(height: 8),
         Text(
-          s.isPaused
-              ? context.l10n.pick(he: "בהפסקה", en: "On break")
-              : s.isRunning
-                  ? context.l10n.pick(he: "כותב", en: "Writing")
-                  : context.l10n.pick(
-                      he: "מוכן להתחיל",
-                      en: "Ready to start",
-                    ),
+          s.isReadingCorrection
+              ? context.l10n
+                  .pick(he: 'קריאה / תיקון', en: 'Reading / correction')
+              : s.isPaused
+                  ? context.l10n.pick(he: "בהפסקה", en: "On break")
+                  : s.isRunning
+                      ? context.l10n.pick(he: "כותב", en: "Writing")
+                      : context.l10n.pick(
+                          he: "מוכן להתחיל",
+                          en: "Ready to start",
+                        ),
           style: TextStyle(
             fontFamily: t.labelFamily,
             fontSize: 13,
@@ -555,7 +577,7 @@ class _ClockPair extends StatelessWidget {
 
     return Row(
       children: [
-        metric(context.l10n.pick(he: 'זמן כתיבה', en: 'Writing time'),
+        metric(context.l10n.pick(he: 'זמן עבודה', en: 'Working time'),
             snapshot.elapsed),
         Container(
           width: 1,
@@ -573,11 +595,15 @@ class _ClockPair extends StatelessWidget {
 /// The opt-in tools that sit beneath the clocks in every home layout.
 class HomeAdditionsPanel extends StatelessWidget {
   final HomeSnapshot snapshot;
+  final VoidCallback? onSessionConditions;
+  final VoidCallback? onReadingCorrection;
   final VoidCallback? onWritingTarget;
 
   const HomeAdditionsPanel({
     super.key,
     required this.snapshot,
+    this.onSessionConditions,
+    this.onReadingCorrection,
     this.onWritingTarget,
   });
 
@@ -630,6 +656,35 @@ class HomeAdditionsPanel extends StatelessWidget {
       ),
       child: Column(
         children: [
+          if (snapshot.showSessionConditions)
+            TextButton.icon(
+                onPressed: snapshot.isSavingLine ? null : onSessionConditions,
+                icon: const Icon(Icons.thermostat_outlined),
+                label: Text(context.l10n.pick(
+                    he: snapshot.isActive ? 'תנאי הישיבה' : 'תנאי הישיבה הבאה',
+                    en: snapshot.isActive
+                        ? 'Session conditions'
+                        : 'Next session conditions'))),
+          if (snapshot.showReadingCorrection) ...[
+            TextButton.icon(
+              onPressed: snapshot.isPaused || snapshot.isSavingLine
+                  ? null
+                  : onReadingCorrection,
+              icon: Icon(snapshot.isReadingCorrection
+                  ? Icons.play_arrow
+                  : Icons.menu_book_outlined),
+              label: Text(context.l10n.pick(
+                  he: snapshot.isReadingCorrection
+                      ? 'חזרה לכתיבה'
+                      : 'קריאה / תיקון',
+                  en: snapshot.isReadingCorrection
+                      ? 'Back to writing'
+                      : 'Reading / correction')),
+            ),
+            Text(context.l10n.pick(
+                he: 'קריאה / תיקון: ${snapshot.readingCorrectionElapsed}',
+                en: 'Reading / correction: ${snapshot.readingCorrectionElapsed}')),
+          ],
           if (snapshot.writingTargetStatus case final value?)
             row(Icons.hourglass_bottom, value,
                 danger: snapshot.writingTargetOverrun,
@@ -766,7 +821,7 @@ class _Actions extends StatelessWidget {
     // the end. The button under the thumb should be the one being pressed all
     // the way through, not the one pressed last.
     return Column(children: [
-      if (!s.isPaused) ...[
+      if (!s.isPaused && !s.isReadingCorrection) ...[
         SoferPrimaryButton(
             isSmart
                 ? context.l10n.pick(

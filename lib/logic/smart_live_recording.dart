@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'writing_conditions.dart';
+import 'work_time_breakdown.dart';
 import '../models.dart';
 import 'date_logic.dart';
 import 'production_calculator.dart';
@@ -37,6 +40,10 @@ class SmartLiveRecording {
 
   static bool _canExtend(WorkSession existing, WorkSession next) {
     if (existing.projectId != next.projectId) return false;
+    if (jsonEncode(existing.extraFields[WritingConditions.key]) !=
+        jsonEncode(next.extraFields[WritingConditions.key])) {
+      return false;
+    }
     if (existing.isPartialLine || next.isPartialLine) return false;
     if (!_sameWorkingDay(existing, next)) return false;
     if (TefillinWordRange.isWordRecord(existing) ||
@@ -103,6 +110,7 @@ class SmartLiveRecording {
             ? 'מזוזה ${existing.mezuzaIndex}'
             : 'מזוזה ${existing.mezuzaIndex} ($lines שורות)',
         timeRecorded: existing.timeRecorded || next.timeRecorded,
+        extraFields: WorkTimeBreakdown.mergedFields(existing, next),
       );
     }
 
@@ -116,6 +124,7 @@ class SmartLiveRecording {
       // for a sefer both descriptions name the same page.
       description: next.description,
       timeRecorded: existing.timeRecorded || next.timeRecorded,
+      extraFields: WorkTimeBreakdown.mergedFields(existing, next),
     );
   }
 }

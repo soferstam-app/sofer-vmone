@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -11,6 +12,7 @@ import 'package:share_plus/share_plus.dart';
 import 'logic/legacy_import.dart';
 import 'logic/merge_service.dart';
 import 'logic/json_compat.dart';
+import 'logic/save_user_file.dart';
 import 'models.dart';
 import 'platform_support.dart';
 import 'storage_service.dart';
@@ -48,6 +50,7 @@ class BackupPreview {
   /// Records in the file this build could not read. Shown before the writer
   /// confirms, so a partial restore is never mistaken for a whole one.
   final int unreadable;
+  final int unreadableSections;
 
   const BackupPreview({
     required this.projects,
@@ -62,6 +65,7 @@ class BackupPreview {
     this.exportedAt,
     this.exportedFrom,
     this.unreadable = 0,
+    this.unreadableSections = 0,
   });
 }
 
@@ -121,14 +125,75 @@ class BackupService {
   final ValueNotifier<Map<String, dynamic>> autoBackupStatus =
       ValueNotifier({});
   Future<void> _autoBackupQueue = Future<void>.value();
+  Timer? _autoBackupTimer;
+  bool _autoBackupRequested = false;
+  Future<void>? _scheduledBackup;
+
+  /// The storage hook acknowledges the local save immediately. Consecutive
+  /// history, position and timer writes request one external snapshot.
+  Future<void> scheduleAutoBackup() async {
+    _autoBackupRequested = true;
+    if (_autoBackupTimer != null || _scheduledBackup != null) return;
+    _autoBackupTimer = Timer(const Duration(milliseconds: 200), () {
+      _autoBackupTimer = null;
+      unawaited(flushScheduledAutoBackup());
+    });
+  }
+
+  /// Start pending work immediately when the app moves to the background.
+  /// External writes remain serialized, including manual verification. While
+  /// a slow provider is busy, later saves collapse into one fresh follow-up.
+  Future<void> flushScheduledAutoBackup() {
+    _autoBackupTimer?.cancel();
+    _autoBackupTimer = null;
+    final running = _scheduledBackup;
+    if (running != null) return running;
+    if (!_autoBackupRequested) return Future<void>.value();
+    final done = Completer<void>();
+    _scheduledBackup = done.future;
+    unawaited(_drainScheduledBackup(done));
+    return done.future;
+  }
+
+  Future<void> _drainScheduledBackup(Completer<void> done) async {
+    try {
+      while (_autoBackupRequested) {
+        _autoBackupRequested = false;
+        await _queueAutoBackup(waitForLocalWrites: true);
+      }
+    } catch (error) {
+      debugPrint('Scheduled external backup failed: $error');
+    } finally {
+      _scheduledBackup = null;
+      done.complete();
+    }
+  }
 
   Future<bool> writeAutoBackup({DateTime? now}) {
-    final result = _autoBackupQueue.then((_) => _backupWithStatus(now: now));
+    return _queueAutoBackup(now: now);
+  }
+
+  /// Explicit setup/retry/startup verification, outside the storage callback.
+  /// Success still means the external file was written, read and verified.
+  Future<bool> verifyAutoBackup() {
+    _autoBackupTimer?.cancel();
+    _autoBackupTimer = null;
+    return _queueAutoBackup(waitForLocalWrites: true);
+  }
+
+  Future<bool> _queueAutoBackup(
+      {DateTime? now, bool waitForLocalWrites = false}) {
+    final result = _autoBackupQueue.then((_) {
+      if (waitForLocalWrites) _autoBackupRequested = false;
+      return _backupWithStatus(
+          now: now, waitForLocalWrites: waitForLocalWrites);
+    });
     _autoBackupQueue = result.then<void>((_) {}, onError: (Object error) {});
     return result;
   }
 
-  Future<bool> _backupWithStatus({DateTime? now}) async {
+  Future<bool> _backupWithStatus(
+      {DateTime? now, bool waitForLocalWrites = false}) async {
     var ok = false;
     String? folder;
     String? error;
@@ -136,7 +201,8 @@ class BackupService {
     try {
       folder = await _storage.getAutoBackupFolder();
       if (folder == null) return false;
-      ok = await _writeAutoBackupOnce(now: now);
+      ok = await _writeAutoBackupOnce(
+          now: now, waitForLocalWrites: waitForLocalWrites);
       if (!ok) error = 'Backup file could not be written or verified';
     } catch (failure) {
       error = '$failure';
@@ -165,7 +231,11 @@ class BackupService {
     };
     autoBackupStatus.value = status;
     try {
-      await _storage.saveAutoBackupStatus(status);
+      if (waitForLocalWrites) {
+        await _storage.saveAutoBackupStatusAfterPendingWrites(status);
+      } else {
+        await _storage.saveAutoBackupStatus(status);
+      }
     } catch (failure) {
       debugPrint('Could not store backup status: $failure');
     }
@@ -174,8 +244,10 @@ class BackupService {
 
   /// The complete backup document, pretty-printed so a user who opens the file
   /// can see what it holds.
-  Future<String> buildBackupJson() async {
-    final data = await _storage.exportAll();
+  Future<String> buildBackupJson({bool waitForLocalWrites = false}) async {
+    final data = waitForLocalWrites
+        ? await _storage.exportAllAfterPendingWrites()
+        : await _storage.exportAll();
 
     final document = <String, dynamic>{
       'app': appId,
@@ -233,12 +305,16 @@ class BackupService {
   /// Returns quietly on any failure. The folder may have been moved, unmounted
   /// or renamed since it was chosen, and none of that is a reason to interrupt
   /// someone who has just finished writing.
-  Future<bool> _writeAutoBackupOnce({DateTime? now}) async {
+  Future<bool> _writeAutoBackupOnce(
+      {DateTime? now, bool waitForLocalWrites = false}) async {
+    if (!PlatformSupport.supportsFolderBackup) return false;
     final folder = await _storage.getAutoBackupFolder();
     if (folder == null) return false;
 
     try {
-      final content = await buildBackupJson();
+      final content =
+          await buildBackupJson(waitForLocalWrites: waitForLocalWrites);
+      if (await _storage.getAutoBackupFolder() != folder) return false;
       // Validate the document before handing it to either platform. Android
       // verifies the same checksum after reading the temporary SAF document
       // back, so a provider that truncates a write cannot replace the last
@@ -385,23 +461,15 @@ class BackupService {
       final bytes = utf8.encode(content);
       final fileName = suggestedFileName();
 
-      final String? path = await FilePicker.platform.saveFile(
+      final path = await saveUserFile(
         dialogTitle: english ? 'Save backup file' : 'שמירת קובץ גיבוי',
         fileName: fileName,
         type: FileType.custom,
         allowedExtensions: const ['json'],
-        // Android needs the bytes up front; desktop returns a path and we
-        // write it ourselves below.
-        bytes: PlatformSupport.isMobile ? bytes : null,
+        bytes: bytes,
       );
 
       if (path == null) return const BackupResult(BackupOutcome.cancelled);
-
-      // On desktop file_picker only returns the chosen path.
-      if (!PlatformSupport.isMobile) {
-        final file = File(path);
-        await file.writeAsBytes(bytes, flush: true);
-      }
 
       return BackupResult(BackupOutcome.success, path: path);
     } catch (e) {
@@ -426,7 +494,9 @@ class BackupService {
 
       final file = picked.files.first;
       final bytes = file.bytes ??
-          (file.path != null ? await File(file.path!).readAsBytes() : null);
+          (!kIsWeb && file.path != null
+              ? await File(file.path!).readAsBytes()
+              : null);
       if (bytes == null) {
         return const BackupReadResult.failed(BackupReadError.unreadable);
       }
@@ -468,10 +538,15 @@ class BackupService {
       // silently is not: a partial restore looked like a complete one, and a
       // writer who then deleted the original lost what was skipped.
       var unreadable = 0;
+      var unreadableSections =
+          legacy ? decoded['unreadableSections'] as int : 0;
 
       List<T> parse<T>(String key, T Function(Map<String, dynamic>) fromJson) {
         final raw = decoded[key];
-        if (raw is! List) return <T>[];
+        if (raw is! List) {
+          if (decoded.containsKey(key)) unreadableSections++;
+          return <T>[];
+        }
         final out = <T>[];
         for (final item in raw) {
           try {
@@ -487,6 +562,13 @@ class BackupService {
         return out;
       }
 
+      Map<String, dynamic> parseMap(String key) {
+        final raw = decoded[key];
+        if (raw is Map) return Map<String, dynamic>.from(raw);
+        if (decoded.containsKey(key)) unreadableSections++;
+        return const {};
+      }
+
       return BackupReadResult.ok(BackupPreview(
         projects: parse('projects', Project.fromJson),
         history: parse('history', WorkSession.fromJson),
@@ -494,12 +576,8 @@ class BackupService {
         proofreads: parse('proofreads', Proofread.fromJson),
         payments: parse('payments', Payment.fromJson),
         orders: parse('orders', Order.fromJson),
-        settings: decoded['settings'] is Map
-            ? Map<String, dynamic>.from(decoded['settings'])
-            : const {},
-        lastPositions: decoded['lastPositions'] is Map
-            ? Map<String, dynamic>.from(decoded['lastPositions'])
-            : const {},
+        settings: parseMap('settings'),
+        lastPositions: parseMap('lastPositions'),
         fileName: file.name,
         exportedAt: decoded['exportedAt'] is String
             ? DateTime.tryParse(decoded['exportedAt'])
@@ -508,6 +586,7 @@ class BackupService {
             ? decoded['exportedFrom'] as String
             : null,
         unreadable: unreadable,
+        unreadableSections: unreadableSections,
       ));
     } catch (e) {
       debugPrint('Backup readBackupFile failed: $e');
@@ -525,34 +604,17 @@ class BackupService {
   /// Portable user settings are restored with the records. Device-specific
   /// paths, window geometry, onboarding markers and transient timer state stay
   /// local to the receiving installation.
-  Future<MergeOutcome> applyBackup(BackupPreview preview) async {
-    final outcome = MergeService.mergeBackup(
-      localProjects: await _storage.loadProjects(),
-      localHistory: await _storage.loadHistory(),
-      localExpenses: await _storage.loadExpenses(),
-      incomingProjects: preview.projects,
-      incomingHistory: preview.history,
-      incomingExpenses: preview.expenses,
-      localProofreads: await _storage.loadProofreads(),
-      incomingProofreads: preview.proofreads,
-      localPayments: await _storage.loadPayments(),
-      incomingPayments: preview.payments,
-      localOrders: await _storage.loadOrders(),
-      incomingOrders: preview.orders,
-    );
-
-    await _storage.saveImportedSnapshot(
-      projects: outcome.projects,
-      history: outcome.history,
-      expenses: outcome.expenses,
-      proofreads: outcome.proofreads,
-      payments: outcome.payments,
-      orders: outcome.orders,
-      lastPositions: preview.lastPositions,
-      settings: preview.settings,
-    );
-    return outcome;
-  }
+  Future<MergeOutcome> applyBackup(BackupPreview preview) =>
+      _storage.saveImportedSnapshot(
+        projects: preview.projects,
+        history: preview.history,
+        expenses: preview.expenses,
+        proofreads: preview.proofreads,
+        payments: preview.payments,
+        orders: preview.orders,
+        lastPositions: preview.lastPositions,
+        settings: preview.settings,
+      );
 
   /// Puts the writer back where he was in each commission.
   ///

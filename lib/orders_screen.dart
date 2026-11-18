@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'hebrew_utils.dart';
 import 'logic/currency.dart';
+import 'logic/hebrew_month.dart';
 import 'logic/id_generator.dart';
 import 'l10n/app_localizations.dart';
 import 'models.dart';
@@ -9,7 +10,17 @@ import 'storage_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/confirm.dart';
 import 'widgets/feedback.dart';
+import 'widgets/hebrew_date_picker.dart';
 import 'widgets/sofer_widgets.dart';
+
+String _deliveryLabel(AppLocalizations l10n, DateTime date,
+    {required bool monthOnly, required bool showGregorian}) {
+  if (monthOnly) {
+    return formatDisplayDateMonth(date, false, english: l10n.isEnglish);
+  }
+  final hebrew = formatDisplayDate(date, false, english: l10n.isEnglish);
+  return showGregorian ? '$hebrew · ${formatDisplayDate(date, true)}' : hebrew;
+}
 
 /// A simple commitment book, separate from the writing projects themselves.
 ///
@@ -32,7 +43,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
   bool _useGregorianDates = false;
   bool _loading = true;
   bool _allMonths = false;
-  DateTime _month = DateTime(DateTime.now().year, DateTime.now().month);
+  DateTime _month = shiftHebrewMonth(DateTime.now(), 0);
 
   List<Order> get _visible {
     final query = _search.text.trim().toLowerCase();
@@ -40,9 +51,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
       if (order.isDeleted) {
         return false;
       }
-      if (!_allMonths &&
-          (order.dueDate.year != _month.year ||
-              order.dueDate.month != _month.month)) {
+      if (!_allMonths && shiftHebrewMonth(order.dueDate, 0) != _month) {
         return false;
       }
       if (query.isNotEmpty &&
@@ -54,7 +63,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
       return true;
     }).toList()
       ..sort((a, b) {
-        final due = a.dueDate.compareTo(b.dueDate);
+        final due = a.deliveryDeadline.compareTo(b.deliveryDeadline);
         return due != 0
             ? due
             : a.customerName
@@ -117,6 +126,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
     try {
       await _save(order);
       if (mounted) {
+        if (!_allMonths) {
+          setState(() => _month = shiftHebrewMonth(order.dueDate, 0));
+        }
         showAppSuccess(
             context, context.l10n.pick(he: 'ההזמנה נשמרה', en: 'Order saved'));
       }
@@ -172,15 +184,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
   void _moveMonth(int delta) {
     setState(() {
       _allMonths = false;
-      _month = DateTime(_month.year, _month.month + delta);
+      _month = shiftHebrewMonth(_month, delta);
     });
   }
-
-  String _date(DateTime date) => formatDisplayDate(
-        date,
-        _useGregorianDates,
-        english: context.l10n.isEnglish,
-      );
 
   String _typeLabel(ProjectType type) => switch (type) {
         ProjectType.sefer =>
@@ -306,7 +312,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
   Widget _monthBar() {
     final monthLabel = _allMonths
         ? context.l10n.pick(he: 'כל החודשים', en: 'All months')
-        : '${_month.month.toString().padLeft(2, '0')}/${_month.year}';
+        : formatDisplayDateMonth(_month, false,
+            english: context.l10n.isEnglish);
     return Row(
       children: [
         IconButton(
@@ -351,7 +358,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
     final color = _statusColor(order, tokens);
     final overdue = order.status != OrderStatus.cancelled &&
         !order.isFullySupplied &&
-        DateUtils.dateOnly(order.dueDate)
+        DateUtils.dateOnly(order.deliveryDeadline)
             .isBefore(DateUtils.dateOnly(DateTime.now()));
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
@@ -398,8 +405,13 @@ class _OrdersScreenState extends State<OrdersScreen> {
                       runSpacing: 4,
                       children: [
                         Text(
-                          context.l10n.pick(he: 'מסירה: ', en: 'Due: ') +
-                              _date(order.dueDate),
+                          context.l10n.pick(
+                                  he: 'מסירה: ',
+                                  en: 'Due: ',
+                                  yi: 'איבערגעבן: ') +
+                              _deliveryLabel(context.l10n, order.dueDate,
+                                  monthOnly: order.dueMonthOnly,
+                                  showGregorian: _useGregorianDates),
                           style: TextStyle(
                             color: overdue ? tokens.danger : tokens.inkMuted,
                             fontWeight: overdue ? FontWeight.bold : null,
@@ -512,6 +524,7 @@ class _OrderEditorDialogState extends State<OrderEditorDialog> {
   late final TextEditingController _requirements;
   late final TextEditingController _price;
   late DateTime _dueDate;
+  late bool _dueMonthOnly;
   late Currency _currency;
   late List<_OrderItemDraft> _items;
   String? _error;
@@ -529,6 +542,7 @@ class _OrderEditorDialogState extends State<OrderEditorDialog> {
             ? ''
             : existing.price.toString());
     _dueDate = existing?.dueDate ?? DateUtils.dateOnly(DateTime.now());
+    _dueMonthOnly = existing?.dueMonthOnly ?? false;
     _currency = existing?.currency ?? widget.currency;
     _items = existing == null
         ? [_OrderItemDraft()]
@@ -548,12 +562,6 @@ class _OrderEditorDialogState extends State<OrderEditorDialog> {
     super.dispose();
   }
 
-  String _date(DateTime date) => formatDisplayDate(
-        date,
-        widget.useGregorianDates,
-        english: context.l10n.isEnglish,
-      );
-
   String _typeLabel(ProjectType type) => switch (type) {
         ProjectType.sefer =>
           context.l10n.pick(he: 'ספר תורה', en: 'Sefer Torah'),
@@ -562,13 +570,18 @@ class _OrderEditorDialogState extends State<OrderEditorDialog> {
         ProjectType.megillah => context.l10n.pick(he: 'מגילה', en: 'Megillah'),
       };
 
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _dueDate,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-    );
+  Future<void> _pickDate({bool gregorian = false}) async {
+    final picked = gregorian
+        ? await showDatePicker(
+            context: context,
+            initialDate: _dueDate,
+            firstDate:
+                _dueDate.isBefore(DateTime(2000)) ? _dueDate : DateTime(2000),
+            lastDate:
+                _dueDate.isAfter(DateTime(2100)) ? _dueDate : DateTime(2100),
+          )
+        : await showHebrewDatePicker(context,
+            initialDate: _dueDate, monthOnly: _dueMonthOnly);
     if (picked != null && mounted) {
       setState(() => _dueDate = DateUtils.dateOnly(picked));
     }
@@ -637,6 +650,7 @@ class _OrderEditorDialogState extends State<OrderEditorDialog> {
         email: _email.text.trim(),
         orderedAt: existing?.orderedAt ?? DateUtils.dateOnly(DateTime.now()),
         dueDate: _dueDate,
+        dueMonthOnly: _dueMonthOnly,
         requirements: _requirements.text.trim(),
         price: price,
         currency: _currency,
@@ -819,14 +833,25 @@ class _OrderEditorDialogState extends State<OrderEditorDialog> {
                 ],
               ),
               const SizedBox(height: 8),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(context.l10n.pick(
+                    he: 'מסירה לפי חודש בלבד',
+                    en: 'Delivery month only',
+                    yi: 'נאָר דער חודש פֿון איבערגעבן')),
+                value: _dueMonthOnly,
+                onChanged: (value) =>
+                    setState(() => _dueMonthOnly = value == true),
+              ),
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: _pickDate,
                       icon: const Icon(Icons.event),
-                      label: Text(
-                          '${context.l10n.pick(he: 'מסירה', en: 'Due')}: ${_date(_dueDate)}'),
+                      label: Text(_deliveryLabel(context.l10n, _dueDate,
+                          monthOnly: _dueMonthOnly,
+                          showGregorian: widget.useGregorianDates)),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -844,9 +869,17 @@ class _OrderEditorDialogState extends State<OrderEditorDialog> {
                   ),
                 ],
               ),
+              if (!_dueMonthOnly)
+                TextButton(
+                    onPressed: () => _pickDate(gregorian: true),
+                    child: Text(context.l10n.pick(
+                        he: 'בחירה לפי תאריך לועזי',
+                        en: 'Choose a Gregorian date',
+                        yi: 'קלײַבן אַ ציווילן דאַטע'))),
               const SizedBox(height: 8),
               DropdownButtonFormField<Currency>(
                 initialValue: _currency,
+                isExpanded: true,
                 decoration: InputDecoration(
                   labelText: context.l10n.pick(he: 'מטבע', en: 'Currency'),
                 ),
@@ -857,7 +890,8 @@ class _OrderEditorDialogState extends State<OrderEditorDialog> {
                   })
                     DropdownMenuItem(
                         value: currency,
-                        child: Text('${currency.name} (${currency.code})')),
+                        child: Text('${currency.name} (${currency.code})',
+                            overflow: TextOverflow.ellipsis)),
                 ],
                 onChanged: (value) {
                   if (value != null) setState(() => _currency = value);

@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'yiddish_preview.dart';
+import 'yiddish_workspace.dart';
 
-/// The two languages the application ships with.
+/// Languages used by the shared workspace.
 ///
 /// Hebrew remains the safe fallback for data written before language choice
 /// existed. English is deliberately a real locale, not a second hard-coded
@@ -9,16 +11,25 @@ import 'package:flutter/material.dart';
 /// conventions from the selected locale.
 enum AppLanguage {
   hebrew(Locale('he', 'IL')),
-  english(Locale('en', 'US'));
+  english(Locale('en', 'US')),
+  yiddish(Locale('yi'));
 
   final Locale locale;
   const AppLanguage(this.locale);
 
   String get code => locale.languageCode;
+  Locale get frameworkLocale => this == yiddish ? hebrew.locale : locale;
+
+  String get label => switch (this) {
+        hebrew => 'עברית',
+        english => 'English',
+        yiddish => 'ייִדיש',
+      };
 
   static AppLanguage? fromCode(String? code) => switch (code) {
         'he' => AppLanguage.hebrew,
         'en' => AppLanguage.english,
+        'yi' when yiddishPreview => AppLanguage.yiddish,
         _ => null,
       };
 }
@@ -42,15 +53,27 @@ class AppLocalizations {
   static const LocalizationsDelegate<AppLocalizations> delegate =
       _AppLocalizationsDelegate();
 
+  static LocalizationsDelegate<AppLocalizations> delegateFor(
+          AppLanguage language) =>
+      language == AppLanguage.yiddish
+          ? const _AppLocalizationsDelegate(Locale('yi'))
+          : delegate;
+
   static AppLocalizations of(BuildContext context) =>
       Localizations.of<AppLocalizations>(context, AppLocalizations) ??
       const AppLocalizations(Locale('he', 'IL'));
 
   bool get isEnglish => locale.languageCode == 'en';
+  bool get isYiddish => locale.languageCode == 'yi';
   TextDirection get textDirection =>
       isEnglish ? TextDirection.ltr : TextDirection.rtl;
 
-  String pick({required String he, required String en}) => isEnglish ? en : he;
+  String pick({required String he, required String en, String? yi}) =>
+      switch (locale.languageCode) {
+        'en' => en,
+        'yi' => yi ?? yiddishWorkspaceCopy(he, en),
+        _ => he,
+      };
 
   String get appName => pick(he: 'סופר ומונה', en: 'Sofer v’Mone');
   String get language => pick(he: 'שפה', en: 'Language');
@@ -70,6 +93,29 @@ class AppLocalizations {
   /// their presentation is localized, so switching language never rewrites a
   /// quote, backup, or historical expense.
   String expenseCategory(String storedName) {
+    if (isYiddish) {
+      return switch (storedName) {
+        'קלף מזוזות' => 'קלף פֿאַר מזוזות',
+        'קלף תפילין' => 'קלף פֿאַר תּפֿילין',
+        'קלף והגהות מגילות' => 'קלף און הגהות פֿאַר מגילות',
+        'הגהות מזוזות' => 'הגהות פֿון מזוזות',
+        'הגהות תפילין' => 'הגהות פֿון תּפֿילין',
+        'מחיקות מזוזות' => 'אויסמעקן אין מזוזות',
+        'משלוחים ונסיעות' => 'שיקונגען און נסיעות',
+        'דיו, מי קלף, ציוד' => 'דיו, מי קלף און געצײַג',
+        'קולמוס מגילות' => 'קולמוסים פֿאַר מגילות',
+        'קולמוס מזוזות' => 'קולמוסים פֿאַר מזוזות',
+        'קולמוס תש"י' => 'קולמוסים פֿאַר תּפֿילין של יד',
+        'קולמוס תש"ר' => 'קולמוסים פֿאַר תּפֿילין של ראש',
+        'משקפיים' => 'ברילן',
+        'שולחן, כסא, פנס, מכשיר אדים' => 'טיש, שטול, לאָמפּ און אַפּאַראַט פֿאַר פֿײַכטקייט',
+        'חדר סופרים' => 'שרײַבצימער פֿאַר סופרים',
+        'שונות' => 'אַנדערע הוצאות',
+        'קורס סת"ם' => 'לימודים אין סת״ם',
+        'תעודה' => 'תּעודה',
+        _ => storedName,
+      };
+    }
     if (!isEnglish) return storedName;
     return switch (storedName) {
       'קלף מזוזות' => 'Mezuzah Parchment',
@@ -96,6 +142,15 @@ class AppLocalizations {
   }
 
   String proofreadingStage(String hebrewLabel) {
+    if (isYiddish) {
+      return switch (hebrewLabel) {
+        'ממתין להגהה' => 'וואַרט אויף הגהה',
+        'אצל המגיה' => 'בײַם מגיה',
+        'חזר לתיקון' => 'צוריקגעקומען צו פֿאַרריכטן',
+        'הושלם' => 'פֿאַרענדיקט',
+        _ => hebrewLabel,
+      };
+    }
     if (!isEnglish) return hebrewLabel;
     return switch (hebrewLabel) {
       'ממתין להגהה' => 'Awaiting Proofreading',
@@ -107,6 +162,14 @@ class AppLocalizations {
   }
 
   String nonWorkReason(String hebrewLabel) {
+    if (isYiddish) {
+      return switch (hebrewLabel) {
+        'לפני פסח' => 'פֿאַר פּסח',
+        'בין כיפור לסוכות' => 'צווישן יום כּיפּור און סוכּות',
+        'יום חופש אישי' => 'אַן אייגענער רוטאָג',
+        _ => hebrewLabel,
+      };
+    }
     if (!isEnglish) return hebrewLabel;
     return switch (hebrewLabel) {
       'שבת' => 'Shabbat',
@@ -136,6 +199,7 @@ class AppLocalizations {
   /// The source remains Hebrew for backward-compatible tests and stored
   /// descriptions; presentation converts only known messages.
   String businessMessage(String message) {
+    if (isYiddish) return yiddishBusinessMessage(message);
     if (!isEnglish) return message;
     const exact = {
       'יש להזין לפחות עמוד התחלה תקין': 'Enter a valid starting page',
@@ -239,7 +303,8 @@ extension AppLocalizationsContext on BuildContext {
 
 class _AppLocalizationsDelegate
     extends LocalizationsDelegate<AppLocalizations> {
-  const _AppLocalizationsDelegate();
+  const _AppLocalizationsDelegate([this.appLocale]);
+  final Locale? appLocale;
 
   @override
   bool isSupported(Locale locale) => AppLocalizations.supportedLocales.any(
@@ -248,8 +313,9 @@ class _AppLocalizationsDelegate
 
   @override
   Future<AppLocalizations> load(Locale locale) =>
-      SynchronousFuture(AppLocalizations(locale));
+      SynchronousFuture(AppLocalizations(appLocale ?? locale));
 
   @override
-  bool shouldReload(_AppLocalizationsDelegate old) => false;
+  bool shouldReload(_AppLocalizationsDelegate old) =>
+      old.appLocale != appLocale;
 }

@@ -72,7 +72,7 @@ void main() {
     final clockText = tester.widget<Text>(find.text('00:00:00').first);
     expect(clockText.style!.fontFamily, r.tokens.numeralFamily);
     expect(clockText.style!.color, r.tokens.ink);
-    expect(find.text('זמן כתיבה'), findsOneWidget);
+    expect(find.text('זמן עבודה'), findsOneWidget);
     expect(find.text('זמן השורה'), findsOneWidget);
   });
 

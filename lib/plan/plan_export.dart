@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:excel/excel.dart' as xl;
 import 'package:flutter/services.dart' show rootBundle;
+import '../app_assets.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
@@ -26,8 +27,8 @@ class PlanExport {
   static Future<void> _loadFonts() async {
     if (_serif != null && _sans != null) return;
     _serif ??= pw.Font.ttf(
-        await rootBundle.load('assets/fonts/FrankRuhlLibre-var.ttf'));
-    _sans ??= pw.Font.ttf(await rootBundle.load('assets/fonts/Heebo-var.ttf'));
+        await rootBundle.load(AppAssets.path('assets/fonts/FrankRuhlLibre-var.ttf')));
+    _sans ??= pw.Font.ttf(await rootBundle.load(AppAssets.path('assets/fonts/Heebo-var.ttf')));
   }
 
   /// The table as a page to print or keep.

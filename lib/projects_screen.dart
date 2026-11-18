@@ -1,3 +1,5 @@
+import 'logic/writing_conditions.dart';
+import 'widgets/writing_conditions_fields.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -316,6 +318,9 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
 
   Future<void> _confirmResetAll() async {
     final TextEditingController confirmCtrl = TextEditingController();
+    final confirmationWord = context.l10n.pick(
+      he: 'מחיקה', en: 'DELETE', yi: 'אויסמעקן',
+    );
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -328,8 +333,9 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
           children: [
             Text(
               context.l10n.pick(
-                he: "פעולה זו תמחק את כל הפרויקטים וההיסטוריה לצמיתות!\nכדי לאשר, הקלד את המילה 'מחיקה' למטה:",
-                en: "This permanently deletes every project and all history!\nTo confirm, type DELETE below:",
+                he: "פעולה זו תמחק את כל הפרויקטים וההיסטוריה לצמיתות!\nכדי לאשר, הקלד את המילה '$confirmationWord' למטה:",
+                en: "This permanently deletes every project and all history!\nTo confirm, type $confirmationWord below:",
+                yi: 'אַלע פּראָיעקטן און די גאַנצע געשיכטע ווערן אויסגעמעקט אויף אייביק.\nצו באַשטעטיקן, שרײַבט „$confirmationWord“ אונטן:',
               ),
               style: TextStyle(color: SoferTokens.of(ctx).danger),
             ),
@@ -337,7 +343,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
             TextField(
               controller: confirmCtrl,
               decoration: InputDecoration(
-                hintText: context.l10n.pick(he: "מחיקה", en: "DELETE"),
+                hintText: confirmationWord,
               ),
             ),
           ],
@@ -349,8 +355,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
           ),
           ElevatedButton(
             onPressed: () {
-              if (confirmCtrl.text ==
-                  context.l10n.pick(he: "מחיקה", en: "DELETE")) {
+              if (confirmCtrl.text == confirmationWord) {
                 widget.onResetAllData();
                 Navigator.pop(ctx);
                 Navigator.pop(ctx);
@@ -714,6 +719,7 @@ class ProjectDialog extends StatefulWidget {
 class _ProjectDialogState extends State<ProjectDialog> {
   final _formKey = GlobalKey<FormState>();
 
+  late WritingConditionsController _conditions;
   late TextEditingController _nameCtrl;
   late TextEditingController _priceCtrl;
   late TextEditingController _expensesCtrl;
@@ -740,6 +746,8 @@ class _ProjectDialogState extends State<ProjectDialog> {
   void initState() {
     super.initState();
     final p = widget.existingProject;
+    _conditions = WritingConditionsController(
+        p == null ? const WritingConditions() : WritingConditions.project(p));
     _type = p?.type ?? ProjectType.sefer;
     if (p != null) {
       _tefillinWords = TefillinPreferences.usesWords(p);
@@ -771,6 +779,7 @@ class _ProjectDialogState extends State<ProjectDialog> {
 
   @override
   void dispose() {
+    _conditions.dispose();
     _nameCtrl.dispose();
     _priceCtrl.dispose();
     _expensesCtrl.dispose();
@@ -857,6 +866,19 @@ class _ProjectDialogState extends State<ProjectDialog> {
               ),
               const SizedBox(height: 10),
               _buildDynamicFields(),
+              ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  maintainState: true,
+                  title: Text(context.l10n.pick(
+                      he: 'תנאי כתיבה לסטטיסטיקה (רשות)',
+                      en: 'Writing conditions for statistics (optional)')),
+                  children: [
+                    WritingConditionsFields(
+                        controller: _conditions, environment: false),
+                    Text(context.l10n.pick(
+                        he: 'שינוי חל על כתיבה חדשה בלבד. רשומות עבר שומרות את הנתונים שנרשמו בהן.',
+                        en: 'Changes apply to new work only. Historical records keep their own snapshots.'))
+                  ]),
               if (_type == ProjectType.tefillin) ...[
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
@@ -1146,10 +1168,12 @@ class _ProjectDialogState extends State<ProjectDialog> {
           const SizedBox(height: 8),
           Row(
             children: [
-              Text(context.l10n.pick(
-                he: "יעד יומי בשורות (במקום עמודים):",
-                en: "Set the daily target in lines instead of pages:",
-              )),
+              Flexible(
+                child: Text(context.l10n.pick(
+                  he: "יעד יומי בשורות (במקום עמודים):",
+                  en: "Set the daily target in lines instead of pages:",
+                )),
+              ),
               const SizedBox(width: 8),
               Switch(
                 value: _dailyGoalInLines,
@@ -1305,7 +1329,7 @@ class _ProjectDialogState extends State<ProjectDialog> {
       // Editing is a replacement of an immutable value, not a new
       // commission. Start from the existing value so fields not shown in this
       // form (plans, tefillin flags and future extension fields) survive.
-      final p = existing == null
+      final base = existing == null
           ? Project(
               id: IdGenerator.generate(),
               name: _nameCtrl.text,
@@ -1342,6 +1366,7 @@ class _ProjectDialogState extends State<ProjectDialog> {
               clientEmail: email.isEmpty ? null : email,
               targetCompletionDate: _targetCompletionDate,
             );
+      final p = _conditions.value.applyToProject(base);
       widget.onSave(_type == ProjectType.tefillin
           ? TefillinPreferences.update(p,
               words: _tefillinWords, script: _tefillinScript)

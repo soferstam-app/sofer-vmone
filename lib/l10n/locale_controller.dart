@@ -34,10 +34,11 @@ class LocaleController extends ChangeNotifier {
   bool get isLoaded => _loaded;
   bool get hasExplicitChoice => _hasExplicitChoice;
 
-  Future<void> load() async {
-    final stored = AppLanguage.fromCode(await _storage.getAppLanguageCode());
-    _hasExplicitChoice = stored != null;
-    _language = stored ?? AppLanguage.hebrew;
+  Future<void> load({AppLanguage? browserLanguage}) async {
+    final selected = browserLanguage ??
+        AppLanguage.fromCode(await _storage.getAppLanguageCode());
+    _hasExplicitChoice = selected != null;
+    _language = selected ?? AppLanguage.hebrew;
     _loaded = true;
     notifyListeners();
   }

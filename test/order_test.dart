@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:kosher_dart/kosher_dart.dart';
+import 'package:sofer_vmone/logic/calendar_days.dart';
 import 'package:sofer_vmone/logic/merge_service.dart';
 import 'package:sofer_vmone/models.dart';
 import 'package:sofer_vmone/storage_service.dart';
@@ -32,6 +34,24 @@ Order sampleOrder({DateTime? updated}) => Order(
 
 void main() {
   tearDown(() => StorageService.demoStore = null);
+
+  test('Hebrew month-only deadline survives export and restore', () {
+    for (final (month, lastDay) in [(12, 30), (13, 29)]) {
+      DateTime date(int day) => JewishDate.initDate(
+              jewishYear: 5787, jewishMonth: month, jewishDayOfMonth: day)
+          .getGregorianCalendar();
+      final order =
+          sampleOrder().copyWith(dueDate: date(1), dueMonthOnly: true);
+      final restored = Order.fromJson(order.toJson());
+      expect(restored.dueMonthOnly, isTrue);
+      expect(restored.deliveryDeadline, CalendarDays.midnight(date(lastDay)));
+      expect(restored.copyWith(isDeleted: true).dueMonthOnly, isTrue);
+    }
+    final oldJson = sampleOrder().toJson()..remove('dueMonthOnly');
+    final old = Order.fromJson(oldJson);
+    expect(old.dueMonthOnly, isFalse);
+    expect(old.deliveryDeadline, sampleOrder().dueDate);
+  });
 
   test('mixed order survives JSON round trip with partial supply', () {
     final original = sampleOrder();

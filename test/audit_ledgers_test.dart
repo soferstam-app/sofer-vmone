@@ -1,9 +1,13 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sofer_vmone/expenses_screen.dart';
+import 'package:sofer_vmone/l10n/app_localizations.dart';
+import 'package:sofer_vmone/l10n/yiddish_material.dart';
 import 'package:sofer_vmone/logic/currency.dart';
+import 'package:sofer_vmone/logic/hebrew_month.dart';
 import 'package:sofer_vmone/models.dart';
 import 'package:sofer_vmone/orders_screen.dart';
 import 'package:sofer_vmone/project/payment_sheet.dart';
@@ -67,6 +71,79 @@ void main() {
     StorageService.demoStore = null;
     StorageService.onChanged = null;
   });
+
+  testWidgets('orders are filtered by Hebrew month boundaries', (tester) async {
+    final now = DateTime.now();
+    final next = shiftHebrewMonth(now, 1);
+    final current =
+        order.copyWith(dueDate: shiftHebrewMonth(now, 0), dueMonthOnly: true);
+    final later = Order(
+        id: 'next',
+        customerName: 'לקוח חודש הבא',
+        orderedAt: now,
+        dueDate: next,
+        lastUpdated: now);
+    StorageService.demoStore = MemoryStore({
+      'orders': jsonEncode([current.toJson(), later.toJson()]),
+    });
+    await tester.pumpWidget(host(const OrdersScreen()));
+    await tester.pumpAndSettle();
+    expect(find.text(current.customerName), findsOneWidget);
+    expect(find.text(later.customerName), findsNothing);
+    await tap(tester, find.byTooltip('חודש הבא'));
+    expect(find.text(current.customerName), findsNothing);
+    expect(find.text(later.customerName), findsOneWidget);
+  });
+
+  for (final (language, label, pickerTitle) in [
+    (AppLanguage.hebrew, 'מסירה לפי חודש בלבד', 'בחר חודש עברי'),
+    (AppLanguage.english, 'Delivery month only', 'Choose a Hebrew month'),
+    (
+      AppLanguage.yiddish,
+      'נאָר דער חודש פֿון איבערגעבן',
+      'קלײַבט אַ ייִדישן חודש'
+    ),
+  ]) {
+    testWidgets('order delivery controls fit a phone in ${language.name}',
+        (tester) async {
+      tester.view.physicalSize = const Size(360, 720);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(
+        locale: language.frameworkLocale,
+        theme: AppThemeBuilder.build(AppTheme.modern),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: [
+          AppLocalizations.delegateFor(language),
+          if (language == AppLanguage.yiddish) const YiddishMaterialDelegate(),
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: OrderEditorDialog(
+            existing: order,
+            projects: const [],
+            currency: Currency.ils,
+            useGregorianDates: true),
+      ));
+      await tester.pumpAndSettle();
+      final choice = find.text(label);
+      expect(choice, findsOneWidget);
+      expect(
+          Directionality.of(tester.element(choice)),
+          language == AppLanguage.english
+              ? TextDirection.ltr
+              : TextDirection.rtl);
+      await tap(tester, choice);
+      expect(
+          tester.widget<CheckboxListTile>(find.byType(CheckboxListTile)).value,
+          isTrue);
+      await tap(tester, find.widgetWithIcon(OutlinedButton, Icons.event));
+      expect(find.text(pickerTitle), findsOneWidget);
+      expect(find.byType(DropdownButton<int>), findsNWidgets(2));
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets(
       'C5 all deleted ledgers can be restored without reviving expired rows',
@@ -165,10 +242,17 @@ void main() {
     await tap(tester, find.text('לקוח בדיקה'));
     expect(find.text('פרויקט שנמחק או אינו זמין'), findsWidgets);
     expect(tester.takeException(), isNull);
+    await tap(tester, find.text('מסירה לפי חודש בלבד'));
+    await tap(tester, find.widgetWithIcon(OutlinedButton, Icons.event));
+    expect(find.text('בחר חודש עברי'), findsOneWidget);
+    expect(find.byType(DropdownButton<int>), findsNWidgets(2));
+    await tap(tester, find.text('בחר'));
     await tap(tester, find.text('שמור'));
     final stored = (await StorageService().loadOrders()).single;
     expect(stored.status, OrderStatus.cancelled);
     expect(stored.items.single.projectId, 'missing');
+    expect(stored.dueMonthOnly, isTrue);
+    expect(stored.dueDate, stored.deliveryDeadline);
     expect(stored.suppliedQuantity, 2);
     await tap(tester, find.byType(PopupMenuButton<String>));
     await tap(tester, find.text('החזר לפעילות'));

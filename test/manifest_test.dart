@@ -59,7 +59,28 @@ void main() {
       }
     });
 
-    test('asks for nothing that reads the writer or the device', () {
+    test(
+        'allows the microphone for offline commands and excludes voice data from backup',
+        () {
+      expect(declares('RECORD_AUDIO'), isTrue);
+      expect(declares('FOREGROUND_SERVICE_MICROPHONE'), isFalse);
+      expect(
+          source(),
+          contains(
+              'android:name="android.hardware.microphone" android:required="false"'));
+      expect(
+          source(), contains('android:fullBackupContent="@xml/backup_rules"'));
+      expect(source(),
+          contains('android:dataExtractionRules="@xml/data_extraction_rules"'));
+      for (final rules in ['backup_rules', 'data_extraction_rules']) {
+        expect(
+          File('android/app/src/main/res/xml/$rules.xml').readAsStringSync(),
+          contains('<exclude domain="sharedpref" path="voice_commands.xml"'),
+        );
+      }
+    });
+
+    test('omits unrelated sensitive permissions', () {
       // Every permission here shows in the installer, and a sideloaded app is
       // judged on that list before anything else. Nothing in this app needs
       // any of these, and one arriving by way of a plugin should be a decision
@@ -71,7 +92,6 @@ void main() {
         'ACCESS_FINE_LOCATION',
         'ACCESS_COARSE_LOCATION',
         'CAMERA',
-        'RECORD_AUDIO',
         'READ_PHONE_STATE',
         'QUERY_ALL_PACKAGES',
       ]) {

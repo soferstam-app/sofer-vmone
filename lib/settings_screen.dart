@@ -8,20 +8,24 @@ import 'platform_support.dart';
 import 'main.dart'
     show accessibilityController, localeController, themeController;
 import 'l10n/app_localizations.dart';
+import 'l10n/theme_labels.dart';
 import 'storage_service.dart';
 import 'notification_service.dart';
 import 'theme_settings_screen.dart';
 import 'widgets/sofer_widgets.dart';
 import 'work_calendar_settings_screen.dart';
-import 'dart:io';
 import 'theme/app_theme.dart';
 import 'onboarding/onboarding_screen.dart';
 import 'settings/shortcuts_screen.dart';
 import 'settings/home_additions_screen.dart';
 import 'settings/writing_journal_settings_screen.dart';
 import 'settings/accessibility_screen.dart';
+import 'settings/diagnostic_report_dialog.dart';
+import 'logic/diagnostic_report.dart';
+import 'settings/account_session.dart';
 import 'widgets/feedback.dart';
 import 'logic/currency.dart';
+import 'logic/merge_service.dart';
 import 'version.dart';
 import 'update_installer.dart';
 import 'update_service.dart';
@@ -56,6 +60,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Set<Currency> _inUse = const {};
   bool _isExporting = false;
   bool _checkingUpdate = false;
+  bool _signingOut = false;
 
   /// Where a copy is left after every sitting, or null when the writer has not
   /// asked for one.
@@ -105,13 +110,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   String get _themeSummary {
-    final choice = context.l10n.isEnglish
-        ? switch (themeController.choice) {
-            AppTheme.modern => 'Modern',
-            AppTheme.klaf => 'Parchment',
-            AppTheme.layla => 'Night',
-          }
-        : themeController.choice.label;
+    final choice = context.l10n.themeLabel(themeController.choice);
     if (themeController.nightByClock) {
       return context.l10n.pick(
         he: "$choice · כרגע בערכת לילה",
@@ -126,8 +125,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         : choice;
   }
 
-  String get _languageLabel =>
-      localeController.language == AppLanguage.hebrew ? 'עברית' : 'English';
+  String get _languageLabel => localeController.language.label;
 
   Future<void> _pickLanguage() async {
     final l10n = context.l10n;
@@ -138,17 +136,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
         content: RadioGroup<AppLanguage>(
           groupValue: localeController.language,
           onChanged: (value) => Navigator.pop(ctx, value),
-          child: const Column(
+          child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              RadioListTile<AppLanguage>(
-                value: AppLanguage.hebrew,
-                title: Text('עברית'),
-              ),
-              RadioListTile<AppLanguage>(
-                value: AppLanguage.english,
-                title: Text('English'),
-              ),
+              for (final language in AppLanguage.values)
+                if (AppLanguage.fromCode(language.code) != null)
+                  RadioListTile<AppLanguage>(
+                    value: language,
+                    title: Text(language.label),
+                  ),
             ],
           ),
         ),
@@ -212,27 +208,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         for (final option in DayBoundary.values)
                           RadioListTile<DayBoundary>(
                             value: option,
-                            title: Text(context.l10n.isEnglish
-                                ? switch (option) {
-                                    DayBoundary.midnight => 'Midnight',
-                                    DayBoundary.sunset => 'Sunset',
-                                    DayBoundary.nightfall => 'Nightfall',
-                                    DayBoundary.fixedHour => 'Fixed hour',
-                                  }
-                                : option.label),
-                            subtitle: Text(
-                                context.l10n.isEnglish
-                                    ? switch (option) {
-                                        DayBoundary.midnight =>
-                                          'The civil day changes at 00:00',
-                                        DayBoundary.sunset =>
-                                          'Uses the average sunset time in Israel',
-                                        DayBoundary.nightfall =>
-                                          'Uses the average nightfall time in Israel',
-                                        DayBoundary.fixedHour =>
-                                          'Choose the hour at which a new workday starts',
-                                      }
-                                    : option.explanation,
+                            title: Text(context.l10n.pick(
+                              he: option.label,
+                              en: switch (option) {
+                                DayBoundary.midnight => 'Midnight',
+                                DayBoundary.sunset => 'Sunset',
+                                DayBoundary.nightfall => 'Nightfall',
+                                DayBoundary.fixedHour => 'Fixed hour',
+                              },
+                              yi: switch (option) {
+                                DayBoundary.midnight => 'חצות הלילה',
+                                DayBoundary.sunset => 'שקיעה',
+                                DayBoundary.nightfall => 'צאת הכוכבים',
+                                DayBoundary.fixedHour => 'אַ באַשטימטע שעה',
+                              },
+                            )),
+                            subtitle: Text(context.l10n.pick(
+                                he: option.explanation,
+                                en: switch (option) {
+                                  DayBoundary.midnight => 'The civil day changes at 00:00',
+                                  DayBoundary.sunset => 'Uses the average sunset time in Israel',
+                                  DayBoundary.nightfall => 'Uses the average nightfall time in Israel',
+                                  DayBoundary.fixedHour => 'Choose the hour at which a new workday starts',
+                                },
+                                yi: switch (option) {
+                                  DayBoundary.midnight => 'דער טאָג בײַט זיך אום 00:00',
+                                  DayBoundary.sunset => 'לויט דער דורכשניטלעכער שקיעה אין ארץ־ישׂראל',
+                                  DayBoundary.nightfall => 'לויטן דורכשניטלעכן צאת הכוכבים אין ארץ־ישׂראל',
+                                  DayBoundary.fixedHour => 'קלײַבט ווען אַ נײַער אַרבעטסטאָג זאָל זיך אָנהייבן',
+                                },
+                              ),
                                 style: const TextStyle(fontSize: 12)),
                             contentPadding: EdgeInsets.zero,
                           ),
@@ -384,11 +389,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
       return;
     }
-    final succeeded = await BackupService.instance.writeAutoBackup();
+    final succeeded = await BackupService.instance.verifyAutoBackup();
     if (!mounted) return;
     setState(() => _autoBackupFolder = picked);
-    // setAutoBackupFolder is observed by StorageService, so the first
-    // snapshot is written as part of the same successful save.
+    // The storage hook only schedules background work. Initial setup reports
+    // success only after this explicit external write has been verified.
     if (!mounted) return;
     if (!succeeded) {
       showAppError(
@@ -495,7 +500,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   String _updateInstallExplanation() {
-    if (Platform.isAndroid) {
+    if (PlatformSupport.isAndroid) {
       return context.l10n.pick(
           he: "התוכנה תוריד את קובץ העדכון המאומת, ו־Android יבקש ממך לאשר את ההתקנה.",
           en: "The app will download the verified update file, and Android will ask you to approve the installation.");
@@ -536,7 +541,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       closeDialog();
       await dialogFuture;
       await const UpdateInstaller().install(downloaded, english: english);
-      if (mounted && Platform.isAndroid) {
+      if (mounted && PlatformSupport.isAndroid) {
         showAppSuccess(
           context,
           context.l10n.pick(
@@ -606,11 +611,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   /// Reads a backup file, shows what it holds, and merges it once confirmed.
   Future<void> _importBackup() async {
+    if (_isExporting) return;
     setState(() => _isExporting = true);
+    try {
+      await _restoreSelectedBackup();
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
+    }
+  }
+
+  Future<void> _restoreSelectedBackup() async {
     final read = await BackupService.instance
         .readBackupFile(english: context.l10n.isEnglish);
     if (!mounted) return;
-    setState(() => _isExporting = false);
 
     if (!read.isOk) {
       final message = switch (read.error!) {
@@ -637,6 +650,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
+        scrollable: true,
         title:
             Text(context.l10n.pick(he: "שחזור מגיבוי", en: "Restore backup")),
         content: Column(
@@ -685,6 +699,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     TextStyle(fontSize: 13, color: SoferTokens.of(ctx).danger),
               ),
             ],
+            if (p.unreadableSections > 0) ...[
+              const SizedBox(height: 8),
+              Text(
+                context.l10n.pick(
+                    he: "${p.unreadableSections} חלקים בקובץ אינם ניתנים לקריאה. אפשר לשחזר את החלקים התקינים. כדאי לשמור את הקובץ המקורי.",
+                    en: "${p.unreadableSections} sections could not be read. Readable sections can be restored. Keep the original file."),
+                style:
+                    TextStyle(fontSize: 13, color: SoferTokens.of(ctx).danger),
+              ),
+            ],
             const SizedBox(height: 14),
             Text(
               context.l10n.pick(
@@ -706,10 +730,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     if (confirmed != true || !mounted) return;
 
-    setState(() => _isExporting = true);
-    final outcome = await BackupService.instance.applyBackup(p);
+    final MergeOutcome outcome;
+    try {
+      outcome = await BackupService.instance.applyBackup(p);
+    } catch (error) {
+      debugPrint('Backup restore failed: $error');
+      if (mounted) {
+        showAppError(
+            context,
+            context.l10n.pick(
+                he: 'שחזור הגיבוי לא הושלם. אפשר לנסות שוב.',
+                en: 'Backup restore did not finish. You can try again.'));
+      }
+      return;
+    }
     if (!mounted) return;
-    setState(() => _isExporting = false);
 
     // The imported snapshot may carry portable user preferences. Reload the
     // app-wide controllers while this route is still open, so restoring a
@@ -721,15 +756,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await _loadNotificationSettings();
     if (!mounted) return;
 
+    final updated = outcome.projectStats.updated +
+        outcome.historyStats.updated +
+        outcome.expenseStats.updated +
+        outcome.proofreadStats.updated +
+        outcome.paymentStats.updated +
+        outcome.orderStats.updated;
     final summary = outcome.changedAnything
         ? context.l10n.pick(
             he:
-                "נוספו: ${outcome.projectStats.added} פרויקטים, ${outcome.historyStats.added} רשומות, ${outcome.expenseStats.added} הוצאות, ${outcome.orderStats.added} הזמנות.\nעודכנו: ${outcome.projectStats.updated + outcome.historyStats.updated + outcome.expenseStats.updated + outcome.orderStats.updated} פריטים.",
+                "נוספו ${outcome.projectStats.added} פרויקטים, ${outcome.historyStats.added} רשומות עבודה, ${outcome.expenseStats.added} הוצאות, ${outcome.proofreadStats.added} הגהות, ${outcome.paymentStats.added} תשלומים ו־${outcome.orderStats.added} הזמנות.\nעודכנו $updated רשומות.",
             en:
-                "Added: ${outcome.projectStats.added} projects, ${outcome.historyStats.added} records, ${outcome.expenseStats.added} expenses, ${outcome.orderStats.added} orders.\nUpdated: ${outcome.projectStats.updated + outcome.historyStats.updated + outcome.expenseStats.updated + outcome.orderStats.updated} items.")
+                "Added ${outcome.projectStats.added} projects, ${outcome.historyStats.added} work records, ${outcome.expenseStats.added} expenses, ${outcome.proofreadStats.added} proofreading records, ${outcome.paymentStats.added} payments and ${outcome.orderStats.added} orders.\nUpdated $updated records.")
         : context.l10n.pick(
-            he: "כל הנתונים בקובץ כבר קיימים במכשיר – לא בוצע שינוי.",
-            en: "All data in the file already exists on this device; no changes were made.");
+            he: "שחזור הגיבוי הושלם. רשומות העבודה והפנקסים נשארו כפי שהיו.",
+            en: "Backup restored. Work and ledger records were unchanged.");
 
     showAppSuccess(context, summary);
   }
@@ -750,7 +791,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context,
       title: context.l10n.pick(
           he: "ייבוא מהתקנה קודמת", en: "Import from an older installation"),
-      message: Platform.isWindows
+      message: PlatformSupport.isWindows
           ? context.l10n.pick(
               he:
                   "גרסאות עד 0.3.1 לא כללו מסך גיבוי, אבל הנתונים שמורים בקובץ רגיל על המחשב:\n\n$windowsPath\n\nאפשר להעתיק אותו מהמחשב הישן ולבחור אותו כאן. הנתונים יתווספו לקיימים ושום דבר לא יימחק.",
@@ -769,8 +810,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final choice = await showModalBottomSheet<String>(
       context: context,
       builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        child: ListView(
+          shrinkWrap: true,
           children: [
             Padding(
               padding: const EdgeInsets.all(16),
@@ -782,25 +823,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             ListTile(
               leading: Icon(Icons.save_alt, color: SoferTokens.of(ctx).accent),
-              title: Text(
-                  context.l10n.pick(he: "שמור במכשיר", en: "Save on device")),
-              subtitle: Text(PlatformSupport.isDesktop
+              title: Text(kIsWeb
+                  ? context.l10n.pick(he: "הורד קובץ", en: "Download file")
+                  : context.l10n.pick(he: "שמור במכשיר", en: "Save on device")),
+              subtitle: Text(kIsWeb
                   ? context.l10n.pick(
-                      he: "בחירת תיקייה לשמירת הקובץ",
-                      en: "Choose a folder for the file")
-                  : context.l10n.pick(
-                      he: "בחירת מיקום בזיכרון המכשיר",
-                      en: "Choose a location in device storage")),
+                      he: "הורדת קובץ גיבוי דרך הדפדפן",
+                      en: "Download a backup through the browser")
+                  : PlatformSupport.isDesktop
+                      ? context.l10n.pick(
+                          he: "בחירת תיקייה לשמירת הקובץ",
+                          en: "Choose a folder for the file")
+                      : context.l10n.pick(
+                          he: "בחירת מיקום בזיכרון המכשיר",
+                          en: "Choose a location in device storage")),
               onTap: () => Navigator.pop(ctx, 'save'),
             ),
-            ListTile(
-              leading: Icon(Icons.share, color: SoferTokens.of(ctx).accent),
-              title: Text(context.l10n.pick(he: "שיתוף", en: "Share")),
-              subtitle: Text(context.l10n.pick(
-                  he: "שליחה לוואטסאפ, מייל, או כל אפליקציה אחרת במכשיר",
-                  en: "Send through WhatsApp, email, or another app on this device")),
-              onTap: () => Navigator.pop(ctx, 'share'),
-            ),
+            if (!kIsWeb)
+              ListTile(
+                leading: Icon(Icons.share, color: SoferTokens.of(ctx).accent),
+                title: Text(context.l10n.pick(he: "שיתוף", en: "Share")),
+                subtitle: Text(context.l10n.pick(
+                    he: "שליחה לוואטסאפ, מייל, או כל אפליקציה אחרת במכשיר",
+                    en: "Send through WhatsApp, email, or another app on this device")),
+                onTap: () => Navigator.pop(ctx, 'share'),
+              ),
             const Divider(),
             ListTile(
               leading:
@@ -987,6 +1034,70 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Widget _accountEntry() {
+    final session = AccountSession.maybeOf(context);
+    if (session == null) return const SizedBox.shrink();
+    return ListTile(
+      leading: Icon(Icons.logout, color: SoferTokens.of(context).accent),
+      title: Text(context.l10n.pick(
+        he: 'יציאה מהחשבון',
+        en: 'Sign out',
+      )),
+      onTap: _signingOut ? null : () => _confirmSignOut(session),
+    );
+  }
+
+  Widget _phoneLinkEntry() {
+    final linkPhone = AccountSession.maybeOf(context)?.linkPhone;
+    if (linkPhone == null) return const SizedBox.shrink();
+    return ListTile(
+      leading:
+          Icon(Icons.phone_outlined, color: SoferTokens.of(context).accent),
+      title: Text(context.l10n.pick(he: 'שיוך טלפון', en: 'Link a phone')),
+      onTap: linkPhone,
+    );
+  }
+
+  Widget _accountPasswordEntry() {
+    final managePassword = AccountSession.maybeOf(context)?.managePassword;
+    if (managePassword == null) return const SizedBox.shrink();
+    return ListTile(
+      leading: Icon(Icons.key_outlined, color: SoferTokens.of(context).accent),
+      title:
+          Text(context.l10n.pick(he: 'סיסמה לחשבון', en: 'Account password')),
+      onTap: managePassword,
+    );
+  }
+
+  Future<void> _confirmSignOut(AccountSession session) async {
+    if (_signingOut) return;
+    setState(() => _signingOut = true);
+    try {
+      final confirmed = await confirmAction(
+        context,
+        title: context.l10n.pick(he: 'לצאת מהחשבון?', en: 'Sign out?'),
+        message: context.l10n.pick(
+          he: 'כדי לחזור לסביבת העבודה תצטרך להתחבר שוב.',
+          en: 'Sign in again to return to your workspace.',
+        ),
+        confirmLabel: context.l10n.pick(he: 'צא מהחשבון', en: 'Sign out'),
+      );
+      if (confirmed && mounted) await session.signOut();
+    } catch (_) {
+      if (mounted) {
+        showAppError(
+          context,
+          context.l10n.pick(
+            he: 'היציאה נכשלה. אפשר לנסות שוב.',
+            en: 'Sign-out failed. Please try again.',
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _signingOut = false);
+    }
+  }
+
   Future<void> _openShortcuts() async {
     await Navigator.push(
       context,
@@ -1054,7 +1165,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SoferRule(strong: true),
         ],
 
-        _autoBackupEntry(ruled: true),
+        if (PlatformSupport.supportsFolderBackup) _autoBackupEntry(ruled: true),
         const SoferRule(strong: true),
 
         _entry(
@@ -1188,6 +1299,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 he: "פרויקטים, היסטוריה, הוצאות, הזמנות והגדרות בקובץ אחד",
                 en: "Projects, history, expenses, orders, and settings in one file"),
             onTap: _isExporting ? null : _showBackupOptions),
+        if (Diagnostics.supported)
+          _entry(diagnosticReportTitle(context), '',
+              onTap: () => showDiagnosticReportDialog(context)),
         if (_unreadable > 0)
           _entry(
               context.l10n.pick(
@@ -1197,7 +1311,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               note: context.l10n.pick(
                   he: "נשמרות כמו שהן ואינן נכנסות לאף חישוב. גרסה חדשה יותר תדע לקרוא אותן",
                   en: "They are preserved unchanged and excluded from calculations. A newer version may be able to read them.")),
-        if (Platform.isWindows || Platform.isAndroid)
+        if (PlatformSupport.isWindows || PlatformSupport.isAndroid)
           _entry(
               context.l10n.pick(he: "בדוק ועדכן", en: "Check for updates"),
               _checkingUpdate
@@ -1205,6 +1319,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   : "",
               onTap: _checkingUpdate ? null : _checkForUpdates),
         const SoferRule(strong: true),
+        _phoneLinkEntry(),
+        _accountPasswordEntry(),
+        _accountEntry(),
         const SizedBox(height: 24),
       ],
     );
@@ -1578,7 +1695,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         : const Icon(Icons.chevron_left),
                     onTap: _isExporting ? null : _showBackupOptions,
                   ),
-                  _autoBackupEntry(),
+                  if (Diagnostics.supported)
+                    ListTile(
+                      title: Text(diagnosticReportTitle(context)),
+                      leading: const Icon(Icons.bug_report_outlined),
+                      onTap: () => showDiagnosticReportDialog(context),
+                    ),
+                  if (PlatformSupport.supportsFolderBackup) _autoBackupEntry(),
                   if (_unreadable > 0)
                     ListTile(
                       leading: Icon(Icons.help_outline,
@@ -1592,7 +1715,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               en: "They are preserved unchanged and excluded from calculations. A newer version may read them."),
                           style: TextStyle(fontSize: 12)),
                     ),
-                  if (Platform.isWindows || Platform.isAndroid)
+                  if (PlatformSupport.isWindows || PlatformSupport.isAndroid)
                     ListTile(
                       title: Text(context.l10n
                           .pick(he: "בדוק ועדכן", en: "Check for updates")),
@@ -1600,6 +1723,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           color: SoferTokens.of(context).accent),
                       onTap: _checkingUpdate ? null : _checkForUpdates,
                     ),
+                  _phoneLinkEntry(),
+                  _accountPasswordEntry(),
+                  _accountEntry(),
                 ],
               ),
             ),

@@ -155,8 +155,7 @@ class ProductionPlan {
         _midnight(DateLogic.effectiveDate(now ?? DateTime.now(), dayStart));
 
     final mine = history
-        .where(
-            (s) => s.projectId == project.id && !s.isDeleted && !s.backlogOnly)
+        .where((s) => s.projectId == project.id && !s.isDeleted)
         .toList();
 
     // The plan is a line drawn from where the writer already was, not from zero.
@@ -310,6 +309,7 @@ class ProductionPlan {
   ) {
     final onDay = <DateTime, List<WorkSession>>{};
     for (final s in sessions) {
+      if (s.backlogOnly) continue;
       final filed = DateLogic.workingDateOf(s, dayStart);
       final day = DateTime(filed.year, filed.month, filed.day);
       if (day.isBefore(start) || day.isAfter(end)) continue;
@@ -340,6 +340,7 @@ class ProductionPlan {
     required bool inclusive,
   }) {
     final upTo = sessions.where((s) {
+      if (s.backlogOnly) return true;
       final filed = DateLogic.workingDateOf(s, dayStart);
       final d = DateTime(filed.year, filed.month, filed.day);
       return inclusive ? !d.isAfter(day) : d.isBefore(day);

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <title>Sofer v'Mone — clock with kolmus nibs</title>
+  <rect x="12" y="12" width="488" height="488" rx="112" fill="#211D24"/>
+  <rect x="22" y="22" width="468" height="468" rx="102" fill="none" stroke="#44323B" stroke-width="4"/>
+  <circle cx="256" cy="256" r="178" fill="#29212A" stroke="#EAB576" stroke-width="15"/>
+  <path d="M256 102v16 M410 256h-16 M256 410v-16 M102 256h16" fill="none" stroke="#EAB576" stroke-width="10" stroke-linecap="round"/>
+  <!-- The slit and the breather hole identify the outward point as a nib. -->
+  <g transform="translate(256 256) rotate(-53) scale(.73)">
+    <path fill="#EAB576" d="M-10 0V-103H10V0Z M-15 -96Q-23 -105 -25 -120Q-9 -148 0 -184Q9 -148 25 -120Q23 -105 15 -96Z"/>
+    <path d="M0 -177v36" stroke="#29212A" stroke-width="5" stroke-linecap="round"/>
+    <circle cy="-140" r="6.8" fill="#29212A"/>
+  </g>
+  <g transform="translate(256 256) rotate(56) scale(.86)">
+    <path fill="#FFF0D2" d="M-10 0V-103H10V0Z M-17 -96Q-27 -105 -29 -120Q-11 -148 0 -184Q11 -148 29 -120Q27 -105 17 -96Z"/>
+    <path d="M0 -177v36" stroke="#29212A" stroke-width="5.5" stroke-linecap="round"/>
+    <circle cy="-140" r="7.4" fill="#29212A"/>
+  </g>
+  <path d="M256 234C252 242 239 251 239 260A17 17 0 0 0 273 260C273 251 260 242 256 234Z" fill="#EAB576" stroke="#29212A" stroke-width="5" stroke-linejoin="round"/>
+</svg>

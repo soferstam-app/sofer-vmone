@@ -8,16 +8,21 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:screen_retriever/screen_retriever.dart';
 import 'package:window_manager/window_manager.dart';
+import 'app_assets.dart';
 import 'home_screen.dart';
 import 'backup_service.dart';
 import 'backup/migration_backup_gate.dart';
 import 'logic/demo_data.dart';
+import 'logic/diagnostic_report.dart';
 import 'logic/onboarding.dart';
 import 'logic/window_sizing.dart';
 import 'l10n/app_localizations.dart';
+import 'l10n/yiddish_material.dart';
 import 'l10n/language_choice_screen.dart';
 import 'l10n/locale_controller.dart';
 import 'onboarding/onboarding_screen.dart';
+import 'platform_support.dart';
+import 'settings/account_session.dart';
 import 'storage_service.dart';
 import 'storage_recovery_screen.dart';
 import 'theme/app_theme.dart';
@@ -52,7 +57,8 @@ final AccessibilityController accessibilityController =
 void registerFontLicences() {
   LicenseRegistry.addLicense(() async* {
     for (final font in const ['Heebo', 'FrankRuhlLibre']) {
-      final text = await rootBundle.loadString('assets/fonts/OFL-$font.txt');
+      final text = await rootBundle
+          .loadString(AppAssets.path('assets/fonts/OFL-$font.txt'));
       yield LicenseEntryWithLineBreaks([font], text);
     }
   });
@@ -99,11 +105,11 @@ class _WindowSizeMemory extends WindowListener {
 
 void main(List<String> _) async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Diagnostics.initialize();
 
-  // Every successful preference write feeds the one live migration snapshot.
-  // The callback is deliberately installed here, before the first screen can
-  // save anything, and failures remain non-fatal inside BackupService.
-  StorageService.onChanged = BackupService.instance.writeAutoBackup;
+  // Local durability remains awaited. External provider I/O is scheduled
+  // separately so finishing a line never waits for a full SAF backup.
+  StorageService.onChanged = BackupService.instance.scheduleAutoBackup;
 
   // Set only by the detached Windows updater. The new version acknowledges
   // itself after its first rendered frame; until then the updater retains a
@@ -153,15 +159,39 @@ void main(List<String> _) async {
   await _loadAndRunApp(updateReadyPath, updateErrorPath);
 }
 
-Future<void> _loadAndRunApp(
-    String? updateReadyPath, String? updateErrorPath) async {
+/// Starts the shared app without desktop/mobile process integration.
+Future<void> startBrowserApp({
+  required Future<void> Function() prepareStorage,
+  AppLanguage? browserLanguage,
+  Future<void> Function()? signOut,
+  VoidCallback? linkPhone,
+  VoidCallback? managePassword,
+}) {
+  registerFontLicences();
+  return _loadAndRunApp(null, null,
+      prepareStorage: prepareStorage,
+      browserLanguage: browserLanguage,
+      signOut: signOut,
+      linkPhone: linkPhone,
+      managePassword: managePassword);
+}
+
+Future<void> _loadAndRunApp(String? updateReadyPath, String? updateErrorPath,
+    {Future<void> Function()? prepareStorage,
+    AppLanguage? browserLanguage,
+    Future<void> Function()? signOut,
+    VoidCallback? linkPhone,
+    VoidCallback? managePassword}) async {
   try {
     await StorageService().ensureWorkRecovered();
+    await prepareStorage?.call();
     // Read before the first frame, so the app never flashes the wrong look.
     await themeController.load();
-    await localeController.load();
+    await localeController.load(browserLanguage: browserLanguage);
     await accessibilityController.load();
-  } on WorkRecoveryException catch (error) {
+  } on WorkRecoveryException catch (error, stack) {
+    unawaited(Diagnostics.record(DiagnosticEvent.startupFailed,
+        error: error, stack: stack));
     debugPrint('Startup recovery required: $error');
     final code = await StorageService().recoveryLanguageCode();
     final english = code == 'en' ||
@@ -180,14 +210,26 @@ Future<void> _loadAndRunApp(
       ],
       home: StorageRecoveryScreen(
         english: english,
-        onRetry: () => _loadAndRunApp(updateReadyPath, updateErrorPath),
+        onRetry: () => _loadAndRunApp(updateReadyPath, updateErrorPath,
+            prepareStorage: prepareStorage,
+            browserLanguage: browserLanguage,
+            signOut: signOut,
+            linkPhone: linkPhone,
+            managePassword: managePassword),
       ),
     ));
     // A recovery screen is not a successful upgrade acknowledgement.
     return;
   }
 
-  runApp(const MyApp());
+  const app = MyApp();
+  runApp(signOut == null
+      ? app
+      : AccountSession(
+          signOut: signOut,
+          linkPhone: linkPhone,
+          managePassword: managePassword,
+          child: app));
 
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     if (updateReadyPath != null && updateReadyPath.isNotEmpty) {
@@ -265,14 +307,16 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           navigatorKey: appNavigatorKey,
           onGenerateTitle: (context) => context.l10n.appName,
           theme: themeController.themeData,
-          localizationsDelegates: const [
-            AppLocalizations.delegate,
+          localizationsDelegates: [
+            AppLocalizations.delegateFor(localeController.language),
+            if (localeController.language == AppLanguage.yiddish)
+              const YiddishMaterialDelegate(),
             GlobalMaterialLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
           ],
           supportedLocales: AppLocalizations.supportedLocales,
-          locale: localeController.language.locale,
+          locale: localeController.language.frameworkLocale,
           builder: (context, child) {
             final media = MediaQuery.of(context);
             return MediaQuery(
@@ -371,11 +415,13 @@ class _OpeningState extends State<_Opening> {
         _finish(createProject: createProject);
       });
     }
-    return MigrationBackupGate(
-      child: SoferHome(
-        windowsFloatingMode: Platform.isWindows ? windowsFloatingMode : null,
-        openProjectsOnStart: _openProjects,
-      ),
+    final home = SoferHome(
+      windowsFloatingMode:
+          PlatformSupport.isWindows ? windowsFloatingMode : null,
+      openProjectsOnStart: _openProjects,
     );
+    return PlatformSupport.supportsFolderBackup
+        ? MigrationBackupGate(child: home)
+        : home;
   }
 }

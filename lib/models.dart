@@ -1,5 +1,7 @@
 import 'logic/currency.dart';
 import 'logic/hebrew_clock.dart';
+import 'logic/hebrew_month.dart';
+import 'logic/calendar_days.dart';
 import 'logic/json_compat.dart';
 import 'logic/mergeable.dart';
 
@@ -471,6 +473,11 @@ class Order implements Mergeable<Order> {
   final String email;
   final DateTime orderedAt;
   final DateTime dueDate;
+  final bool dueMonthOnly;
+
+  DateTime get deliveryDeadline => dueMonthOnly
+      ? CalendarDays.addDays(shiftHebrewMonth(dueDate, 1), -1)
+      : dueDate;
   final String requirements;
   final double price;
   final Currency currency;
@@ -513,6 +520,7 @@ class Order implements Mergeable<Order> {
     this.email = '',
     required this.orderedAt,
     required this.dueDate,
+    this.dueMonthOnly = false,
     this.requirements = '',
     this.price = 0,
     this.currency = Currency.ils,
@@ -533,7 +541,8 @@ class Order implements Mergeable<Order> {
         'phone': phone,
         'email': email,
         'orderedAt': orderedAt.toIso8601String(),
-        'dueDate': dueDate.toIso8601String(),
+        'dueDate': deliveryDeadline.toIso8601String(),
+        'dueMonthOnly': dueMonthOnly,
         'requirements': requirements,
         'price': price,
         'currency': currency.toJson(),
@@ -580,6 +589,7 @@ class Order implements Mergeable<Order> {
       email: JsonCompat.string(json['email']),
       orderedAt: orderedAt,
       dueDate: dueDate,
+      dueMonthOnly: JsonCompat.boolean(json['dueMonthOnly'], false),
       requirements: JsonCompat.string(json['requirements']),
       price: JsonCompat.number(json['price'], 0),
       currency: Currency.fromJson(json['currency']),
@@ -598,6 +608,7 @@ class Order implements Mergeable<Order> {
         'email',
         'orderedAt',
         'dueDate',
+        'dueMonthOnly',
         'requirements',
         'price',
         'currency',
@@ -619,6 +630,7 @@ class Order implements Mergeable<Order> {
     String? email,
     DateTime? orderedAt,
     DateTime? dueDate,
+    bool? dueMonthOnly,
     String? requirements,
     double? price,
     Currency? currency,
@@ -635,6 +647,7 @@ class Order implements Mergeable<Order> {
       email: email ?? this.email,
       orderedAt: orderedAt ?? this.orderedAt,
       dueDate: dueDate ?? this.dueDate,
+      dueMonthOnly: dueMonthOnly ?? this.dueMonthOnly,
       requirements: requirements ?? this.requirements,
       price: price ?? this.price,
       currency: currency ?? this.currency,
@@ -659,6 +672,7 @@ class Order implements Mergeable<Order> {
         email: email,
         orderedAt: orderedAt,
         dueDate: dueDate,
+        dueMonthOnly: dueMonthOnly,
         requirements: requirements,
         price: price,
         currency: currency,

@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 import '../format.dart';
 import '../logic/home_additions.dart';
 import '../logic/metronome_audio.dart';
+import '../logic/voice_microphone.dart';
 import '../notification_service.dart';
 import '../storage_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/feedback.dart';
 import '../widgets/sofer_widgets.dart';
 import '../l10n/app_localizations.dart';
+import 'voice_commands_screen.dart';
 
 /// Opt-in tools that may be placed on the home screen.
 ///
@@ -25,6 +27,7 @@ class _HomeAdditionsScreenState extends State<HomeAdditionsScreen> {
   final StorageService _storage = StorageService();
   final MetronomeAudio _metronomeAudio = MetronomeAudio();
   HomeAdditionsSettings _settings = HomeAdditionsSettings.defaults;
+  final _lineTargetHelpKey = GlobalKey<TooltipState>();
   bool _askBreakLength = true;
   bool _loading = true;
 
@@ -58,7 +61,8 @@ class _HomeAdditionsScreenState extends State<HomeAdditionsScreen> {
 
   Future<void> _pickLineTarget() async {
     final value = await _durationDialog(
-      title: context.l10n.pick(he: 'יעד זמן לשורה', en: 'Line time target'),
+      title: context.l10n
+          .pick(he: 'יעד זמן לשורה ס"ת', en: 'Sefer Torah line time target'),
       firstLabel: context.l10n.pick(he: 'דקות', en: 'Minutes'),
       secondLabel: context.l10n.pick(he: 'שניות', en: 'Seconds'),
       first: _settings.lineTargetSeconds ~/ 60,
@@ -207,6 +211,37 @@ class _HomeAdditionsScreenState extends State<HomeAdditionsScreen> {
     super.dispose();
   }
 
+  Widget _lineTargetHelp() => Tooltip(
+        key: _lineTargetHelpKey,
+        triggerMode: TooltipTriggerMode.manual,
+        waitDuration: const Duration(milliseconds: 250),
+        showDuration: const Duration(seconds: 15),
+        constraints: const BoxConstraints(maxWidth: 340),
+        padding: const EdgeInsets.all(12),
+        message: context.l10n.pick(
+          he: 'הזמן שמגדירים כאן הוא לשורה אחת של ספר תורה.\n\n'
+              'במצב חכם בתפילין, היעד לשורה מחושב אוטומטית לפי הפרשייה ושל ראש או של יד: '
+              'זמן הבסיס × שורות ס"ת בפרשייה ÷ מספר השורות בפרשייה (4 בשל ראש, 7 בשל יד).\n\n'
+              'לדוגמה, יעד בסיס של 10 דקות נותן 40 דקות לשורת קדש בשל ראש ו־17:30 דקות לשורת שמע בשל ראש.\n\n'
+              'זהו יעד ממוצע לשורת קלף. בסימון מילים הוא משמש כיעד ייחוס; שורות המסך אינן שורות קלף. '
+              'במצב רגיל, שבו לא נבחרת פרשייה בזמן הכתיבה, מוצג יעד הבסיס לשורת ס"ת.',
+          en: 'The time entered here is for one Sefer Torah line.\n\n'
+              'In Smart Mode for tefillin, the line target adjusts automatically to the current parashah and Shel Rosh or Shel Yad: '
+              'base time × Sefer Torah lines in the parashah ÷ its ruled lines (4 for Shel Rosh, 7 for Shel Yad).\n\n'
+              'For example, a 10-minute base gives 40 minutes per Kadesh line and 17:30 per Shema line in Shel Rosh.\n\n'
+              'This is an average per ruled line. Word entry uses it as a reference; screen rows are not ruled lines. '
+              'Regular Mode has no live parashah selection, so it shows the Sefer Torah base target.',
+        ),
+        child: IconButton(
+          onPressed: () =>
+              _lineTargetHelpKey.currentState?.ensureTooltipVisible(),
+          icon: Icon(Icons.help_outline,
+              size: 20,
+              semanticLabel: context.l10n
+                  .pick(he: 'הסבר על יעד הזמן', en: 'About the time target')),
+        ),
+      );
+
   Widget _addition({
     required String title,
     required String description,
@@ -214,6 +249,7 @@ class _HomeAdditionsScreenState extends State<HomeAdditionsScreen> {
     required bool value,
     required ValueChanged<bool> onChanged,
     Widget? control,
+    Widget? titleHelp,
   }) {
     final t = SoferTokens.of(context);
     return SoferPanel(
@@ -229,11 +265,16 @@ class _HomeAdditionsScreenState extends State<HomeAdditionsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title,
-                        style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: t.ink)),
+                    Row(children: [
+                      Flexible(
+                        child: Text(title,
+                            style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: t.ink)),
+                      ),
+                      if (titleHelp != null) titleHelp,
+                    ]),
                     const SizedBox(height: 4),
                     Text(description,
                         style: TextStyle(
@@ -279,6 +320,16 @@ class _HomeAdditionsScreenState extends State<HomeAdditionsScreen> {
                       style: TextStyle(height: 1.6, color: t.inkMuted),
                     ),
                   ),
+                  if (VoiceMicrophone.supported)
+                    ListTile(
+                      leading: const Icon(Icons.mic_none),
+                      title: Text(context.l10n.pick(
+                          he: 'פקודות קוליות אופליין (ניסוי)',
+                          en: 'Offline voice commands (experimental)')),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                          builder: (_) => const VoiceCommandsScreen())),
+                    ),
                   _addition(
                     title: context.l10n.pick(
                         he: 'לשאול כמה זמן ההפסקה',
@@ -293,6 +344,31 @@ class _HomeAdditionsScreenState extends State<HomeAdditionsScreen> {
                       await _storage.setAskBreakLength(value);
                       if (mounted) setState(() => _askBreakLength = value);
                     },
+                  ),
+                  _addition(
+                      title: context.l10n.pick(
+                          he: 'תנאי ישיבה לסטטיסטיקה',
+                          en: 'Session conditions for statistics'),
+                      description: context.l10n.pick(
+                          he:
+                              'מציג כפתור להגדרת קלף, גובה כתב, לחות וטמפרטורה לפני תחילת הישיבה. כל השדות הם רשות.',
+                          en:
+                              'Shows a button for parchment, letter height, humidity and temperature before starting. All fields are optional.'),
+                      icon: Icons.thermostat_outlined,
+                      value: _settings.writingConditionsEnabled,
+                      onChanged: (value) => _save(
+                          _settings.copyWith(writingConditionsEnabled: value))),
+                  _addition(
+                    title: context.l10n.pick(
+                        he: 'אפשר מדידת זמן קריאה ותיקון',
+                        en: 'Measure reading and correction time'),
+                    description: context.l10n.pick(
+                        he: 'בתפילין ובמזוזות נוסף כפתור קריאה / תיקון. שעון השורה והמטרונום נעצרים; הזמן נכלל בזמן העבודה ומוצג בנפרד מהפסקות.',
+                        en: 'Adds a Reading / correction button for Tefillin and Mezuzot. The line clock and metronome stop; this time remains part of working time and is shown separately from breaks.'),
+                    icon: Icons.menu_book_outlined,
+                    value: _settings.readingCorrectionEnabled,
+                    onChanged: (value) => _save(
+                        _settings.copyWith(readingCorrectionEnabled: value)),
                   ),
                   _addition(
                     title: context.l10n.pick(
@@ -317,12 +393,14 @@ class _HomeAdditionsScreenState extends State<HomeAdditionsScreen> {
                     ),
                     icon: Icons.stop_circle_outlined,
                     value: _settings.finishWritingCompletesLine,
-                    onChanged: (value) => _save(_settings.copyWith(
-                        finishWritingCompletesLine: value)),
+                    onChanged: (value) => _save(
+                        _settings.copyWith(finishWritingCompletesLine: value)),
                   ),
                   _addition(
-                    title: context.l10n
-                        .pick(he: 'יעד זמן לשורה', en: 'Line time target'),
+                    title: context.l10n.pick(
+                        he: 'יעד זמן לשורה ס"ת',
+                        en: 'Sefer Torah line time target'),
+                    titleHelp: _lineTargetHelp(),
                     description: context.l10n.pick(
                         he: 'שעון השורה סופר לאחור. לאחר החריגה הוא נעשה אדום ומציג זמן במינוס.',
                         en: 'The line clock counts down. After the target it turns red and shows negative time.'),
@@ -333,8 +411,8 @@ class _HomeAdditionsScreenState extends State<HomeAdditionsScreen> {
                     control: ListTile(
                       contentPadding: EdgeInsets.zero,
                       title: Text(context.l10n.pick(
-                          he: 'הזמן המוקצב לשורה',
-                          en: 'Time allowed per line')),
+                          he: 'זמן הבסיס לשורת ס"ת',
+                          en: 'Base time per Sefer Torah line')),
                       trailing: Text(
                         formatClock(
                             Duration(seconds: _settings.lineTargetSeconds)),

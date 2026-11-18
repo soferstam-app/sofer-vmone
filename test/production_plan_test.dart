@@ -76,6 +76,19 @@ void main() {
       );
 
   group('the shape of the month', () {
+    test('previously written pages are the opening position, not daily output',
+        () {
+      final earlier = [
+        for (var number = 1; number <= 100; number++)
+          page(number, hebrew(3))
+              .copyWith(backlogOnly: true, timeRecorded: false),
+      ];
+      final result =
+          plan(history: [...earlier, page(101, hebrew(3))], now: hebrew(3));
+      expect(result.openingUnits, 100);
+      expect(result.days[1].actual, 100);
+      expect(result.actualNow, 101);
+    });
     test('covers every day of the Hebrew month, in order', () {
       final p = plan();
       expect(p.days, hasLength(iyar.getDaysInJewishMonth()));

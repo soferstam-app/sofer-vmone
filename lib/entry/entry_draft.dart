@@ -10,6 +10,11 @@ class EntryDraft {
   final String projectId;
   final String entryId;
   final bool isManual;
+  final Map<String, dynamic>? writingConditions;
+  final List<dynamic>? workIntervals;
+  final String? writingSittingId;
+  final Duration readingCorrection;
+  final Duration sittingBreak;
   final Duration measuredTime;
   final DateTime? measuredEnd;
   final DateTime? date;
@@ -38,6 +43,11 @@ class EntryDraft {
     required this.projectId,
     required this.entryId,
     required this.isManual,
+    this.writingConditions,
+    this.workIntervals,
+    this.writingSittingId,
+    this.readingCorrection = Duration.zero,
+    this.sittingBreak = Duration.zero,
     this.measuredTime = Duration.zero,
     this.measuredEnd,
     this.date,
@@ -66,6 +76,11 @@ class EntryDraft {
   factory EntryDraft.timed({
     required String projectId,
     required String entryId,
+    Map<String, dynamic>? writingConditions,
+    List<dynamic>? workIntervals,
+    String? writingSittingId,
+    Duration readingCorrection = Duration.zero,
+    Duration sittingBreak = Duration.zero,
     required Duration measuredTime,
     required DateTime measuredEnd,
   }) =>
@@ -73,14 +88,24 @@ class EntryDraft {
         projectId: projectId,
         entryId: entryId,
         isManual: false,
+        writingConditions: writingConditions,
+        workIntervals: workIntervals,
+        writingSittingId: writingSittingId,
+        readingCorrection: readingCorrection,
+        sittingBreak: sittingBreak,
         measuredTime: measuredTime,
         measuredEnd: measuredEnd,
       );
 
   Map<String, dynamic> toJson() => {
+        if (writingConditions != null) 'writingConditions': writingConditions,
+        if (workIntervals != null) 'workIntervals': workIntervals,
+        if (writingSittingId != null) 'writingSittingId': writingSittingId,
         'projectId': projectId,
         'entryId': entryId,
         'isManual': isManual,
+        'readingCorrectionMs': readingCorrection.inMilliseconds,
+        'sittingBreakMs': sittingBreak.inMilliseconds,
         'measuredTimeMs': measuredTime.inMilliseconds,
         'measuredEnd': measuredEnd?.toIso8601String(),
         'date': date?.toIso8601String(),
@@ -132,9 +157,22 @@ class EntryDraft {
     final mode = text('tefillinMode', 'set');
     final part = text('tefillinPart', 'head');
     return EntryDraft(
+      writingConditions: json['writingConditions'] is Map
+          ? Map<String, dynamic>.from(json['writingConditions'] as Map)
+          : null,
+      workIntervals: json['workIntervals'] is List
+          ? List<dynamic>.from(json['workIntervals'] as List)
+          : null,
+      writingSittingId: json['writingSittingId'] is String
+          ? json['writingSittingId'] as String
+          : null,
       projectId: projectId,
       entryId: entryId,
       isManual: json['isManual'] == true,
+      readingCorrection: Duration(
+          milliseconds: number('readingCorrectionMs', 0).clamp(0, 1 << 53)),
+      sittingBreak:
+          Duration(milliseconds: number('sittingBreakMs', 0).clamp(0, 1 << 53)),
       measuredTime:
           Duration(milliseconds: number('measuredTimeMs', 0).clamp(0, 1 << 53)),
       measuredEnd: dateValue('measuredEnd'),

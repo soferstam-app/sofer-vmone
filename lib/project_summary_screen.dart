@@ -1,3 +1,4 @@
+import 'writing_analysis_screen.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -21,7 +22,6 @@ import 'format.dart';
 import 'logic/client_update.dart';
 import 'logic/tefillin_state.dart';
 import 'logic/tefillin_units.dart';
-import 'project/rhythm_panel.dart';
 import 'project/tefillin_board.dart';
 import 'project/project_writing_tab.dart';
 import 'logic/hebrew_clock.dart';
@@ -963,11 +963,17 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
             else if (project.plannedUnits == null)
               _missingSizeCard(project),
           ],
-          RhythmPanel(
-            project: project,
-            sessions: sessionsForStats,
-            dayStart: _dayStart,
-          ),
+          TextButton.icon(
+              icon: const Icon(Icons.insights_outlined),
+              label: Text(context.l10n.pick(
+                  he: 'תנאי כתיבה וקצב', en: 'Writing conditions and pace')),
+              onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => WritingAnalysisScreen(
+                          projects: widget.projects,
+                          history: widget.history,
+                          initialProjectId: project.id)))),
         ],
       ),
     );

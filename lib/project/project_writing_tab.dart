@@ -43,6 +43,7 @@ class ProjectWritingTab extends StatefulWidget {
 }
 
 class _ProjectWritingTabState extends State<ProjectWritingTab> {
+  final _messages = GlobalKey<ScaffoldMessengerState>();
   WritingView _view = WritingView.units;
   bool _applying = false;
 
@@ -61,9 +62,12 @@ class _ProjectWritingTabState extends State<ProjectWritingTab> {
     _applying = true;
     try {
       await widget.onHistoryUpdated(result.history);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).clearSnackBars();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      final messenger = _messages.currentState;
+      if (!mounted || messenger == null) return;
+      messenger.clearSnackBars();
+      messenger.showSnackBar(SnackBar(
+        persist: false,
+        duration: const Duration(seconds: 6),
         content: Text(message),
         action: SnackBarAction(
           label: context.l10n.pick(he: 'ביטול', en: 'Undo'),
@@ -147,32 +151,42 @@ class _ProjectWritingTabState extends State<ProjectWritingTab> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: SegmentedButton<WritingView>(
-            segments: [
-              ButtonSegment(
-                value: WritingView.units,
-                icon: const Icon(Icons.view_timeline_outlined),
-                label: Text(context.l10n.pick(he: 'לפי יחידות', en: 'By unit')),
+    // Undo belongs to this tab and should disappear when the user leaves it.
+    return ScaffoldMessenger(
+      key: _messages,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: SegmentedButton<WritingView>(
+                segments: [
+                  ButtonSegment(
+                    value: WritingView.units,
+                    icon: const Icon(Icons.view_timeline_outlined),
+                    label: Text(
+                        context.l10n.pick(he: 'לפי יחידות', en: 'By unit')),
+                  ),
+                  ButtonSegment(
+                    value: WritingView.records,
+                    icon: const Icon(Icons.receipt_long_outlined),
+                    label: Text(
+                        context.l10n.pick(he: 'לפי רשומות', en: 'By record')),
+                  ),
+                ],
+                selected: {_view},
+                onSelectionChanged: (value) =>
+                    setState(() => _view = value.first),
               ),
-              ButtonSegment(
-                value: WritingView.records,
-                icon: const Icon(Icons.receipt_long_outlined),
-                label:
-                    Text(context.l10n.pick(he: 'לפי רשומות', en: 'By record')),
-              ),
-            ],
-            selected: {_view},
-            onSelectionChanged: (value) => setState(() => _view = value.first),
-          ),
+            ),
+            Expanded(
+              child:
+                  _view == WritingView.records ? _recordsView() : _unitsView(),
+            ),
+          ],
         ),
-        Expanded(
-          child: _view == WritingView.records ? _recordsView() : _unitsView(),
-        ),
-      ],
+      ),
     );
   }
 

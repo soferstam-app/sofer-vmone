@@ -43,6 +43,15 @@ class JsonCompat {
         _ => null,
       };
 
+  /// Timer checkpoints keep second fields for older builds and add milliseconds
+  /// so repeated pauses and restarts do not shorten a measured interval.
+  static Duration checkpointDuration(Map<String, dynamic> state, String key) {
+    final milliseconds = intOrNull(state['${key}Ms']);
+    return milliseconds == null
+        ? Duration(seconds: intOrNull(state['${key}Seconds']) ?? 0)
+        : Duration(milliseconds: milliseconds);
+  }
+
   static int integer(Object? value, int fallback) =>
       intOrNull(value) ?? fallback;
 

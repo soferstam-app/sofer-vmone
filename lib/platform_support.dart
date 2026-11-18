@@ -1,15 +1,22 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 /// Central place for platform capability checks.
 ///
 /// Most `Platform.isWindows` checks scattered through this app really mean
 /// "desktop". macOS is a planned target, so new code should ask about a
 /// capability here rather than naming an operating system directly.
 abstract final class PlatformSupport {
-  static bool get isDesktop =>
-      Platform.isWindows || Platform.isMacOS || Platform.isLinux;
+  static bool get isWindows => !kIsWeb && Platform.isWindows;
+  static bool get isAndroid => !kIsWeb && Platform.isAndroid;
 
-  static bool get isMobile => Platform.isAndroid || Platform.isIOS;
+  static bool get isDesktop =>
+      !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
+
+  static bool get isMobile => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+
+  static bool get supportsFolderBackup => !kIsWeb;
 
   /// Desktop platforms get a native "save as" dialog; mobile goes through the
   /// system document picker. Both are handled by file_picker.
@@ -23,18 +30,19 @@ abstract final class PlatformSupport {
   static bool get canBindLocalServer => isDesktop;
 
   /// Foreground service keeping the timer alive in the background.
-  static bool get hasForegroundTimerService => Platform.isAndroid;
+  static bool get hasForegroundTimerService => isAndroid;
 
   /// Local notifications are wired for Android today. macOS support exists in
   /// flutter_local_notifications via DarwinInitializationSettings but is not
   /// initialised yet.
-  static bool get hasLocalNotifications => Platform.isAndroid;
+  static bool get hasLocalNotifications => isAndroid;
 
   /// Desktop window sizing/positioning via window_manager.
   static bool get hasWindowManager => isDesktop;
 
   /// Short label used in exported backup metadata.
   static String get name {
+    if (kIsWeb) return 'web';
     if (Platform.isAndroid) return 'android';
     if (Platform.isIOS) return 'ios';
     if (Platform.isWindows) return 'windows';

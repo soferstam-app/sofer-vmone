@@ -1,3 +1,5 @@
+import 'writing_timeline.dart';
+import 'work_time_breakdown.dart';
 import '../hebrew_utils.dart';
 import '../models.dart';
 import 'id_generator.dart';
@@ -244,7 +246,10 @@ class WorkCorrection {
           'appCorrectionCreatedIds': sourceCreated,
         },
       ));
-      next.addAll(fragments);
+      next.addAll(WorkTimeBreakdown.allocate(fragments,
+          reading: WorkTimeBreakdown.readingOf(session),
+          breaks: WorkTimeBreakdown.of([session]).breaks,
+          intervals: WritingTimeline.of(session)));
     }
 
     return WorkCorrectionResult(
@@ -382,7 +387,10 @@ class WorkCorrection {
           'appCorrectionCreatedIds': sourceCreated,
         },
       ));
-      next.addAll(fragments);
+      next.addAll(WorkTimeBreakdown.allocate(fragments,
+          reading: WorkTimeBreakdown.readingOf(session),
+          breaks: WorkTimeBreakdown.of([session]).breaks,
+          intervals: WritingTimeline.of(session)));
     }
     return WorkCorrectionResult(
       history: next,
@@ -483,7 +491,10 @@ class WorkCorrection {
           'appCorrectionCreatedIds': sourceCreated,
         },
       ));
-      next.addAll(fragments);
+      next.addAll(WorkTimeBreakdown.allocate(fragments,
+          reading: WorkTimeBreakdown.readingOf(session),
+          breaks: WorkTimeBreakdown.of([session]).breaks,
+          intervals: WritingTimeline.of(session)));
     }
 
     return WorkCorrectionResult(

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../backup_service.dart';
@@ -29,6 +31,7 @@ class MigrationBackupGate extends StatefulWidget {
 class _MigrationBackupGateState extends State<MigrationBackupGate> {
   bool _ready = false;
   bool _checking = true;
+  bool _dialogOpen = false;
   BackupService get _backup => widget.backupService ?? BackupService.instance;
 
   @override
@@ -47,9 +50,21 @@ class _MigrationBackupGateState extends State<MigrationBackupGate> {
     try {
       folder = await StorageService().getAutoBackupFolder();
       if (folder != null) {
-        // A remembered path or an old success timestamp is not proof that the
-        // destination is still accessible. Verify an actual current snapshot.
-        final saved = await _backup.writeAutoBackup();
+        final status = await StorageService().getAutoBackupStatus();
+        final lastSuccess = status['lastSuccess'];
+        if (status['folder'] == folder &&
+            lastSuccess is String &&
+            DateTime.tryParse(lastSuccess) != null) {
+          if (!mounted) return;
+          // Prior verification permits entering the app, not claiming that
+          // today's backup succeeded. Recheck the actual file in the background.
+          setState(() => _ready = true);
+          unawaited(_verifyWithoutBlocking(folder));
+          return;
+        }
+        // First verification still requires a real write and read-back before
+        // setup can report success. An old path alone is insufficient.
+        final saved = await _backup.verifyAutoBackup();
         if (!mounted) return;
         if (saved) {
           setState(() => _ready = true);
@@ -63,12 +78,51 @@ class _MigrationBackupGateState extends State<MigrationBackupGate> {
     }
     if (!mounted) return;
     setState(() => _checking = false);
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => _MigrationBackupDialog(
-          folder: folder, failed: failed, backup: _backup),
-    );
+    await _showSetupDialog(folder: folder, failed: failed);
+  }
+
+  Future<void> _verifyWithoutBlocking(String folder) async {
+    var saved = false;
+    try {
+      saved = await _backup.verifyAutoBackup();
+      // A check of an old destination must not warn over a newer folder choice.
+      if (await StorageService().getAutoBackupFolder() != folder) return;
+    } catch (error) {
+      debugPrint('Background migration backup verification failed: $error');
+    }
+    if (saved || !mounted) return;
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
+      key: const ValueKey('backup-migration-background-failed'),
+      persist: false,
+      duration: const Duration(seconds: 12),
+      content: Text(context.l10n.pick(
+        he: 'הגיבוי החיצוני לא הושלם. הנתונים נשמרים במכשיר; יש לבדוק את תיקיית הגיבוי.',
+        en: 'External backup did not complete. Data is saved on this device; check the backup folder.',
+      )),
+      action: SnackBarAction(
+        label: context.l10n.pick(he: 'טיפול בגיבוי', en: 'Check backup'),
+        onPressed: () =>
+            unawaited(_showSetupDialog(folder: folder, failed: true)),
+      ),
+    ));
+  }
+
+  Future<void> _showSetupDialog(
+      {required String? folder, required bool failed}) async {
+    if (!mounted || _dialogOpen) return;
+    _dialogOpen = true;
+    try {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _MigrationBackupDialog(
+            folder: folder, failed: failed, backup: _backup),
+      );
+    } finally {
+      _dialogOpen = false;
+    }
     if (mounted) setState(() => _ready = true);
   }
 
@@ -128,7 +182,7 @@ class _MigrationBackupDialogState extends State<_MigrationBackupDialog> {
         if (!mounted) return;
         setState(() => _folder = folder);
       }
-      final saved = _folder != null && await widget.backup.writeAutoBackup();
+      final saved = _folder != null && await widget.backup.verifyAutoBackup();
       if (!mounted) return;
       if (!saved) {
         setState(() => _failed = true);

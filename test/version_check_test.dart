@@ -92,11 +92,13 @@ void main() {
       Map<String, dynamic> json,
       String running, {
       UpdatePlatform platform = UpdatePlatform.windows,
+      bool withVoiceModel = false,
     }) =>
         readLatestRelease(
           json: json,
           running: Version.tryParse(running)!,
           platform: platform,
+          withVoiceModel: withVoiceModel,
         );
 
     test('a newer release, with somewhere to read about it', () {
@@ -113,6 +115,34 @@ void main() {
 
     test('the same version means up to date', () {
       expect(read(release(tag: '0.4.0'), '0.4.0'), isA<UpToDate>());
+    });
+
+    test('updates keep the installed edition on both platforms', () {
+      for (final platform in UpdatePlatform.values) {
+        final extension = platform == UpdatePlatform.android ? 'apk' : 'zip';
+        final base = 'sofer-vmone-0.5.0-${platform.name}';
+        Map<String, Object?> asset(String name) => {
+              'name': name,
+              'size': 12345,
+              'digest': 'sha256:${digest('a')}',
+              'browser_download_url': 'https://example.invalid/$name',
+            };
+        final regular = asset('$base.$extension');
+        final voice = asset('$base-voice.$extension');
+        final both = release(assets: [regular, voice]);
+        expect(
+            (read(both, '0.4.0', platform: platform) as UpdateAvailable)
+                .asset
+                .name,
+            regular['name']);
+        final upgraded =
+            read(both, '0.4.0', platform: platform, withVoiceModel: true);
+        expect((upgraded as UpdateAvailable).asset.name, voice['name']);
+        expect(
+            read(release(assets: [regular]), '0.4.0',
+                platform: platform, withVoiceModel: true),
+            isA<UpdateCheckFailed>());
+      }
     });
 
     test('an older published release also means up to date', () {

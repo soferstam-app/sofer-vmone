@@ -94,6 +94,7 @@ class CardsSmartBody extends StatelessWidget {
   Widget _state(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
 
+    if (snapshot.isReadingCorrection) return const SizedBox.shrink();
     if (snapshot.isPaused) {
       return Column(
         mainAxisSize: MainAxisSize.min,
@@ -202,7 +203,7 @@ class CardsSmartBody extends StatelessWidget {
         ),
         child: Row(
           children: [
-            metric(context.l10n.pick(he: 'זמן כתיבה', en: 'Writing time'),
+            metric(context.l10n.pick(he: 'זמן עבודה', en: 'Working time'),
                 snapshot.elapsed),
             Container(
                 width: 1,
@@ -235,7 +236,9 @@ class CardsSmartBody extends StatelessWidget {
       children: [
         ElevatedButton.icon(
           // Nothing was written during a break, so there is no line to finish.
-          onPressed: snapshot.isPaused || snapshot.isSavingLine
+          onPressed: snapshot.isPaused ||
+                  snapshot.isReadingCorrection ||
+                  snapshot.isSavingLine
               ? null
               : actions.onNextLine,
           icon: const Icon(Icons.arrow_downward),
@@ -255,7 +258,9 @@ class CardsSmartBody extends StatelessWidget {
         if (snapshot.project?.type == ProjectType.mezuza) ...[
           const SizedBox(height: 12),
           OutlinedButton.icon(
-            onPressed: snapshot.isPaused ? null : actions.onSkipMezuza,
+            onPressed: snapshot.isPaused || snapshot.isReadingCorrection
+                ? null
+                : actions.onSkipMezuza,
             icon: const Icon(Icons.skip_next),
             label: Text(context.l10n.pick(
               he: 'עבור למזוזה הבאה',
@@ -327,6 +332,8 @@ class CardsSmartBody extends StatelessWidget {
                     constraints: const BoxConstraints(maxWidth: 520),
                     child: HomeAdditionsPanel(
                       snapshot: snapshot,
+                      onSessionConditions: actions.onSessionConditions,
+                      onReadingCorrection: actions.onReadingCorrection,
                       onWritingTarget: actions.onWritingTarget,
                     ),
                   ),

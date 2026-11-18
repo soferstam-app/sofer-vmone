@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>סופר ומונה · סביבת עבודה לסופרי סת״ם</title>
+  <meta name="description" content="ניהול פרויקטים, זמני כתיבה והספק לסופרי סת״ם">
+  <link rel="stylesheet" href="/account.css?v=8">
+</head>
+<body>
+  <main id="sign-in" class="landing">
+    <div class="landing-heading">
+      <span class="brand-mark" aria-hidden="true">סמ</span>
+      <span>סביבת עבודה לסופרי סת״ם</span>
+      <select data-account-language aria-label="שפת הממשק">
+        <option value="he">עברית</option>
+        <option value="yi">ייִדיש</option>
+        <option value="en">English</option>
+      </select>
+    </div>
+
+    <div class="landing-content">
+      <section class="introduction" aria-labelledby="product-title">
+        <h1 id="product-title">סופר ומונה</h1>
+        <p class="introduction-copy">
+          ניהול הכתיבה מספר תורה ועד מזוזה, עם מעקב אחר הזמן, ההספק וההתקדמות בכל פרויקט.
+        </p>
+        <ul class="features" aria-label="מה אפשר לעשות באתר">
+          <li>ניהול פרויקטים</li>
+          <li>מדידת זמני כתיבה</li>
+          <li>סיכומי הספק</li>
+        </ul>
+      </section>
+
+      <section class="sign-in-card" aria-labelledby="sign-in-title">
+        <div class="writing-mark" aria-hidden="true">
+          <svg width="64" height="54" viewBox="0 0 64 54" fill="none">
+            <path d="M8 48c8-14 18-25 31-34m-10 20C38 13 51 7 57 6c-1 13-8 26-22 29l-6-1ZM9 48h44M35 26l10-1M40 20l9-1"
+              stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <h2 id="sign-in-title">כניסה לסביבת העבודה</h2>
+        <p id="sign-in-status" role="status">טוען את אפשרויות הכניסה…</p>
+        <label class="remember-sign-in" hidden><input type="checkbox" id="remember-sign-in" checked> להישאר מחובר במכשיר הזה</label>
+        <div id="sign-in-options"></div>
+        <div id="email-auth" hidden>
+          <form id="email-auth-form" class="auth-form" method="post">
+            <label for="signin-email">כתובת מייל</label>
+            <input id="signin-email" name="email" type="email" autocomplete="username" dir="ltr" required>
+            <label for="signin-password">סיסמה</label>
+            <input id="signin-password" name="password" type="password" autocomplete="current-password" dir="ltr" required>
+            <button type="submit">כניסה במייל</button>
+          </form>
+          <form id="email-register-form" class="auth-form" method="post" hidden>
+            <label for="register-name">שם מלא</label>
+            <input id="register-name" name="name" autocomplete="name" maxlength="100" required>
+            <label for="register-email">כתובת מייל</label>
+            <input id="register-email" name="email" type="email" autocomplete="username" dir="ltr" required>
+            <label for="register-password">סיסמה חדשה</label>
+            <input id="register-password" name="password" type="password" autocomplete="new-password"
+              aria-describedby="register-password-help" dir="ltr" minlength="8" required>
+            <p id="register-password-help">לפחות 8 תווים, כולל אות אנגלית קטנה ומספר.</p>
+            <label for="register-confirm-password">הקלידו שוב את הסיסמה</label>
+            <input id="register-confirm-password" name="confirm-password" type="password" autocomplete="new-password" dir="ltr" minlength="8" required>
+            <button type="submit">יצירת חשבון</button>
+          </form>
+          <p id="email-feedback" role="status"></p>
+          <div id="email-actions">
+            <button type="button" class="auth-secondary" id="email-mode">פתיחת חשבון במייל</button>
+            <a class="auth-link auth-secondary" id="email-reset" href="/password-reset.html">שכחתי סיסמה</a>
+          </div>
+          <div id="email-pending" hidden>
+            <button type="button" id="email-check">אימתתי את המייל</button>
+            <button type="button" class="auth-secondary" id="email-resend">שלחו שוב קישור</button>
+            <button type="button" class="auth-secondary" id="email-exit">חזרה למסך הכניסה</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <footer class="landing-footer">סופר ומונה <span aria-hidden="true">·</span> גרסת ניסיון</footer>
+  </main>
+  <div id="account-saving" role="status" hidden>שומר בשרת…</div>
+  <div id="account-notice" role="alert" hidden>
+    <span id="notice-text"></span>
+    <button id="reload">טען מחדש</button>
+    <button id="choose-account" hidden>בחירת חשבון אחר</button>
+  </div>
+  <dialog id="phone-link" aria-labelledby="phone-link-title">
+    <h2 id="phone-link-title">שיוך טלפון לחשבון</h2>
+    <p id="phone-onboarding" hidden>כדי לפתוח את סביבת העבודה, אמתו פעם אחת את המספר שממנו תחייגו לקו. המספר ישמש לזיהוי החשבון בשיחות הבאות.</p>
+    <p id="phone-account-email" hidden></p>
+    <p id="phone-verified"></p>
+    <form id="phone-link-form" method="post">
+      <label>שם מלא <input name="name" autocomplete="name" maxlength="100" required></label>
+      <label>מספר טלפון <input name="phone" type="tel" dir="ltr" autocomplete="tel" maxlength="32" required></label>
+      <button id="phone-create">הפקת קוד שיוך</button>
+    </form>
+    <div id="phone-challenge" hidden>
+      <p>חייגו מהמספר שהזנתם אל <a href="tel:0772251024" dir="ltr">077-225-1024</a>,
+        הקישו 1 והזינו את הקוד. באימות חוזר של מספר שכבר משויך, הקישו גם 9.</p>
+      <output id="phone-code" dir="ltr"></output>
+      <p>הקוד תקף ל־10 דקות.</p>
+    </div>
+    <p id="phone-status" role="status"></p>
+    <section id="phone-projects" aria-labelledby="phone-projects-title" hidden>
+      <h3 id="phone-projects-title">פרויקטים לדיווח מהקו</h3>
+      <label>ספרי תורה, נביאים ומגילות <select name="paged" disabled></select></label>
+      <label>מזוזות <select name="mezuza" disabled></select></label>
+      <label>תפילין <select name="tefillin" disabled></select></label>
+      <p id="phone-project-status" role="status"></p>
+    </section>
+    <form id="weekly-mail" hidden>
+      <h3>סיכום כתיבה במייל</h3>
+      <label>עיר לחישוב זמני שבת וחג <select name="city" required></select></label>
+      <label>יום קבוע לשליחה <select name="weekday"></select></label>
+      <p id="weekly-mail-status" role="status"></p>
+      <button type="submit">שמירת הגדרות המייל</button>
+    </form>
+    <div class="phone-actions">
+      <button type="button" id="phone-check">בדיקת מצב האימות</button>
+      <button type="button" id="phone-continue" hidden>פתיחת סביבת העבודה</button>
+      <button type="button" id="phone-switch" class="phone-close" hidden>בחירת חשבון אחר</button>
+      <form method="dialog" id="phone-close"><button class="phone-close">סגירה</button></form>
+    </div>
+  </dialog>
+  <dialog id="account-password" aria-labelledby="account-password-title">
+    <h2 id="account-password-title">סיסמה לחשבון</h2>
+    <form id="password-form" method="post">
+      <p>לאחר אימות מחדש ב־Google, תוכלו להיכנס לאותו חשבון גם עם מייל וסיסמה.</p>
+      <label>כתובת מייל <input name="email" autocomplete="username" dir="ltr" readonly></label>
+      <label>סיסמה חדשה <input name="password" type="password" autocomplete="new-password" dir="ltr" minlength="8" aria-describedby="password-help" required></label>
+      <p id="password-help">לפחות 8 תווים, כולל אות אנגלית קטנה ומספר.</p>
+      <label>הזנת סיסמה מחדש <input name="repeated" type="password" autocomplete="new-password" dir="ltr" minlength="8" required></label>
+      <button type="submit">שמירת סיסמה</button>
+    </form>
+    <p id="password-status" role="status"></p>
+    <form method="dialog"><button class="phone-close">סגירה</button></form>
+  </dialog>
+  <script type="module" src="/account.js?v=8"></script>
+</body>
+</html>

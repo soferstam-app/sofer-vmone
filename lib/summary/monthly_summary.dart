@@ -1,3 +1,4 @@
+import '../logic/work_time_breakdown.dart';
 import 'package:flutter/material.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 
@@ -235,6 +236,9 @@ Future<void> showMonthlySummary({
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text("• $projectText"),
+          if (WorkTimeBreakdown.of(sessions).hasDetails)
+            Text(WorkTimeBreakdown.of(sessions)
+                .label(english: context.l10n.isEnglish)),
           if (goalWidget != null)
             Padding(
               padding: const EdgeInsets.only(right: 12.0),

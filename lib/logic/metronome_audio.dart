@@ -1,11 +1,19 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
+
+import 'browser_io_stub.dart'
+    if (dart.library.js_interop) 'browser_io_web.dart';
 
 /// A short offline click with a real, feature-specific volume control.
 class MetronomeAudio {
   static const MethodChannel _channel = MethodChannel('sofer_vmone/metronome');
+  static final String _browserBeat =
+      Uri.dataFromBytes(buildMetronomeWav(), mimeType: 'audio/wav').toString();
+  static final String _browserAlert =
+      Uri.dataFromBytes(buildAlertWav(), mimeType: 'audio/wav').toString();
   bool _beatPlaying = false;
   bool _alertPlaying = false;
   DateTime? _alertUntil;
@@ -20,6 +28,10 @@ class MetronomeAudio {
     }
     _beatPlaying = true;
     try {
+      if (kIsWeb) {
+        await playBrowserSound(_browserBeat, volumePercent.clamp(0, 100) / 100);
+        return true;
+      }
       await _channel.invokeMethod<void>('beat', {
         'volume': volumePercent.clamp(0, 100),
       });
@@ -44,6 +56,10 @@ class MetronomeAudio {
     // Windows, where PlaySound owns one asynchronous sound at a time.
     _alertUntil = DateTime.now().add(const Duration(milliseconds: 600));
     try {
+      if (kIsWeb) {
+        await playBrowserSound(_browserAlert, 1);
+        return true;
+      }
       await _channel.invokeMethod<void>('alert');
       return true;
     } catch (_) {

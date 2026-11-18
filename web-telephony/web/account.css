@@ -1,0 +1,280 @@
+@font-face {
+  font-family: Heebo;
+  src: url('/assets/packages/sofer_vmone/assets/fonts/Heebo-var.ttf') format('truetype');
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: FrankRuhlLibre;
+  src: url('/assets/packages/sofer_vmone/assets/fonts/FrankRuhlLibre-var.ttf') format('truetype');
+  font-weight: 300 900;
+  font-display: swap;
+}
+
+body {
+  margin: 0;
+  background: #f5efe2;
+}
+
+.landing,
+#account-notice,
+#account-saving {
+  font-family: Heebo, system-ui, sans-serif;
+  color: #2b3024;
+}
+
+.landing {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-height: 100vh;
+  padding: clamp(1.25rem, 5vw, 4.5rem) clamp(1.25rem, 8vw, 7.5rem) 1.5rem;
+  background:
+    radial-gradient(ellipse at 80% 30%, #fff9eb 0%, transparent 57%),
+    linear-gradient(155deg, #f8f1e4, #eee0c6);
+}
+
+.landing[hidden] {
+  display: none;
+}
+
+.landing-heading,
+.landing-content,
+.landing-footer {
+  width: min(100%, 74rem);
+  margin-inline: auto;
+}
+
+.landing-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #505643;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  border: 1px solid #9c7949;
+  border-radius: 0.3rem;
+  background: #273d31;
+  color: #f7e8c9;
+  font: 600 1.5rem FrankRuhlLibre, serif;
+}
+
+.landing-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(17rem, 1fr);
+  align-items: center;
+  gap: clamp(2rem, 7vw, 6.75rem);
+  padding-block: clamp(2.5rem, 9vh, 7rem);
+}
+
+.introduction h1 {
+  margin: 0;
+  color: #24372b;
+  font: 700 clamp(3.5rem, 8vw, 8rem)/0.95 FrankRuhlLibre, Georgia, serif;
+}
+
+.introduction-copy {
+  max-width: 32rem;
+  margin: 1.45rem 0 2rem;
+  font-size: clamp(1.13rem, 2.1vw, 1.42rem);
+  line-height: 1.65;
+}
+
+.features {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem 1.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: #454d3e;
+  font-weight: 600;
+}
+
+.features li::before {
+  content: '';
+  display: inline-block;
+  width: 0.4rem;
+  height: 0.4rem;
+  margin-inline-end: 0.5rem;
+  background: #95723c;
+  transform: rotate(45deg);
+  vertical-align: 0.13rem;
+}
+
+.sign-in-card {
+  padding: clamp(1.15rem, 3vw, 2.35rem);
+  border: 1px solid #cbb58e;
+  border-radius: 0.9rem;
+  background: #fff9ed;
+  box-shadow: 0 1rem 3rem #4a32171a;
+}
+
+.writing-mark {
+  display: inline-flex;
+  margin-bottom: 0.65rem;
+  color: #886336;
+}
+
+.sign-in-card h2 {
+  margin: 0;
+  font: 650 clamp(1.7rem, 3vw, 2.25rem)/1.2 FrankRuhlLibre, Georgia, serif;
+}
+
+#sign-in-status {
+  margin: 0.65rem 0 1.35rem;
+  line-height: 1.55;
+  color: #515747;
+}
+
+#sign-in-options {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.remember-sign-in{display:flex;align-items:center;gap:.45rem;margin-block:.5rem .85rem}
+.remember-sign-in[hidden]{display:none}
+.sign-in-card .remember-sign-in input{inline-size:1.1rem;min-height:auto;accent-color:#243d31}
+
+.landing button,
+#account-notice button,
+.landing .auth-link {
+  padding: 0.66rem 1.05rem;
+  border: 1px solid #243d31;
+  border-radius: 0.38rem;
+  background: #243d31;
+  color: #fff9ed;
+  font: 650 1rem Heebo, system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.landing button:hover,
+#account-notice button:hover {
+  background: #335644;
+}
+
+.landing button:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.landing button:focus-visible,
+#account-notice button:focus-visible,
+.landing .auth-link:focus-visible {
+  outline: 3px solid #95723c;
+  outline-offset: 3px;
+}
+
+.landing-footer {
+  padding-top: 1.1rem;
+  border-top: 1px solid #cbb58e;
+  color: #545744;
+  font-size: 0.88rem;
+}
+
+.landing-heading select {
+  margin-inline-start: auto;
+  padding: 0.45rem 0.65rem;
+  font: inherit;
+}
+
+.landing-footer span {
+  margin-inline: 0.35rem;
+}
+
+#account-notice {
+  position: fixed;
+  inset: 0.75rem 1rem auto;
+  z-index: 1001;
+  max-width: 36rem;
+  margin-inline: auto;
+  padding: 0.85rem;
+  border: 1px solid #cbb58e;
+  border-radius: 0.5rem;
+  background: #fff2d6;
+  text-align: center;
+}
+
+#account-notice button {
+  margin: 0.25rem;
+}
+
+#account-saving {
+  position: fixed;
+  inset: 0.5rem 0.75rem auto auto;
+  z-index: 1000;
+  padding: 0.4rem 0.8rem;
+  border-radius: 0.35rem;
+  background: #243d31;
+  color: #fff9ed;
+  pointer-events: none;
+}
+
+@media (max-width: 48rem) {
+  .landing-content {
+    grid-template-columns: 1fr;
+  }
+}
+
+:is(#phone-link, #account-password) {
+  box-sizing: border-box;
+  width: min(29rem, calc(100% - 2rem));
+  max-height: calc(100% - 2rem);
+  border: 1px solid #cbb58e;
+  border-radius: 0.75rem;
+  padding: 1.4rem;
+  background: #fff9ed;
+  color: #243d31;
+  font: 1rem Heebo, system-ui, sans-serif;
+}
+
+:is(#phone-link, #account-password)::backdrop { background: rgb(23 35 29 / 50%); }
+:is(#phone-link, #account-password) h2 { margin-block-start: 0; }
+:is(#phone-link-form, #password-form, .auth-form, #email-pending, #email-actions) { display: grid; gap: 0.65rem; }
+:is(#phone-link-form, #password-form, #email-auth, #email-auth [hidden])[hidden] { display: none; }
+:is(#phone-link, #account-password, #email-auth) label { display: grid; gap: 0.25rem; }
+:is(#phone-link, #account-password, #email-auth) input,
+:is(#phone-link, #account-password) button {
+  padding: 0.55rem 0.75rem;
+  border: 1px solid #647469;
+  border-radius: 0.38rem;
+  font: inherit;
+}
+:is(#phone-link, #account-password) button { background: #243d31; color: #fff9ed; cursor: pointer; }
+:is(#phone-link, #account-password) button:disabled { opacity: 0.6; cursor: wait; }
+:is(#phone-link, #account-password) .phone-close { background: transparent; color: inherit; }
+#email-auth { margin-block-start: 1rem; }
+#email-actions { margin-block-start: 0.65rem; }
+.sign-in-card :is(input, button, .auth-link) { box-sizing: border-box; width: 100%; min-height: 2.85rem; }
+.sign-in-card .auth-link { display: grid; place-items: center; text-decoration: none; }
+.sign-in-card .auth-link[hidden] { display: none; }
+#email-auth input { min-width: 0; background: #fffdfa; }
+#email-auth input:focus-visible { outline: 2px solid #95723c; outline-offset: 2px; }
+#email-auth .auth-secondary,
+#sign-in-options .auth-secondary { background: transparent; color: #243d31; border-color: #a5987e; }
+#email-auth .auth-secondary:hover,
+#sign-in-options .auth-secondary:hover { background: #f4ebdb; }
+.auth-form label { margin-block-end: -0.35rem; font-weight: 600; }
+.auth-form button[type=submit] { margin-block-start: 0.25rem; }
+#email-feedback:empty { display: none; }
+#email-feedback:not(:empty) {
+  padding: 0.6rem 0.8rem;
+  border-inline-start: 3px solid #95723c;
+  background: #f7efdf;
+  overflow-wrap: anywhere;
+}
+#register-password-help { margin: 0; font-size: 0.9rem; }
+
+.password-reset-content { grid-template-columns: minmax(0, 28rem); justify-content: center; }
+#phone-code { display: block; font: bold 1.8rem system-ui, sans-serif; letter-spacing: 0.13em; }
+.phone-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+#phone-projects label { margin-block: 0.55rem; }
+#phone-projects select { min-width: 0; padding: 0.55rem; font: inherit; }

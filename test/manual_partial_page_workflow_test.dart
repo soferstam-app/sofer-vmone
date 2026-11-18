@@ -105,6 +105,7 @@ void main() {
         expect(find.text('1 עמודים ו-10 שורות'), findsOneWidget);
         expect(find.text('2 עמודים ו-0 שורות'), findsNothing);
         await tap(tester, find.text('יום ▾'));
+        await tap(tester, find.text('חודש'));
         expect(find.text('1 עמודים ו-10 שורות'), findsOneWidget);
         await tap(tester, find.byIcon(Icons.calendar_view_month));
         expect(find.textContaining('ספר לבדיקה: 1 עמודים ו-10 שורות'),

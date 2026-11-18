@@ -1,3 +1,4 @@
+import 'writing_analysis_screen.dart';
 import 'package:flutter/material.dart';
 
 import 'entry/entry_sheet.dart';
@@ -46,6 +47,16 @@ class FeaturesScreen extends StatelessWidget {
             : const EdgeInsets.all(16),
         children: [
           if (SoferTokens.of(context).isRules) const SoferRule(strong: true),
+          _tile(context,
+              icon: Icons.insights_outlined,
+              title: context.l10n.pick(
+                  he: 'תנאי כתיבה וקצב', en: 'Writing conditions and pace'),
+              subtitle: context.l10n.pick(
+                  he: 'השוואת ימים, שעות, קלף, גובה כתב ותנאי חדר',
+                  en:
+                      'Compare weekdays, hours, parchment, letter height and room conditions'),
+              screen:
+                  WritingAnalysisScreen(projects: projects, history: history)),
           _tile(
             context,
             icon: Icons.assignment,

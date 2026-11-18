@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart' show rootBundle;
 
+import '../app_assets.dart';
+
 const String helpAssetPath = 'docs/help/FAQ.he.json';
 
 class HelpQuestion {
@@ -74,6 +76,14 @@ class HelpCatalog {
     return HelpCatalog(sections);
   }
 
-  static Future<HelpCatalog> load() async =>
-      HelpCatalog.fromJsonString(await rootBundle.loadString(helpAssetPath));
+  static Future<HelpCatalog> load({String language = 'he'}) async {
+    final path = switch (language) {
+      'en' => 'docs/help/FAQ.en.json',
+      'yi' => 'docs/help/FAQ.yi.json',
+      _ => helpAssetPath,
+    };
+    return HelpCatalog.fromJsonString(
+      await rootBundle.loadString(AppAssets.path(path)),
+    );
+  }
 }

@@ -1,5 +1,8 @@
+import 'logic/writing_conditions.dart';
+import 'logic/writing_timeline.dart';
+import 'widgets/writing_conditions_fields.dart';
+import 'logic/work_time_breakdown.dart';
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -28,6 +31,8 @@ import 'models.dart';
 import 'settings_screen.dart';
 import 'projects_screen.dart';
 import 'storage_service.dart';
+import 'backup_service.dart';
+import 'platform_support.dart';
 import 'summary_screen.dart';
 import 'features_screen.dart';
 import 'help/help_screen.dart';
@@ -35,6 +40,9 @@ import 'writing_journal_screen.dart';
 import 'notification_service.dart';
 import 'hebrew_utils.dart';
 import 'home/ruled_home_body.dart';
+import 'home/voice_command_listener.dart';
+import 'logic/voice_commands.dart';
+import 'logic/voice_microphone.dart';
 import 'home/mezuza_position_sheet.dart';
 import 'home/tefillin_position_sheet.dart';
 import 'logic/completion_estimator.dart';
@@ -59,7 +67,10 @@ class SoferHome extends StatefulWidget {
     super.key,
     this.windowsFloatingMode,
     this.openProjectsOnStart = false,
+    this.workingDayClock = DateTime.now,
   });
+
+  final DateTime Function() workingDayClock;
 
   final ValueNotifier<bool>? windowsFloatingMode;
 
@@ -95,6 +106,9 @@ class _SoferHomeState extends State<SoferHome>
   Duration _lastBreakElapsed = Duration.zero;
 
   HomeAdditionsSettings _homeAdditions = HomeAdditionsSettings.defaults;
+  VoiceCommandProfile _voiceProfile = VoiceCommandProfile.empty;
+  final _voiceRepeatGuard = VoiceCommandRepeatGuard();
+  final _voiceClock = Stopwatch();
   WritingJournalSettings _journalSettings = WritingJournalSettings.defaults;
   bool _journalHomeTemporarilyHidden = false;
   final MetronomeAudio _metronomeAudio = MetronomeAudio();
@@ -139,6 +153,9 @@ class _SoferHomeState extends State<SoferHome>
   /// durable as soon as it is marked, while all lines on the same physical
   /// page still fold back into one record.
   String? _smartEntryId;
+  WritingConditions? _nextWritingConditions;
+  WritingConditions _sessionWritingConditions = const WritingConditions();
+  String? _writingSittingId;
   bool _smartLineSaving = false;
   bool _stopAfterLineSave = false;
   bool _stoppingTimer = false;
@@ -151,6 +168,8 @@ class _SoferHomeState extends State<SoferHome>
   bool _hasStoredPosition = false;
 
   DayStart _dayStart = DayStart.midnight;
+  DateTime? _displayedWorkingDay;
+  late final Timer _workingDayRefresh;
   bool _useGregorianDates = false;
 
   /// Needed for the completion estimate the ruled home screen shows.
@@ -181,6 +200,9 @@ class _SoferHomeState extends State<SoferHome>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // The sitting clock does not tick when the home screen is idle.
+    _workingDayRefresh = Timer.periodic(
+        const Duration(minutes: 1), (_) => _refreshWorkingDay());
     _clock = TimerController(onTick: () {
       if (!mounted) return;
       _checkBreakChime();
@@ -222,6 +244,7 @@ class _SoferHomeState extends State<SoferHome>
     );
 
     _loadData();
+    unawaited(_loadVoiceProfile());
   }
 
   @override
@@ -234,15 +257,19 @@ class _SoferHomeState extends State<SoferHome>
     }
   }
 
-  DateTime _effectiveDate(DateTime now) =>
-      DateLogic.effectiveDate(now, _dayStart);
+  DateTime get _currentWorkingDay =>
+      DateLogic.effectiveDate(widget.workingDayClock(), _dayStart);
 
-  /// Records filed under today's working day — the writer's own day, so a
-  /// sitting at half past midnight still counts under the day he was working.
-  int get _recordsToday => history
+  void _refreshWorkingDay() {
+    if (mounted && _displayedWorkingDay != _currentWorkingDay) {
+      setState(() {});
+    }
+  }
+
+  int _recordsOnDate(DateTime date) => history
       .where((s) =>
           !s.isDeleted &&
-          DateLogic.sessionIsOnDay(s, DateTime.now(), _dayStart))
+          DateLogic.sessionIsFiledOnDate(s, date, _dayStart))
       .length;
 
   /// Freezes onto each session the day-boundary rule it is being filed under.
@@ -275,6 +302,7 @@ class _SoferHomeState extends State<SoferHome>
     _metronomeTimer?.cancel();
     _metronomeAudio.dispose();
     _celebrationTimer?.cancel();
+    _workingDayRefresh.cancel();
     _keyboardFocus.dispose();
     _clock.dispose();
     super.dispose();
@@ -322,6 +350,19 @@ class _SoferHomeState extends State<SoferHome>
         await _loadSmartPosition();
       }
       await _restoreTimerState();
+      final chosen = _selectedProject;
+      if (chosen != null && !_clock.isActive) {
+        final prepared =
+            await _storageService.getNextWritingConditions(chosen.id);
+        if (mounted) {
+          setState(() => _nextWritingConditions =
+              prepared == null ? null : WritingConditions.fromJson(prepared));
+        }
+      } else if (chosen != null && _writingSittingId != null) {
+        try {
+          await _storageService.clearNextWritingConditions(chosen.id);
+        } catch (_) {}
+      }
       await _restorePendingEntry();
     } catch (e) {
       debugPrint("Error loading data: $e");
@@ -435,10 +476,9 @@ class _SoferHomeState extends State<SoferHome>
   /// Built here because the figures come from the same sources the rest of the
   /// app uses — one pace calculation, one estimator — rather than from numbers
   /// the layout works out for itself.
-  HomeSnapshot _buildHomeSnapshot() {
+  HomeSnapshot _buildHomeSnapshot(DateTime today) {
     final project = _selectedProject;
     final now = DateTime.now();
-    final today = _effectiveDate(now);
 
     var todayOutput = "—";
     String? hourlyRate;
@@ -453,7 +493,7 @@ class _SoferHomeState extends State<SoferHome>
               s.projectId == project.id &&
               !s.isDeleted &&
               !s.backlogOnly &&
-              DateLogic.sessionIsOnDay(s, today, _dayStart))
+              DateLogic.sessionIsFiledOnDate(s, today, _dayStart))
           .toList();
 
       switch (project.type) {
@@ -517,9 +557,16 @@ class _SoferHomeState extends State<SoferHome>
       }
     }
 
+    // Regular mode does not select a live parshiya. Keep its clock in the
+    // explicitly labelled Sefer-line unit instead of using a stale smart slot.
+    final targetPosition =
+        _isSmartWorkflow && project?.type == ProjectType.tefillin
+            ? TefillinPosition.fromSlotIndex(_smartCurrentPage)
+            : null;
     final lineCountdown = TargetCountdown(
       target: _homeAdditions.lineTargetEnabled
-          ? Duration(seconds: _homeAdditions.lineTargetSeconds)
+          ? _homeAdditions.targetForLine(
+              parshiya: targetPosition?.parshiya, side: targetPosition?.side)
           : null,
       elapsed: _currentLineElapsed,
     );
@@ -587,13 +634,24 @@ class _SoferHomeState extends State<SoferHome>
       hebrewDate: _getDisplayDate(today),
       isRunning: _clock.isRunning,
       isPaused: _clock.isPaused,
+      showSessionConditions:
+          _homeAdditions.writingConditionsEnabled && project != null,
+      isReadingCorrection: _clock.isReadingCorrection,
+      showReadingCorrection: _canReadCorrect,
+      readingCorrectionElapsed: formatClock(_clock.readingCorrectionElapsed),
       elapsed: formatClock(_clock.elapsed),
       breakElapsed: formatClock(_clock.breakElapsed),
       breakRemaining: _breakCountdown.label ?? '',
       breakOverrun: _breakCountdown.isOverrun,
       sinceLastLap: formatClock(_currentLineElapsed),
       lineClockLabel: _homeAdditions.lineTargetEnabled
-          ? context.l10n.pick(he: 'יעד לשורה', en: 'Line target')
+          ? targetPosition == null
+              ? context.l10n
+                  .pick(he: 'יעד זמן לשורה ס"ת', en: 'Sefer Torah line target')
+              : _wordTefillin
+                  ? context.l10n
+                      .pick(he: 'יעד ממוצע לשורה', en: 'Average line target')
+                  : context.l10n.pick(he: 'יעד לשורה', en: 'Line target')
           : context.l10n.pick(he: 'זמן השורה', en: 'Line time'),
       lineClockValue:
           _homeAdditions.lineTargetEnabled ? lineCountdown.label : null,
@@ -607,8 +665,9 @@ class _SoferHomeState extends State<SoferHome>
           _homeAdditions.metronomeEnabled ? _homeAdditions.metronomeBpm : null,
       metronomeActive: _homeAdditions.metronomeEnabled &&
           _clock.isRunning &&
-          !_clock.isPaused,
-      isSavingLine: _smartLineSaving,
+          !_clock.isPaused &&
+          !_clock.isReadingCorrection,
+      isSavingLine: _smartLineSaving || _timerCheckpointSaving,
       wordEntry: _wordTefillin,
       // Read off the position already loaded rather than through a
       // FutureBuilder in the layout, which re-read storage on every rebuild.
@@ -809,6 +868,7 @@ class _SoferHomeState extends State<SoferHome>
   String _tefillinWhereLabel(TefillinPosition at) => context.l10n.pick(
         he: at.whereLabel,
         en: '${at.side == TefillinSide.head ? 'Shel Rosh' : 'Shel Yad'} · set ${at.pair}',
+        yi: '${at.side == TefillinSide.head ? 'של ראש' : 'של יד'} · פאר ${at.pair}',
       );
 
   /// One app bar for every theme and both workflows.
@@ -873,13 +933,13 @@ class _SoferHomeState extends State<SoferHome>
             MaterialPageRoute(builder: (_) => const HelpScreen()),
           ),
         ),
-        if (Platform.isWindows && compact)
+        if (PlatformSupport.isWindows && compact)
           IconButton(
             icon: const Icon(Icons.open_in_new),
             tooltip: context.l10n.pick(he: "חלון צף", en: "Floating window"),
             onPressed: _openFloatingWindow,
           ),
-        if (Platform.isWindows && !compact)
+        if (PlatformSupport.isWindows && !compact)
           Padding(
             padding: const EdgeInsetsDirectional.only(end: 8),
             child: TextButton.icon(
@@ -941,6 +1001,8 @@ class _SoferHomeState extends State<SoferHome>
         onStart: _isSmartWorkflow ? _initSmartSession : _startTimer,
         onStop: _stopTimer,
         onBreak: _onBreakTap,
+        onSessionConditions: _editSessionConditions,
+        onReadingCorrection: _toggleReadingCorrection,
         onManualEntry: () => _openEntryDialog(isManual: true),
         onNextLine: _smartNextLine,
         onLap: _recordLap,
@@ -956,12 +1018,20 @@ class _SoferHomeState extends State<SoferHome>
   /// Without this the screen showed — and the position dialog opened on — page
   /// one for every project until a sitting had been started.
   Future<void> _selectProject(Project? p) async {
+    _nextWritingConditions = null;
     setState(() => _selectedProject = p);
     // Remembered here as well as at entry. Only a commission written through
     // the entry form used to be, so choosing one on this screen and working on
     // it all evening left the app opening on something else the next morning.
     if (p != null) await _storageService.setLastProjectId(p.id);
     if (_isSmartWorkflow && p != null) await _loadSmartPosition();
+    if (p != null && !_clock.isActive) {
+      final prepared = await _storageService.getNextWritingConditions(p.id);
+      if (mounted && _selectedProject?.id == p.id) {
+        setState(() => _nextWritingConditions =
+            prepared == null ? null : WritingConditions.fromJson(prepared));
+      }
+    }
   }
 
   /// Reads the stored position of the selected commission into the screen.
@@ -1023,8 +1093,13 @@ class _SoferHomeState extends State<SoferHome>
     final previousTargetSounded = _sessionTargetSounded;
     final previousBreakTarget = _breakTarget;
     final previousRecorded = _plainAlreadyRecordedElapsed;
+    final previousConditions = _sessionWritingConditions;
+    final previousSittingId = _writingSittingId;
     final freshSitting = !_clock.isActive;
     if (freshSitting) {
+      _sessionWritingConditions = _nextWritingConditions ??
+          WritingConditions.project(_selectedProject!);
+      _writingSittingId = IdGenerator.generate();
       _endTimeSounded = false;
       _sessionTargetSounded = false;
       _plainAlreadyRecordedElapsed = Duration.zero;
@@ -1044,7 +1119,16 @@ class _SoferHomeState extends State<SoferHome>
     }
     try {
       await _persistTimerState();
+      if (freshSitting) {
+        _nextWritingConditions = null;
+        try {
+          await _storageService
+              .clearNextWritingConditions(_selectedProject!.id);
+        } catch (_) {}
+      }
     } catch (error) {
+      _sessionWritingConditions = previousConditions;
+      _writingSittingId = previousSittingId;
       _clock.restoreFrom(previousClock);
       _endTimeDeadline = previousDeadline;
       _endTimeSounded = previousEndSounded;
@@ -1065,6 +1149,137 @@ class _SoferHomeState extends State<SoferHome>
     } finally {
       await _finishTimerCheckpoint();
     }
+  }
+
+  Future<void> _editSessionConditions() async {
+    if (_selectedProject == null ||
+        _timerCheckpointSaving ||
+        _smartLineSaving) {
+      return;
+    }
+    if (!await _prepareWindowForDialog() || !mounted) return;
+    final value = await showWritingConditions(
+        context,
+        _clock.isActive
+            ? _sessionWritingConditions
+            : _nextWritingConditions ??
+                WritingConditions.project(_selectedProject!),
+        readOnly: _clock.isActive);
+    if (value != null && mounted) {
+      setState(() => _nextWritingConditions = value);
+      try {
+        await _storageService.setNextWritingConditions(
+            _selectedProject!.id, value.toJson());
+      } catch (_) {
+        if (mounted) {
+          showAppError(
+              context,
+              context.l10n.pick(
+                  he: 'לא ניתן לשמור את תנאי הישיבה. נסה שוב.',
+                  en: 'Session conditions could not be saved. Retry.'));
+        }
+      }
+    }
+  }
+
+  bool get _canReadCorrect =>
+      _clock.isActive &&
+      (_homeAdditions.readingCorrectionEnabled || _clock.isReadingCorrection) &&
+      (_selectedProject?.type == ProjectType.tefillin ||
+          _selectedProject?.type == ProjectType.mezuza);
+
+  Future<void> _toggleReadingCorrection() async {
+    if (!_canReadCorrect ||
+        !_clock.isRunning ||
+        _smartLineSaving ||
+        _timerCheckpointSaving ||
+        _reviewingLineTime) {
+      return;
+    }
+    _timerCheckpointSaving = true;
+    _timerCheckpointDone = Completer<void>();
+    final before = _clock.checkpoint();
+    setState(() {
+      if (_clock.isReadingCorrection) {
+        _clock.endReadingCorrection();
+      } else {
+        _clock.beginReadingCorrection();
+      }
+    });
+    _syncPulse();
+    _syncMetronome();
+    try {
+      await _persistTimerState();
+    } catch (error) {
+      _clock.restoreFrom(before);
+      if (mounted) {
+        setState(() {});
+        showAppError(
+            context,
+            context.l10n.pick(
+                he: 'שינוי מצב הקריאה / תיקון לא נשמר. נסה שוב.',
+                en: 'The reading / correction change could not be saved. Retry.'));
+      }
+      _syncPulse();
+      _syncMetronome();
+    } finally {
+      await _finishTimerCheckpoint();
+    }
+  }
+
+  Future<bool> _saveTrailingBreaks(Duration totalBreaks) async {
+    final records = history
+        .where((s) =>
+            !s.isDeleted &&
+            _smartEntryId != null &&
+            s.extraFields['workTimerId'] == _smartEntryId)
+        .toList();
+    if (records.isEmpty) return true;
+    final details = WorkTimeBreakdown.of(records);
+    final missing = totalBreaks - details.breaks;
+    if (missing <= Duration.zero) return true;
+    final last = records.last;
+    final previousBreak = WorkTimeBreakdown.of([last]).breaks;
+    final updated = last.copyWith(extraFields: {
+      ...last.extraFields,
+      WorkTimeBreakdown.breakKey: (previousBreak + missing).inMilliseconds
+    });
+    final next = [for (final s in history) s.id == last.id ? updated : s];
+    try {
+      await _storageService.saveHistory(next);
+      if (mounted) setState(() => history = next);
+      return true;
+    } catch (_) {
+      if (mounted) {
+        showAppError(
+            context,
+            context.l10n.pick(
+                he: 'סיכום זמני הישיבה לא נשמר. הטיימר נשאר פעיל; נסה שוב.',
+                en: 'The session time breakdown could not be saved. The timer remains active; retry.'));
+      }
+      return false;
+    }
+  }
+
+  List<WorkSession> _stampTimedSessions(List<WorkSession> sessions) {
+    final previous = WorkTimeBreakdown.of(history.where((s) =>
+        s.extraFields['workTimerId'] == _smartEntryId &&
+        _smartEntryId != null));
+    final stamped = [
+      for (final s in sessions)
+        _sessionWritingConditions.stamp(s).copyWith(extraFields: {
+          ..._sessionWritingConditions.stamp(s).extraFields,
+          if (_writingSittingId != null) 'writingSittingId': _writingSittingId,
+        })
+    ];
+    return _stampWorkingDay(WorkTimeBreakdown.allocate(stamped,
+        reading: _clock.readingCorrectionElapsed - previous.reading,
+        breaks: _clock.totalBreakElapsed - previous.breaks,
+        timerId: _smartEntryId,
+        intervals: WritingTimeline.slice(
+            _clock.workIntervals,
+            _smartRecordedElapsed.inMilliseconds,
+            sessions.fold<int>(0, (n, s) => n + s.duration.inMilliseconds))));
   }
 
   Future<void> _pauseTimer() async {
@@ -1126,7 +1341,11 @@ class _SoferHomeState extends State<SoferHome>
       return;
     }
     if (!await _prepareWindowForDialog()) return;
-    if (_clock.hasUnusualLineTime && !await _reviewUnusualLineTime()) return;
+    if (!_clock.isReadingCorrection &&
+        _clock.hasUnusualLineTime &&
+        !await _reviewUnusualLineTime()) {
+      return;
+    }
     if (!mounted) return;
     if (_isSmartWorkflow) {
       await _stopSmartTimerTransactionally();
@@ -1156,11 +1375,35 @@ class _SoferHomeState extends State<SoferHome>
       projectId: project.id,
       entryId: IdGenerator.generate(),
       measuredTime: measured,
+      writingConditions: _sessionWritingConditions.toJson(),
+      writingSittingId: _writingSittingId,
+      workIntervals: [
+        for (final span in WritingTimeline.slice(
+            _clock.workIntervals,
+            _plainAlreadyRecordedElapsed.inMilliseconds,
+            measured.inMilliseconds))
+          span.toJson()
+      ],
+      readingCorrection: _clock.readingCorrectionElapsed -
+          WorkTimeBreakdown.of(history.where((s) =>
+              _smartEntryId != null &&
+              s.extraFields['workTimerId'] == _smartEntryId)).reading,
+      sittingBreak: sitting.onBreak -
+          WorkTimeBreakdown.of(history.where((s) =>
+              _smartEntryId != null &&
+              s.extraFields['workTimerId'] == _smartEntryId)).breaks,
       measuredEnd: sitting.endedAt,
     );
 
+    final accountStop = StorageService.browserAccountStore != null;
+    if (accountStop) {
+      _timerCheckpointSaving = true;
+      _timerCheckpointDone = Completer<void>();
+    }
     try {
-      await _storageService.savePendingEntry(pending);
+      await _storageService.checkpointStoppedTimer(pending);
+      // Stop only after the recovery draft is durable.
+      _clock.commitPreview(sitting, clearStoredState: false);
     } catch (error) {
       debugPrint('Could not persist stopped sitting: $error');
       if (mounted) {
@@ -1173,11 +1416,9 @@ class _SoferHomeState extends State<SoferHome>
         );
       }
       return;
+    } finally {
+      if (accountStop) await _finishTimerCheckpoint();
     }
-
-    // The pending entry is durable now. Stop the in-memory clock without
-    // clearing its old persisted state until the explicit clear below.
-    _clock.commitPreview(sitting, clearStoredState: false);
     _syncPulse();
     _syncMetronome();
     _clock.stopForegroundService();
@@ -1196,12 +1437,13 @@ class _SoferHomeState extends State<SoferHome>
         _smartEntryId = null;
       });
     }
-    try {
-      await _storageService.clearTimerState();
-    } catch (error) {
-      // The pending entry is authoritative and startup clears the stale timer
-      // state before reopening it, so a failure here cannot lose the sitting.
-      debugPrint('Could not clear stopped timer state: $error');
+    if (!accountStop) {
+      try {
+        await _storageService.clearTimerState();
+      } catch (error) {
+        // Startup can recover the durable draft if the old checkpoint remains.
+        debugPrint('Could not clear stopped timer state: $error');
+      }
     }
     await _openEntryDialog(
       isManual: false,
@@ -1335,14 +1577,23 @@ class _SoferHomeState extends State<SoferHome>
         : await _finishSmartSession(
             breakDuration: sitting.onBreak,
             sitting: sitting,
-            finishCurrentLine:
-                _homeAdditions.finishWritingCompletesLine && !lineJustCompleted,
-            savePartialLine: !_homeAdditions.finishWritingCompletesLine &&
+            finishCurrentLine: _homeAdditions.finishWritingCompletesLine &&
+                !lineJustCompleted &&
+                !_clock.isReadingCorrection,
+            savePartialLine: (!_homeAdditions.finishWritingCompletesLine ||
+                    _clock.isReadingCorrection) &&
                 !lineJustCompleted,
           );
     if (!saved) {
       if (mounted) setState(() => _smartLineSaving = false);
       return;
+    }
+    if (mounted && sitting.readingCorrection > Duration.zero) {
+      showAppSuccess(
+          context,
+          WorkTimeBreakdown(
+                  sitting.worked, sitting.readingCorrection, sitting.onBreak)
+              .label(english: context.l10n.isEnglish));
     }
     // History is durable; clear the old timer state as a separate awaited
     // step. If storage is temporarily unavailable, the old state remains as a
@@ -1369,7 +1620,7 @@ class _SoferHomeState extends State<SoferHome>
   /// The pulse follows the clock rather than being driven alongside it, so
   /// there is one answer to whether writing is under way and not two.
   void _syncPulse() {
-    if (_clock.isRunning && !_clock.isPaused) {
+    if (_clock.isRunning && !_clock.isPaused && !_clock.isReadingCorrection) {
       _pulseController.repeat(reverse: true);
     } else {
       _pulseController.stop();
@@ -1380,6 +1631,8 @@ class _SoferHomeState extends State<SoferHome>
   Future<void> _persistTimerState() async {
     await _storageService.saveTimerState({
       ..._clock.checkpoint(),
+      'writingConditions': _sessionWritingConditions.toJson(),
+      'writingSittingId': _writingSittingId,
       'isSmart': _isSmartWorkflow,
       'projectId': _selectedProject?.id,
       'smartCurrentPage': _smartCurrentPage,
@@ -1387,11 +1640,13 @@ class _SoferHomeState extends State<SoferHome>
       'smartStartPage': _smartStartPage,
       'smartStartLine': _smartStartLine,
       'smartRecordedElapsedSeconds': _smartRecordedElapsed.inSeconds,
+      'smartRecordedElapsedMs': _smartRecordedElapsed.inMilliseconds,
       'smartSavedAny': _smartSavedAny,
       'smartSavedLines': _smartSavedLines,
       'smartEntryId': _smartEntryId,
       'plainAlreadyRecordedElapsedSeconds':
           _plainAlreadyRecordedElapsed.inSeconds,
+      'plainAlreadyRecordedElapsedMs': _plainAlreadyRecordedElapsed.inMilliseconds,
       'endTimeDeadline': _endTimeDeadline?.toIso8601String(),
       'endTimeSounded': _endTimeSounded,
       'sessionTargetMinutes': _sessionTargetMinutes,
@@ -1430,6 +1685,11 @@ class _SoferHomeState extends State<SoferHome>
     var running = false;
     setState(() {
       running = _clock.restoreFrom(state);
+      _sessionWritingConditions =
+          WritingConditions.fromJson(state['writingConditions']);
+      _writingSittingId = state['writingSittingId'] is String
+          ? state['writingSittingId'] as String
+          : null;
       _endTimeDeadline = switch (state['endTimeDeadline']) {
         final String value => DateTime.tryParse(value),
         _ => null,
@@ -1452,17 +1712,12 @@ class _SoferHomeState extends State<SoferHome>
             JsonCompat.intOrNull(state['smartCurrentLine']) ?? 1;
         _smartStartPage = JsonCompat.intOrNull(state['smartStartPage']) ?? 1;
         _smartStartLine = JsonCompat.intOrNull(state['smartStartLine']) ?? 1;
-        _smartRecordedElapsed = Duration(
-            seconds:
-                JsonCompat.intOrNull(state['smartRecordedElapsedSeconds']) ??
-                    0);
+        _smartRecordedElapsed =
+            JsonCompat.checkpointDuration(state, 'smartRecordedElapsed');
         _smartSavedAny = state['smartSavedAny'] == true;
         _smartSavedLines = JsonCompat.intOrNull(state['smartSavedLines']) ?? 0;
-        _plainAlreadyRecordedElapsed = Duration(
-          seconds: JsonCompat.intOrNull(
-                  state['plainAlreadyRecordedElapsedSeconds']) ??
-              0,
-        );
+        _plainAlreadyRecordedElapsed =
+            JsonCompat.checkpointDuration(state, 'plainAlreadyRecordedElapsed');
         _smartEntryId = switch (state['smartEntryId']) {
           final String id when id.isNotEmpty => id,
           _ => isSmart ? IdGenerator.generate() : null,
@@ -1560,10 +1815,20 @@ class _SoferHomeState extends State<SoferHome>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive) {
-      if (_clock.isActive) unawaited(_persistTimerStateSafely());
+      unawaited(_checkpointBeforeBackground());
       _clock.startForegroundService();
     } else if (state == AppLifecycleState.resumed) {
+      _refreshWorkingDay();
       _clock.stopForegroundService();
+    } else if (state == AppLifecycleState.detached) {
+      unawaited(_checkpointBeforeBackground());
+    }
+  }
+
+  Future<void> _checkpointBeforeBackground() async {
+    if (_clock.isActive) await _persistTimerStateSafely();
+    if (PlatformSupport.supportsFolderBackup) {
+      await BackupService.instance.flushScheduledAutoBackup();
     }
   }
 
@@ -1578,8 +1843,8 @@ class _SoferHomeState extends State<SoferHome>
   }
 
   Duration _markLineFinished({Duration carried = Duration.zero}) {
-    final lapDuration = _clock.recordLap(carried: carried);
-    final fullLineDuration = carried + lapDuration;
+    _clock.recordLap(carried: carried);
+    final fullLineDuration = _clock.previousLineDuration;
     showAppNote(
       context,
       context.l10n.pick(
@@ -1590,17 +1855,20 @@ class _SoferHomeState extends State<SoferHome>
     return fullLineDuration;
   }
 
-  Future<void> _recordLap() async {
+  Future<bool> _recordLap() async {
+    if (_clock.isReadingCorrection) return false;
     if (_reviewingLineTime || _timerCheckpointSaving || _smartLineSaving) {
-      return;
+      return false;
     }
-    if (_clock.hasUnusualLineTime && !await _reviewUnusualLineTime()) return;
-    if (!mounted || _timerCheckpointSaving) return;
+    if (_clock.hasUnusualLineTime && !await _reviewUnusualLineTime()) return false;
+    if (!mounted || _timerCheckpointSaving) return false;
     _timerCheckpointSaving = true;
     _timerCheckpointDone = Completer<void>();
     final previousLap = _clock.lastLapElapsed;
+    final previousLapReading = _clock.lapReadingElapsed;
     final previousDuration = _clock.previousLineDuration;
-    final lap = _clock.recordLap();
+    final lap = _clock.sinceLastLap;
+    _clock.recordLap();
     try {
       await _persistTimerState();
       if (mounted) {
@@ -1611,9 +1879,11 @@ class _SoferHomeState extends State<SoferHome>
                 he: 'זמן השורה: ${formatClock(lap)}. שעון השורה אופס; ההספק יוזן בסיום הישיבה.',
                 en: 'Line time: ${formatClock(lap)}. The line timer was reset; output will be entered at the end.'));
       }
+      return true;
     } catch (error) {
       _clock.restoreLastLap(previousLap,
-          previousLineDuration: previousDuration);
+          previousLineDuration: previousDuration,
+          lapReading: previousLapReading);
       if (mounted) {
         setState(() {});
         showAppError(
@@ -1622,6 +1892,7 @@ class _SoferHomeState extends State<SoferHome>
                 he: 'איפוס שעון השורה לא נשמר: $error',
                 en: 'Line timer reset could not be saved: $error'));
       }
+      return false;
     } finally {
       await _finishTimerCheckpoint();
     }
@@ -1799,7 +2070,8 @@ class _SoferHomeState extends State<SoferHome>
   void _syncMetronome() {
     _metronomeTimer?.cancel();
     _metronomeTimer = null;
-    if (!_homeAdditions.metronomeEnabled ||
+    if (_clock.isReadingCorrection ||
+        !_homeAdditions.metronomeEnabled ||
         !_clock.isRunning ||
         _clock.isPaused) {
       return;
@@ -1807,7 +2079,9 @@ class _SoferHomeState extends State<SoferHome>
     _metronomeTimer = Timer.periodic(
       metronomeInterval(_homeAdditions.metronomeBpm),
       (_) {
-        if (_clock.isRunning && !_clock.isPaused) {
+        if (_clock.isRunning &&
+            !_clock.isPaused &&
+            !_clock.isReadingCorrection) {
           _metronomeAudio.beat(_homeAdditions.metronomeVolume);
         }
       },
@@ -1857,6 +2131,7 @@ class _SoferHomeState extends State<SoferHome>
     final project = _selectedProject;
     if (project == null || !_clock.isActive) return false;
     final wasRunning = _clock.isRunning;
+    final wasReading = _clock.isReadingCorrection;
     if (wasRunning) {
       setState(_clock.pause);
       _syncPulse();
@@ -1874,6 +2149,7 @@ class _SoferHomeState extends State<SoferHome>
           ? elapsed - _smartRecordedElapsed
           : Duration.zero;
       if (stopping && worked.inSeconds <= 0) {
+        if (!await _saveTrailingBreaks(_clock.totalBreakElapsed)) return false;
         saved = true;
         return true;
       }
@@ -1954,7 +2230,7 @@ class _SoferHomeState extends State<SoferHome>
         }
         checkpoint = (outcome as EntryBuilt).sessions;
       }
-      checkpoint = _stampWorkingDay([
+      checkpoint = _stampTimedSessions([
         for (final s in checkpoint)
           s.copyWith(extraFields: {
             ...s.extraFields,
@@ -2057,6 +2333,7 @@ class _SoferHomeState extends State<SoferHome>
     } finally {
       if (mounted && wasRunning && (!stopping || !saved)) {
         _clock.start(clearStoredState: false);
+        if (wasReading) _clock.beginReadingCorrection();
         _syncPulse();
         _syncMetronome();
         try {
@@ -2068,12 +2345,13 @@ class _SoferHomeState extends State<SoferHome>
     }
   }
 
-  Future<void> _smartNextLine() async {
+  Future<bool> _smartNextLine() async {
+    if (_clock.isReadingCorrection) return false;
     if (_smartLineSaving || _timerCheckpointSaving || _reviewingLineTime) {
-      return;
+      return false;
     }
-    if (_clock.hasUnusualLineTime && !await _reviewUnusualLineTime()) return;
-    if (!mounted) return;
+    if (_clock.hasUnusualLineTime && !await _reviewUnusualLineTime()) return false;
+    if (!mounted) return false;
     if (_wordTefillin) {
       setState(() => _smartLineSaving = true);
       var saved = false;
@@ -2087,7 +2365,7 @@ class _SoferHomeState extends State<SoferHome>
           await _stopSmartTimerTransactionally(lineJustCompleted: true);
         }
       }
-      return;
+      return saved;
     }
     // Once a valid segment starts, finishing one parshiya makes the following
     // one valid inside that same segment even before the segment is saved.
@@ -2095,10 +2373,10 @@ class _SoferHomeState extends State<SoferHome>
     final positionError = _tefillinPositionError(slotIndex: _smartStartPage);
     if (positionError != null) {
       showAppError(context, positionError);
-      return;
+      return false;
     }
     final project = _selectedProject;
-    if (project == null) return;
+    if (project == null) return false;
     final from = SmartPosition(_smartCurrentPage, _smartCurrentLine);
     var nextPage = from.page;
     var nextLine = from.line + 1;
@@ -2113,6 +2391,7 @@ class _SoferHomeState extends State<SoferHome>
     }
     final destination = SmartPosition(nextPage, nextLine);
     final previousLap = _clock.lastLapElapsed;
+    final previousLapReading = _clock.lapReadingElapsed;
     final previousLineDuration = _clock.previousLineDuration;
     final carriedLineTime = PartialLineRecording.carriedTime(
       history,
@@ -2130,8 +2409,9 @@ class _SoferHomeState extends State<SoferHome>
         // action. If the checkpoint was rejected or could not be written,
         // restore the lap so the writer can press the same button again.
         _clock.restoreLastLap(previousLap,
-            previousLineDuration: previousLineDuration);
-        return;
+            previousLineDuration: previousLineDuration,
+            lapReading: previousLapReading);
+        return false;
       }
       lineSaved = true;
       final nextPosition = _nextWritablePosition(project, destination, history);
@@ -2208,6 +2488,7 @@ class _SoferHomeState extends State<SoferHome>
         await _stopSmartTimerTransactionally(lineJustCompleted: true);
       }
     }
+    return lineSaved;
   }
 
   /// Prevents an old stored position, or a restored timer from an older build,
@@ -2247,6 +2528,7 @@ class _SoferHomeState extends State<SoferHome>
   }
 
   Future<void> _showEditPositionDialog() async {
+    if (_clock.isReadingCorrection) return;
     if (_selectedProject == null) return;
 
     // Tefillin does not answer this with numbers. Eighty slots in a ten-pair
@@ -2398,6 +2680,7 @@ class _SoferHomeState extends State<SoferHome>
   /// one. Any lines marked in this stretch are filed first, while the clock
   /// itself keeps running.
   Future<void> _skipMezuza() async {
+    if (_clock.isReadingCorrection) return;
     if (_smartLineSaving || _timerCheckpointSaving) return;
     final project = _selectedProject;
     if (project?.type != ProjectType.mezuza) return;
@@ -2515,7 +2798,7 @@ class _SoferHomeState extends State<SoferHome>
             !await _confirmSmartOverlap(overlappingPages)) {
           return false;
         }
-        final checkpoint = _stampWorkingDay(sessions);
+        final checkpoint = _stampTimedSessions(sessions);
         final goalWasMet = _dailyGoalMet(project);
         final resolvedHistory = PartialLineRecording.resolve(
           history,
@@ -2580,14 +2863,14 @@ class _SoferHomeState extends State<SoferHome>
         segmentStart.page == current.page &&
         segmentStart.line == current.line &&
         remaining > Duration.zero) {
-      final partial = _stampWorkingDay([
+      final partial = _stampTimedSessions([
         PartialLineRecording.create(
           project: project,
           position: current,
           worked: remaining,
           endedAt: sitting.endedAt,
         ),
-      ]).single;
+      ]).single.copyWith(entryId: _smartEntryId);
       final nextHistory = [...history, partial];
       try {
         await _storageService.saveHistory(nextHistory);
@@ -2691,6 +2974,7 @@ class _SoferHomeState extends State<SoferHome>
           return false;
         }
         final totalLines = _smartSavedLines;
+        if (!await _saveTrailingBreaks(sitting.onBreak)) return false;
         if (mounted) {
           setState(() {
             _smartRecordedElapsed = Duration.zero;
@@ -2699,6 +2983,7 @@ class _SoferHomeState extends State<SoferHome>
             _smartEntryId = null;
           });
         }
+        if (!mounted) return false;
         showAppSuccess(
           context,
           context.l10n.pick(
@@ -2724,7 +3009,7 @@ class _SoferHomeState extends State<SoferHome>
         if (!mounted) return false;
 
         final totalLines = _smartSavedLines + linesWritten;
-        final finalRecords = _stampWorkingDay(sessions);
+        final finalRecords = _stampTimedSessions(sessions);
         final goalWasMet = _dailyGoalMet(project);
         final resolvedHistory = finishCurrentLine
             ? PartialLineRecording.resolve(history, project, current)
@@ -3268,6 +3553,7 @@ class _SoferHomeState extends State<SoferHome>
   }
 
   void _navigateToSettings() async {
+    setState(() => _voiceProfile = VoiceCommandProfile.empty);
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -3280,6 +3566,17 @@ class _SoferHomeState extends State<SoferHome>
     // Importing a backup writes records from in there. It reported success and
     // then nothing appeared until the app was restarted.
     await _reloadAfterExternalChange();
+    await _loadVoiceProfile();
+  }
+
+  Future<void> _loadVoiceProfile() async {
+    if (!VoiceMicrophone.supported) return;
+    try {
+      final profile = await VoiceProfileStore().load();
+      if (mounted && profile.enabled) setState(() => _voiceProfile = profile);
+    } catch (_) {
+      // The timer and its buttons still work without the optional profile.
+    }
   }
 
   Future<void> _navigateToFeatures() async {
@@ -3399,7 +3696,8 @@ class _SoferHomeState extends State<SoferHome>
   }
 
   Future<bool> _prepareWindowForDialog() async {
-    if (!Platform.isWindows || !(widget.windowsFloatingMode?.value ?? false)) {
+    if (!PlatformSupport.isWindows ||
+        !(widget.windowsFloatingMode?.value ?? false)) {
       return mounted;
     }
     try {
@@ -3422,7 +3720,9 @@ class _SoferHomeState extends State<SoferHome>
   }
 
   Future<void> _restoreFromFloatingWindow() async {
-    if (!Platform.isWindows || widget.windowsFloatingMode == null) return;
+    if (!PlatformSupport.isWindows || widget.windowsFloatingMode == null) {
+      return;
+    }
     await windowManager.setAlwaysOnTop(false);
     await windowManager.setMinimumSize(const Size(420, 640));
     await windowManager.setSize(_sizeBeforeFloating ?? const Size(1280, 720));
@@ -3489,7 +3789,9 @@ class _SoferHomeState extends State<SoferHome>
           _onBreakTap();
         }
       case ShortcutAction.markLine:
-        if (_clock.isRunning && !_clock.isPaused) {
+        if (_clock.isRunning &&
+            !_clock.isPaused &&
+            !_clock.isReadingCorrection) {
           _isSmartWorkflow ? _smartNextLine() : _recordLap();
         }
     }
@@ -3498,16 +3800,88 @@ class _SoferHomeState extends State<SoferHome>
 
   @override
   Widget build(BuildContext context) {
-    return Focus(
-      focusNode: _keyboardFocus,
-      autofocus: true,
-      onKeyEvent: (_, event) => _onKey(event),
-      child: _buildBody(context),
+    return VoiceCommandListener(
+      profile: _voiceProfile,
+      mode: _voiceProfile.enabled && ModalRoute.isCurrentOf(context) == true
+          ? _voiceTimerMode
+          : null,
+      projectId: _selectedProject?.id,
+      onCommand: _runVoiceCommand,
+      onMicrophoneError: () => showAppError(
+        context,
+        context.l10n.pick(
+          he: 'המיקרופון לפקודות קוליות אינו זמין.',
+          en: 'The microphone for voice commands is unavailable.',
+        ),
+      ),
+      child: Focus(
+        focusNode: _keyboardFocus,
+        autofocus: true,
+        onKeyEvent: (_, event) => _onKey(event),
+        child: _buildBody(context),
+      ),
     );
   }
 
+  VoiceTimerMode? get _voiceTimerMode {
+    if (_selectedProject == null || _clock.isReadingCorrection) {
+      return null;
+    }
+    if (_clock.isPaused) return VoiceTimerMode.paused;
+    if (_clock.isRunning) {
+      return _wordTefillin ? VoiceTimerMode.writingByWord : VoiceTimerMode.writing;
+    }
+    if (_journalSettings.useAsHome && !_journalHomeTemporarilyHidden) return null;
+    return VoiceTimerMode.idle;
+  }
+
+  Future<void> _runVoiceCommand(VoiceCommand command) async {
+    final projectId = _selectedProject?.id;
+    if (projectId == null ||
+        !_voiceProfile.enabled ||
+        ModalRoute.of(context)?.isCurrent != true ||
+        _voiceTimerMode?.allows(command) != true ||
+        _timerCheckpointSaving ||
+        _smartLineSaving ||
+        _reviewingLineTime ||
+        _stoppingTimer) {
+      return;
+    }
+    _voiceClock.start();
+    // A new break needs its own resume, even if writing started recently.
+    // Once resumed, the writing state rejects repeats of the start command.
+    final applied = command == VoiceCommand.start && _clock.isPaused
+        ? await _applyVoiceCommand(command)
+        : await _voiceRepeatGuard.run(
+            command,
+            projectId: projectId,
+            heardAt: _voiceClock.elapsed,
+            apply: () => _applyVoiceCommand(command),
+          );
+    if (mounted && applied) unawaited(_metronomeAudio.alert());
+  }
+
+  Future<bool> _applyVoiceCommand(VoiceCommand command) async {
+    switch (command) {
+      case VoiceCommand.start:
+        await (_isSmartWorkflow && !_clock.isPaused
+            ? _initSmartSession()
+            : _startTimer());
+        return _clock.isRunning;
+      case VoiceCommand.line:
+        return _isSmartWorkflow ? _smartNextLine() : _recordLap();
+      case VoiceCommand.takeBreak:
+        // A voice command starts an untimed break without a dialog.
+        await _pauseTimer();
+        return _clock.isPaused;
+    }
+  }
+
   Widget _buildBody(BuildContext context) {
-    if (Platform.isWindows && (widget.windowsFloatingMode?.value ?? false)) {
+    final today = _currentWorkingDay;
+    _displayedWorkingDay = today;
+    if (PlatformSupport.isWindows &&
+        (widget.windowsFloatingMode?.value ?? false)) {
       return FloatingTimerWindow(
         clock: _clock,
         onStart: _startTimer,
@@ -3528,6 +3902,8 @@ class _SoferHomeState extends State<SoferHome>
         },
         onRestore: _restoreFromFloatingWindow,
         lineSaving: _smartLineSaving || _timerCheckpointSaving,
+        showReadingCorrection: _canReadCorrect,
+        onReadingCorrection: _toggleReadingCorrection,
         lineElapsed: _currentLineElapsed,
         lineActionTooltip: _isSmartWorkflow
             ? context.l10n.pick(
@@ -3537,7 +3913,7 @@ class _SoferHomeState extends State<SoferHome>
       );
     }
 
-    final homeSnapshot = _buildHomeSnapshot();
+    final homeSnapshot = _buildHomeSnapshot(today);
 
     if (_journalSettings.useAsHome &&
         !_journalHomeTemporarilyHidden &&
@@ -3600,10 +3976,11 @@ class _SoferHomeState extends State<SoferHome>
           // almost everybody met.
           if (projects.isEmpty) {
             return _ModernEmptyState(
-              hebrewDate: _getDisplayDate(_effectiveDate(DateTime.now())),
+              hebrewDate: homeSnapshot.hebrewDate,
               onCreateProject: _navigateToProjects,
             );
           }
+          final recordsToday = _recordsOnDate(today);
           return SingleChildScrollView(
             child: ConstrainedBox(
               constraints: BoxConstraints(minHeight: constraints.maxHeight),
@@ -3620,7 +3997,7 @@ class _SoferHomeState extends State<SoferHome>
                               color: Colors.deepPurple.shade300, size: 22),
                           const SizedBox(width: 8),
                           Text(
-                            _getDisplayDate(_effectiveDate(DateTime.now())),
+                            homeSnapshot.hebrewDate,
                             style: TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.bold,
@@ -3684,7 +4061,9 @@ class _SoferHomeState extends State<SoferHome>
                           ),
                         ),
                       ),
-                      if (_clock.isRunning && !_clock.isPaused)
+                      if (_clock.isRunning &&
+                          !_clock.isPaused &&
+                          !_clock.isReadingCorrection)
                         Padding(
                           padding: const EdgeInsets.only(top: 12),
                           child: FadeTransition(
@@ -3740,6 +4119,8 @@ class _SoferHomeState extends State<SoferHome>
                             constraints: const BoxConstraints(maxWidth: 520),
                             child: HomeAdditionsPanel(
                               snapshot: homeSnapshot,
+                              onSessionConditions: _editSessionConditions,
+                              onReadingCorrection: _toggleReadingCorrection,
                               onWritingTarget: _pickSessionTarget,
                             ),
                           ),
@@ -3784,7 +4165,8 @@ class _SoferHomeState extends State<SoferHome>
                         Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            if (!_clock.isPaused) ...[
+                            if (!_clock.isPaused &&
+                                !_clock.isReadingCorrection) ...[
                               ElevatedButton.icon(
                                 onPressed: _recordLap,
                                 icon: const Icon(Icons.flag, size: 28),
@@ -3858,11 +4240,11 @@ class _SoferHomeState extends State<SoferHome>
                       // records since the app was opened — a number that reset
                       // itself on every launch and told the writer nothing about
                       // his day. "סשן" was not a Hebrew word either.
-                      if (_recordsToday > 0)
+                      if (recordsToday > 0)
                         Text(
                           context.l10n.pick(
-                            he: "נשמרו היום $_recordsToday רשומות",
-                            en: "$_recordsToday records saved today",
+                            he: "נשמרו היום $recordsToday רשומות",
+                            en: "$recordsToday records saved today",
                           ),
                           style: const TextStyle(color: Colors.grey),
                         ),

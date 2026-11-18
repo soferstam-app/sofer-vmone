@@ -7,6 +7,7 @@ import 'package:sofer_vmone/projects_screen.dart';
 import 'package:sofer_vmone/project_summary_screen.dart';
 import 'package:sofer_vmone/recycle_bin_screen.dart';
 import 'package:sofer_vmone/storage_service.dart';
+import 'package:sofer_vmone/summary_screen.dart';
 import 'package:sofer_vmone/theme/app_theme.dart';
 
 void main() {
@@ -125,6 +126,78 @@ void main() {
     await tester.tap(secondPage);
     await tester.pumpAndSettle();
     expect(find.text('העמוד טרם נכתב.'), findsOneWidget);
+  });
+
+  testWidgets('record deletion offers undo and keeps its message local',
+      (tester) async {
+    final p = project();
+    final session = work();
+    final otherSession = WorkSession.fromJson({
+      ...session.toJson(),
+      'id': 'other-work',
+      'description': 'רשומה נוספת',
+    });
+    var savedHistory = [session, otherSession];
+    StorageService.demoStore = MemoryStore({});
+    tester.view.physicalSize = const Size(900, 1300);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(host(SummaryScreen(
+      projects: [p],
+      history: savedHistory,
+      onHistoryUpdated: (next) {
+        savedHistory = next;
+      },
+    )));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.folder_special));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('הכתיבה'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('לפי רשומות'));
+    await tester.pumpAndSettle();
+
+    Future<void> deleteRecord(WorkSession record) async {
+      await tester.tap(find.descendant(
+        of: find.widgetWithText(ListTile, record.description),
+        matching: find.byType(PopupMenuButton<String>),
+      ));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('מחק'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('מחק'),
+      ));
+      await tester.pumpAndSettle();
+    }
+
+    final message = find.text('הרשומה נמחק');
+    await deleteRecord(session);
+    expect(message, findsOneWidget);
+    expect(savedHistory.where((s) => s.isDeleted).single.id, session.id);
+    await tester.tap(find.widgetWithText(SnackBarAction, 'ביטול'));
+    await tester.pumpAndSettle();
+    expect(message, findsNothing);
+    expect(find.text(session.description), findsOneWidget);
+    expect(savedHistory.where((s) => s.isDeleted), isEmpty);
+
+    await deleteRecord(session);
+    expect(message, findsOneWidget);
+    await tester.pump(const Duration(seconds: 8));
+    await tester.pumpAndSettle();
+    expect(message, findsNothing);
+    expect(savedHistory.where((s) => s.isDeleted).single.id, session.id);
+
+    await deleteRecord(otherSession);
+    expect(message, findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.byType(SummaryScreen), findsOneWidget);
+    expect(message, findsNothing);
+    expect(savedHistory.where((s) => s.isDeleted).map((s) => s.id),
+        unorderedEquals([session.id, otherSession.id]));
   });
 
   testWidgets('deleted writing record appears in the bin and restores',

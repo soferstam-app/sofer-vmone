@@ -1,3 +1,4 @@
+import 'work_time_breakdown.dart';
 import '../models.dart';
 import 'id_generator.dart';
 import 'production_calculator.dart';
@@ -99,7 +100,7 @@ class PartialLineRecording {
       if (matches(session, project, position) &&
           session.timeRecorded &&
           session.duration > Duration.zero) {
-        total += session.duration;
+        total += session.duration - WorkTimeBreakdown.readingOf(session);
       }
     }
     return total;

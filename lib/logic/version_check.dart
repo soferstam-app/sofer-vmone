@@ -71,10 +71,13 @@ extension UpdatePlatformLabel on UpdatePlatform {
         UpdatePlatform.windows => 'Windows',
       };
 
-  String assetName(Version version) => switch (this) {
-        UpdatePlatform.android => 'sofer-vmone-$version-android.apk',
-        UpdatePlatform.windows => 'sofer-vmone-$version-windows.zip',
-      };
+  String assetName(Version version, {bool withVoiceModel = false}) {
+    final suffix = withVoiceModel ? '-voice' : '';
+    return switch (this) {
+      UpdatePlatform.android => 'sofer-vmone-$version-android$suffix.apk',
+      UpdatePlatform.windows => 'sofer-vmone-$version-windows$suffix.zip',
+    };
+  }
 }
 
 /// The exact release file that may be downloaded and installed.
@@ -140,6 +143,7 @@ UpdateStatus readLatestRelease({
   required Map<String, dynamic> json,
   required Version running,
   required UpdatePlatform platform,
+  bool withVoiceModel = false,
   bool english = false,
 }) {
   // A draft is not published, and a pre-release was not meant for whoever
@@ -166,7 +170,8 @@ UpdateStatus readLatestRelease({
 
   if (!latest.isNewerThan(running)) return UpToDate(running);
 
-  final expectedName = platform.assetName(latest);
+  final expectedName =
+      platform.assetName(latest, withVoiceModel: withVoiceModel);
   final rawAssets = json['assets'];
   if (rawAssets is! List) {
     return UpdateCheckFailed(english

@@ -10,7 +10,7 @@ import 'dart:convert';
 ///     %APPDATA%\com.example\stamsofer\shared_preferences.json
 ///
 /// It is not a backup file and never claimed to be. It is the app's own store:
-/// every key prefixed with `flutter.`, and the three record lists held as JSON
+/// every key prefixed with `flutter.`, and the record lists held as JSON
 /// text inside string values. Converting it to the shape the restore flow
 /// already understands costs nothing and closes the one route those users had.
 ///
@@ -28,6 +28,9 @@ class LegacyImport {
     'projects',
     'history',
     'expenses',
+    'proofreads',
+    'payments',
+    'orders',
   };
 
   static const Set<String> _encodedMaps = {
@@ -39,6 +42,9 @@ class LegacyImport {
   /// Checked on the shape rather than the file name, because the writer may
   /// well have renamed it while copying it off the old machine.
   static bool looksLikeStore(Map<String, dynamic> json) =>
+      !json.containsKey('app') &&
+      !json.containsKey('formatVersion') &&
+      !json.containsKey('checksum') &&
       json.keys.any((k) => k.startsWith(_prefix));
 
   /// Turns the store file into the shape a backup has.
@@ -51,26 +57,21 @@ class LegacyImport {
     required String appId,
     required int formatVersion,
   }) {
-    List<dynamic> listAt(String key) {
-      final raw = store['$_prefix$key'];
-      if (raw is! String || raw.isEmpty) return const [];
-      try {
-        final decoded = jsonDecode(raw);
-        return decoded is List ? decoded : const [];
-      } catch (_) {
-        return const [];
+    var unreadableSections = 0;
+    T decodeSection<T>(String key, T fallback) {
+      final storedKey = '$_prefix$key';
+      if (!store.containsKey(storedKey)) return fallback;
+      final raw = store[storedKey];
+      if (raw is String) {
+        try {
+          final decoded = jsonDecode(raw);
+          if (decoded is T) return decoded;
+        } on FormatException {
+          // Continue with the rest of the store file.
+        }
       }
-    }
-
-    Map<String, dynamic> mapAt(String key) {
-      final raw = store['$_prefix$key'];
-      if (raw is! String || raw.isEmpty) return const {};
-      try {
-        final decoded = jsonDecode(raw);
-        return decoded is Map ? Map<String, dynamic>.from(decoded) : const {};
-      } catch (_) {
-        return const {};
-      }
+      unreadableSections++;
+      return fallback;
     }
 
     // Everything that is not a record list is a setting. Carried through
@@ -91,10 +92,11 @@ class LegacyImport {
       // be inventing one, and the preview says "unknown" for a null.
       'exportedAt': null,
       'exportedFrom': 'התקנה קודמת',
-      'projects': listAt('projects'),
-      'history': listAt('history'),
-      'expenses': listAt('expenses'),
-      'lastPositions': mapAt('last_positions'),
+      for (final key in _encodedLists)
+        key: decodeSection<List<dynamic>>(key, const []),
+      'lastPositions':
+          decodeSection<Map<String, dynamic>>('last_positions', const {}),
+      'unreadableSections': unreadableSections,
       'settings': settings,
     };
   }

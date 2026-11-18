@@ -1,9 +1,13 @@
+import '../logic/writing_conditions.dart';
+import '../logic/writing_timeline.dart';
+import '../widgets/writing_conditions_fields.dart';
+import '../logic/work_time_breakdown.dart';
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart'
     show CupertinoTimerPicker, CupertinoTimerPickerMode;
 import 'package:flutter/material.dart';
-import 'package:kosher_dart/kosher_dart.dart';
+import '../widgets/hebrew_date_picker.dart';
 
 import '../format.dart';
 import '../hebrew_utils.dart';
@@ -25,6 +29,8 @@ import '../widgets/feedback.dart';
 import '../widgets/sofer_widgets.dart';
 import '../widgets/confirm.dart';
 import '../l10n/app_localizations.dart';
+import '../l10n/prior_writing_labels.dart';
+import '../logic/diagnostic_report.dart';
 import 'entry_draft.dart';
 import '../logic/tefillin_text.dart';
 import 'tefillin_words_dialog.dart';
@@ -161,6 +167,7 @@ class _EntrySheetState extends State<_EntrySheet> {
   final ScrollController _scrollController = ScrollController();
 
   Project? _project;
+  late WritingConditionsController _conditions;
 
   final _pageCtrl = TextEditingController();
   final _pageToCtrl = TextEditingController();
@@ -177,6 +184,7 @@ class _EntrySheetState extends State<_EntrySheet> {
   final _pairCtrl = TextEditingController();
 
   DateTime? _date;
+  DateTime? _dateBeforePriorWriting;
   TimeOfDay _startTime = const TimeOfDay(hour: 9, minute: 0);
   TimeOfDay _endTime = const TimeOfDay(hour: 10, minute: 0);
   bool _includeTime = true;
@@ -237,6 +245,11 @@ class _EntrySheetState extends State<_EntrySheet> {
   void initState() {
     super.initState();
     _project = widget.initialProject;
+    _conditions = WritingConditionsController.draft(
+        widget.initialDraft?.writingConditions,
+        _project == null
+            ? const WritingConditions()
+            : WritingConditions.project(_project!));
     _loadWordPreferences();
     _draftEntryId = widget.initialDraft?.entryId ?? IdGenerator.generate();
     if (_project == null) _restoreLastProject();
@@ -261,6 +274,7 @@ class _EntrySheetState extends State<_EntrySheet> {
     _pageToCtrl.dispose();
     _lineFromCtrl.dispose();
     _lineToCtrl.dispose();
+    _conditions.dispose();
     _amountCtrl.dispose();
     _partialLineCtrl.dispose();
     _pairCtrl.dispose();
@@ -310,6 +324,12 @@ class _EntrySheetState extends State<_EntrySheet> {
       projectId: project.id,
       entryId: _draftEntryId,
       isManual: widget.isManual,
+      writingConditions: _conditions.draftJson,
+      workIntervals: widget.initialDraft?.workIntervals,
+      writingSittingId: widget.initialDraft?.writingSittingId,
+      readingCorrection:
+          widget.initialDraft?.readingCorrection ?? Duration.zero,
+      sittingBreak: widget.initialDraft?.sittingBreak ?? Duration.zero,
       measuredTime: widget.measuredTime,
       measuredEnd: widget.measuredEnd,
       date: _date,
@@ -508,6 +528,8 @@ class _EntrySheetState extends State<_EntrySheet> {
       if (p.id != id) continue;
       setState(() {
         _project = p;
+        _conditions.dispose();
+        _conditions = WritingConditionsController(WritingConditions.project(p));
         _loadWordPreferences();
         _suggestSingleContinuation(p);
       });
@@ -536,6 +558,9 @@ class _EntrySheetState extends State<_EntrySheet> {
     if (!mounted) return;
     setState(() {
       _project = created;
+      _conditions.dispose();
+      _conditions =
+          WritingConditionsController(WritingConditions.project(created!));
       _loadWordPreferences();
       _suggestSingleContinuation(created!);
     });
@@ -666,6 +691,12 @@ class _EntrySheetState extends State<_EntrySheet> {
       return false;
     }
 
+    if (_conditions.error() != null) {
+      _showFormError(context.l10n.pick(
+          he: 'יש לבדוק את גובה הכתב, הטמפרטורה והלחות בתנאי הישיבה.',
+          en: 'Check letter height, temperature and humidity in session conditions.'));
+      return false;
+    }
     final times = _times();
     final backlogOnly = widget.isManual && _date == null;
 
@@ -723,9 +754,28 @@ class _EntrySheetState extends State<_EntrySheet> {
           return false;
         }
         try {
+          await Diagnostics.record(DiagnosticEvent.entrySaveStarted);
           await widget.onSave(EntrySave(
             project: project,
-            sessions: sessions,
+            sessions: !widget.isManual && !_sittingTimeUsed
+                ? WorkTimeBreakdown.allocate(sessions,
+                        reading: widget.initialDraft?.readingCorrection ??
+                            Duration.zero,
+                        breaks:
+                            widget.initialDraft?.sittingBreak ?? Duration.zero,
+                        intervals: widget.initialDraft?.workIntervals == null
+                            ? null
+                            : WritingSpan.decode(
+                                widget.initialDraft!.workIntervals))
+                    .map((s) =>
+                        _conditions.value.stamp(s).copyWith(extraFields: {
+                          ..._conditions.value.stamp(s).extraFields,
+                          'writingSittingId':
+                              widget.initialDraft?.writingSittingId ??
+                                  _draftEntryId,
+                        }))
+                    .toList()
+                : sessions.map((s) => _conditions.value.stamp(s)).toList(),
             reachedPage: reachedPage,
             reachedLine: reachedLine,
             backlogOnly: backlogOnly,
@@ -735,7 +785,10 @@ class _EntrySheetState extends State<_EntrySheet> {
                 project.type == ProjectType.tefillin ? _tefillinScript : null,
           ));
           _savedInSheet.addAll(sessions);
-        } catch (error) {
+          unawaited(Diagnostics.record(DiagnosticEvent.entrySaved));
+        } catch (error, stack) {
+          unawaited(Diagnostics.record(DiagnosticEvent.entrySaveFailed,
+              error: error, stack: stack));
           debugPrint('Entry save failed: $error');
           if (!mounted) return false;
           _showFormError(context.l10n.pick(
@@ -744,12 +797,10 @@ class _EntrySheetState extends State<_EntrySheet> {
           ));
           return false;
         }
-        // Remembered for the next entry, so the list is not asked again.
         try {
-          await _storage.setLastProjectId(project.id);
+          await _storage.finishSavedEntry(project.id);
         } catch (_) {
-          // History is already durable. Remembering the last project is only a
-          // convenience and must not turn a successful save into a retry.
+          // Cleanup failure must not turn a durable save into a retry.
         }
         return true;
     }
@@ -762,9 +813,6 @@ class _EntrySheetState extends State<_EntrySheet> {
   /// rather than a form opened and closed for every stretch of it.
   Future<void> _saveAndContinue() async {
     if (!await _attemptSave()) return;
-    try {
-      await _storage.clearPendingEntry();
-    } catch (_) {}
     if (!mounted) return;
 
     final project = _project;
@@ -827,9 +875,6 @@ class _EntrySheetState extends State<_EntrySheet> {
 
   Future<void> _saveAndClose() async {
     if (!await _attemptSave()) return;
-    try {
-      await _storage.clearPendingEntry();
-    } catch (_) {}
     if (!mounted) return;
     // Said before the route goes, not after: the messenger it reaches is the
     // app's and outlives this sheet either way, and saying it first means there
@@ -1034,6 +1079,11 @@ class _EntrySheetState extends State<_EntrySheet> {
                         setState(() {
                           _clearFields();
                           _project = value;
+                          _conditions.dispose();
+                          _conditions = WritingConditionsController(
+                              value == null
+                                  ? const WritingConditions()
+                                  : WritingConditions.project(value));
                           _loadWordPreferences();
                           if (value != null) _suggestSingleContinuation(value);
                         });
@@ -1061,6 +1111,32 @@ class _EntrySheetState extends State<_EntrySheet> {
             padding: EdgeInsets.zero),
         const SizedBox(height: 8),
         _whenRow(),
+        if (widget.isManual)
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(context.l10n.priorWriting),
+            subtitle: Text(context.l10n.priorWritingHelp),
+            value: _date == null,
+            onChanged: (value) =>
+                setState(() => _setPriorWriting(value == true)),
+          ),
+        ExpansionTile(
+            key: ValueKey('conditions-${project?.id}'),
+            maintainState: true,
+            title: Text(context.l10n.pick(
+                he: 'תנאי הישיבה (רשות)', en: 'Session conditions (optional)')),
+            children: [WritingConditionsFields(controller: _conditions)]),
+        if (!widget.isManual &&
+            !_sittingTimeUsed &&
+            (widget.initialDraft?.readingCorrection ?? Duration.zero) >
+                Duration.zero)
+          Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(WorkTimeBreakdown(
+                      widget.measuredTime,
+                      widget.initialDraft!.readingCorrection,
+                      widget.initialDraft!.sittingBreak)
+                  .label(english: context.l10n.isEnglish))),
       ],
     );
   }
@@ -1131,6 +1207,17 @@ class _EntrySheetState extends State<_EntrySheet> {
         ),
       ),
     );
+  }
+
+  void _setPriorWriting(bool priorWriting) {
+    if (priorWriting) {
+      _dateBeforePriorWriting = _date;
+      _date = null;
+    } else {
+      _date = _dateBeforePriorWriting ??
+          widget.initialDate ??
+          DateLogic.effectiveDate(DateTime.now(), widget.dayStart);
+    }
   }
 
   String _whenSummary() {
@@ -1421,7 +1508,7 @@ class _EntrySheetState extends State<_EntrySheet> {
             if (_date != null)
               IconButton(
                 icon: const Icon(Icons.close, size: 16),
-                onPressed: () => setInner(() => _date = null),
+                onPressed: () => setInner(() => _setPriorWriting(true)),
               ),
           ],
         ),
@@ -1430,118 +1517,9 @@ class _EntrySheetState extends State<_EntrySheet> {
   }
 
   Future<void> _pickHebrewDate(StateSetter setInner) async {
-    final jewishDate = JewishDate.fromDateTime(_date ?? DateTime.now());
-
-    await showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setPicker) {
-          final year = jewishDate.getJewishYear();
-          final month = jewishDate.getJewishMonth();
-          final day = jewishDate.getJewishDayOfMonth();
-          final isLeap = jewishDate.isJewishLeapYear();
-
-          final years = List.generate(21, (i) => (year - 10) + i);
-          final months = isLeap
-              ? [7, 8, 9, 10, 11, 12, 13, 1, 2, 3, 4, 5, 6]
-              : [7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6];
-          final days =
-              List.generate(jewishDate.getDaysInJewishMonth(), (i) => i + 1);
-
-          return AlertDialog(
-            title: Text(context.l10n.pick(
-              he: "בחר תאריך עברי",
-              en: "Choose a Hebrew date",
-            )),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DropdownButton<int>(
-                  value: years.contains(year) ? year : years.first,
-                  items: [
-                    for (final y in years)
-                      DropdownMenuItem(
-                        value: y,
-                        child: Text(context.l10n.isEnglish
-                            ? y.toString()
-                            : formatHebrewYear(y)),
-                      )
-                  ],
-                  onChanged: (value) {
-                    if (value == null) return;
-                    final probe = JewishDate()..setJewishDate(value, 1, 1);
-                    // Adar II exists only in a leap year; a year without one
-                    // takes the writer back to Adar.
-                    final newMonth =
-                        !probe.isJewishLeapYear() && month == 13 ? 12 : month;
-                    probe.setJewishDate(value, newMonth, 1);
-                    final maxDays = probe.getDaysInJewishMonth();
-                    jewishDate.setJewishDate(
-                        value, newMonth, day > maxDays ? maxDays : day);
-                    setPicker(() {});
-                  },
-                ),
-                DropdownButton<int>(
-                  value: months.contains(month) ? month : 1,
-                  items: [
-                    for (final m in months)
-                      DropdownMenuItem(
-                        value: m,
-                        child: Text(_jewishMonthName(m, year, isLeap)),
-                      )
-                  ],
-                  onChanged: (value) {
-                    if (value == null) return;
-                    jewishDate.setJewishDate(year, value, 1);
-                    final maxDays = jewishDate.getDaysInJewishMonth();
-                    jewishDate.setJewishDate(
-                        year, value, day > maxDays ? maxDays : day);
-                    setPicker(() {});
-                  },
-                ),
-                DropdownButton<int>(
-                  value: days.contains(day) ? day : 1,
-                  items: [
-                    for (final d in days)
-                      DropdownMenuItem(
-                        value: d,
-                        child: Text(context.l10n.isEnglish
-                            ? d.toString()
-                            : formatHebrewNumber(d)),
-                      )
-                  ],
-                  onChanged: (value) {
-                    if (value == null) return;
-                    jewishDate.setJewishDate(year, month, value);
-                    setPicker(() {});
-                  },
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: Text(context.l10n.cancel),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  setInner(() => _date = jewishDate.getGregorianCalendar());
-                  Navigator.pop(ctx);
-                },
-                child: Text(context.l10n.pick(he: "בחר", en: "Select")),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  String _jewishMonthName(int month, int year, bool isLeap) {
-    if (!context.l10n.isEnglish) return getHebrewMonthName(month, isLeap);
-    final date = JewishDate()..setJewishDate(year, month, 1);
-    final formatter = HebrewDateFormatter()..hebrewFormat = false;
-    return formatter.format(date, pattern: 'MM');
+    final picked = await showHebrewDatePicker(context,
+        initialDate: _date ?? DateTime.now());
+    if (picked != null && mounted) setInner(() => _date = picked);
   }
 
   /// The fields that differ by what kind of work the commission is.

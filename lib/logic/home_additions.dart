@@ -1,4 +1,5 @@
 import 'json_compat.dart';
+import 'tefillin_units.dart';
 
 /// Optional tools that may be added to the home screen.
 ///
@@ -8,12 +9,17 @@ import 'json_compat.dart';
 class HomeAdditionsSettings {
   static const defaults = HomeAdditionsSettings();
 
+  final bool writingConditionsEnabled;
+  final bool readingCorrectionEnabled;
   final bool celebrateDailyGoal;
 
   /// In smart mode, stopping the sitting also confirms the displayed line.
   /// Off is safer for existing users who may stop half way through a line.
   final bool finishWritingCompletesLine;
   final bool lineTargetEnabled;
+
+  /// Base time for one Sefer Torah line. A physical tefillin line uses its
+  /// parshiya's text ratio, without the separate pricing/difficulty weights.
   final int lineTargetSeconds;
   final bool metronomeEnabled;
   final int metronomeBpm;
@@ -31,6 +37,8 @@ class HomeAdditionsSettings {
   final int endTimeMinutes;
 
   const HomeAdditionsSettings({
+    this.writingConditionsEnabled = false,
+    this.readingCorrectionEnabled = false,
     this.celebrateDailyGoal = false,
     this.finishWritingCompletesLine = false,
     this.lineTargetEnabled = false,
@@ -45,7 +53,24 @@ class HomeAdditionsSettings {
     this.endTimeMinutes = 18 * 60,
   });
 
+  /// With no current tefillin position, show the Sefer-line reference target.
+  /// For word entry this is an average ruled-line reference, never a screen row.
+  Duration targetForLine({int? parshiya, TefillinSide? side}) {
+    if (parshiya == null || side == null || parshiya < 1 || parshiya > 4) {
+      return Duration(seconds: lineTargetSeconds);
+    }
+    return Duration(
+      microseconds: (lineTargetSeconds *
+              Duration.microsecondsPerSecond *
+              TefillinUnits.seferLines[parshiya - 1] /
+              TefillinUnits.linesIn(side))
+          .round(),
+    );
+  }
+
   HomeAdditionsSettings copyWith({
+    bool? writingConditionsEnabled,
+    bool? readingCorrectionEnabled,
     bool? celebrateDailyGoal,
     bool? finishWritingCompletesLine,
     bool? lineTargetEnabled,
@@ -60,6 +85,10 @@ class HomeAdditionsSettings {
     int? endTimeMinutes,
   }) =>
       HomeAdditionsSettings(
+        writingConditionsEnabled:
+            writingConditionsEnabled ?? this.writingConditionsEnabled,
+        readingCorrectionEnabled:
+            readingCorrectionEnabled ?? this.readingCorrectionEnabled,
         celebrateDailyGoal: celebrateDailyGoal ?? this.celebrateDailyGoal,
         finishWritingCompletesLine:
             finishWritingCompletesLine ?? this.finishWritingCompletesLine,
@@ -82,6 +111,8 @@ class HomeAdditionsSettings {
       );
 
   Map<String, dynamic> toJson() => {
+        'writingConditionsEnabled': writingConditionsEnabled,
+        'readingCorrectionEnabled': readingCorrectionEnabled,
         'celebrateDailyGoal': celebrateDailyGoal,
         'finishWritingCompletesLine': finishWritingCompletesLine,
         'lineTargetEnabled': lineTargetEnabled,
@@ -102,6 +133,8 @@ class HomeAdditionsSettings {
         (JsonCompat.intOrNull(json[key]) ?? fallback).clamp(min, max);
 
     return HomeAdditionsSettings(
+      writingConditionsEnabled: flag('writingConditionsEnabled'),
+      readingCorrectionEnabled: flag('readingCorrectionEnabled'),
       celebrateDailyGoal: flag('celebrateDailyGoal'),
       finishWritingCompletesLine: flag('finishWritingCompletesLine'),
       lineTargetEnabled: flag('lineTargetEnabled'),

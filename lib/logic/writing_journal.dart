@@ -181,7 +181,7 @@ class WritingJournalLogic {
       history
           .where((session) =>
               !session.isDeleted &&
-              DateLogic.sessionIsOnDay(session, day, dayStart))
+              DateLogic.sessionIsFiledOnDate(session, day, dayStart))
           .toList()
         ..sort((a, b) => a.startTime.compareTo(b.startTime));
 

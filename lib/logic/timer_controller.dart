@@ -1,22 +1,24 @@
+import 'writing_timeline.dart';
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../format.dart';
+import '../platform_support.dart';
 import 'json_compat.dart';
 import '../storage_service.dart';
 import '../timer_foreground_task.dart';
 
 /// What a finished sitting produced.
 class StoppedSitting {
-  /// Time actually spent writing.
+  /// Professional work, including reading/correction and excluding rest breaks.
   final Duration worked;
 
   /// Time spent on breaks during it, which is excluded from the writing
   /// average — a cup of coffee is not slow writing.
   final Duration onBreak;
+  final Duration readingCorrection;
 
   /// When the sitting ended, which is what dates the record.
   final DateTime endedAt;
@@ -25,6 +27,7 @@ class StoppedSitting {
     required this.worked,
     required this.onBreak,
     required this.endedAt,
+    this.readingCorrection = Duration.zero,
   });
 }
 
@@ -91,6 +94,56 @@ class TimerController {
   Duration _previousLineDuration = Duration.zero;
   Duration _lastSitting = Duration.zero;
   Duration _breakSoFar = Duration.zero;
+  Duration _readingSoFar = Duration.zero;
+  Duration _lapReading = Duration.zero;
+  Duration? _readingMark;
+
+  List<WritingSpan> _workSpans = [];
+  DateTime? _spanStarted;
+  Duration _spanWork = Duration.zero;
+  bool _spanReading = false;
+
+  List<WritingSpan> get workIntervals {
+    final current = elapsed - _spanWork;
+    return [
+      ..._workSpans,
+      if (_spanStarted != null && current > Duration.zero)
+        WritingSpan(_spanStarted, _now(), current.inMilliseconds,
+            reading: _spanReading)
+    ];
+  }
+
+  void _closeWorkSpan() {
+    _workSpans = workIntervals;
+    _spanStarted = null;
+  }
+
+  void _openWorkSpan() {
+    _spanStarted = _now();
+    _spanWork = elapsed;
+    _spanReading = isReadingCorrection;
+  }
+
+  bool get isReadingCorrection => _readingMark != null;
+  Duration get readingCorrectionElapsed =>
+      _readingSoFar +
+      (_readingMark == null ? Duration.zero : _monotonic() - _readingMark!);
+  Duration get totalBreakElapsed => _breakSoFar + breakElapsed;
+
+  void beginReadingCorrection() {
+    if (!isRunning || isReadingCorrection) return;
+    _closeWorkSpan();
+    _readingMark = _monotonic();
+    _openWorkSpan();
+  }
+
+  void endReadingCorrection() {
+    if (!isReadingCorrection) return;
+    _closeWorkSpan();
+    _readingSoFar = readingCorrectionElapsed;
+    _readingMark = null;
+    if (isRunning) _openWorkSpan();
+  }
 
   bool get isRunning => _isRunning;
   bool get isPaused => _isPaused;
@@ -124,7 +177,7 @@ class TimerController {
 
   /// Time since the writer last marked a line finished.
   Duration get sinceLastLap {
-    final since = elapsed - _lastLap;
+    final since = elapsed - _lastLap - (readingCorrectionElapsed - _lapReading);
     return since.isNegative ? Duration.zero : since;
   }
 
@@ -132,6 +185,7 @@ class TimerController {
   /// as a transaction boundary: if writing the checkpoint fails, the visible
   /// line timer must return to the line that was actually saved.
   Duration get lastLapElapsed => _lastLap;
+  Duration get lapReadingElapsed => _lapReading;
 
   Duration get previousLineDuration => _previousLineDuration;
 
@@ -149,25 +203,43 @@ class TimerController {
   /// line boundaries and the current position. Works while paused or running.
   void restartCurrentLine() {
     final discarded = sinceLastLap;
-    _banked = elapsed - discarded;
+    if (discarded == Duration.zero) return;
+
+    final work = elapsed;
+    final intervals = workIntervals;
+    final lapMs = _lastLap.inMilliseconds;
+    _workSpans = [
+      ...WritingTimeline.slice(intervals, 0, lapMs),
+      // Reading is professional work, even if the pen time since the last
+      // line is discarded. Retain its original wall-clock placement.
+      ...WritingTimeline.slice(intervals, lapMs, work.inMilliseconds - lapMs)
+          .where((span) => span.reading),
+    ];
+    _banked = work - discarded;
     _breakSoFar += discarded;
+    _spanStarted = null;
     if (_isRunning) {
       _runMark = _monotonic();
       _startedAt = _now();
     }
+    _normalizeTimeline();
+    if (_isRunning) _openWorkSpan();
   }
 
   /// Restores the previous line boundary after a failed smart checkpoint.
   /// This does not touch persisted timer state; the caller persists the
   /// unchanged sitting once its UI state has been restored.
-  void restoreLastLap(Duration value, {Duration? previousLineDuration}) {
+  void restoreLastLap(Duration value,
+      {Duration? previousLineDuration, Duration? lapReading}) {
     _lastLap = value;
+    if (lapReading != null) _lapReading = lapReading;
     if (previousLineDuration != null) {
       _previousLineDuration = previousLineDuration;
     }
   }
 
   void start({bool clearStoredState = false}) {
+    endReadingCorrection();
     _isPaused = false;
     if (isRunning) return;
 
@@ -178,11 +250,14 @@ class TimerController {
     _isRunning = true;
     _runMark = _monotonic();
     _startedAt ??= _now();
+    _openWorkSpan();
     _startTicking();
     // The owner replaces/clears the durable checkpoint after its transaction.
   }
 
   void pause() {
+    endReadingCorrection();
+    _closeWorkSpan();
     // Banked, so the time already written survives the pause and, through
     // toJson, the app being closed.
     _banked += _sinceRunStart;
@@ -217,6 +292,7 @@ class TimerController {
         worked: elapsed,
         onBreak: _breakSoFar + breakElapsed,
         endedAt: _now(),
+        readingCorrection: readingCorrectionElapsed,
       );
 
   /// Commits a previously previewed stop after its history has been saved.
@@ -240,6 +316,11 @@ class TimerController {
     _startedAt = null;
     _banked = Duration.zero;
     _breakSoFar = Duration.zero;
+    _readingMark = null;
+    _readingSoFar = Duration.zero;
+    _lapReading = Duration.zero;
+    _workSpans = [];
+    _spanStarted = null;
 
     // The owner replaces/clears the durable checkpoint after its transaction.
   }
@@ -247,10 +328,11 @@ class TimerController {
   /// Marks a line finished, and reports how long it took.
   Duration recordLap({Duration carried = Duration.zero}) {
     final now = elapsed;
-    final lap = now - _lastLap;
+    final writingLap = sinceLastLap;
     _lastLap = now;
-    _previousLineDuration = carried + lap;
-    return lap;
+    _lapReading = readingCorrectionElapsed;
+    _previousLineDuration = carried + writingLap;
+    return writingLap;
   }
 
   /// Forgets the break time banked so far, for a break the writer says was not
@@ -262,16 +344,26 @@ class TimerController {
   /// The timer's own part of the stored sitting. The screen adds what it knows
   /// — which commission, and where in it — and stores the two together.
   Map<String, dynamic> toJson() => {
+        'workIntervals': [for (final span in workIntervals) span.toJson()],
+        'timelineCheckpointAt': _now().toIso8601String(),
         'isPaused': _isPaused,
         'sessionStartTime': _startedAt?.toIso8601String(),
         'accumulatedElapsedSeconds': _banked.inSeconds,
+        'accumulatedElapsedMs': _banked.inMilliseconds,
         'breakStartedAt': _breakStartedAt?.toIso8601String(),
         'accumulatedBreakSeconds': _breakSoFar.inSeconds,
+        'accumulatedBreakMs': _breakSoFar.inMilliseconds,
         // The line clock is part of the sitting, not decoration. Without its
         // checkpoint a restored timer showed the whole sitting as the current
         // line until the next press of "סיימתי שורה".
         'lastLapElapsedSeconds': _lastLap.inSeconds,
+        'lastLapElapsedMs': _lastLap.inMilliseconds,
         'previousLineDurationSeconds': _previousLineDuration.inSeconds,
+        'previousLineDurationMs': _previousLineDuration.inMilliseconds,
+        'readingCorrectionMs': readingCorrectionElapsed.inMilliseconds,
+        'isReadingCorrection': isReadingCorrection,
+        'lapReadingMs': _lapReading.inMilliseconds,
+        'readingCheckpointAt': _now().toIso8601String(),
       };
 
   /// Picks a sitting back up. Returns true when the clock is running again, so
@@ -279,22 +371,28 @@ class TimerController {
   Map<String, dynamic> checkpoint() => {
         ...toJson(),
         'accumulatedElapsedSeconds': elapsed.inSeconds,
+        'accumulatedElapsedMs': elapsed.inMilliseconds,
         'sessionStartTime': isRunning ? _now().toIso8601String() : null,
       };
 
   bool restoreFrom(Map<String, dynamic> state) {
     _ticker?.cancel();
+    _spanStarted = null;
+    _workSpans = WritingSpan.decode(state['workIntervals']);
     _breakStartedAt = null;
+    _readingMark = null;
+    _readingSoFar = Duration(
+        milliseconds: (JsonCompat.intOrNull(state['readingCorrectionMs']) ?? 0)
+            .clamp(0, 1 << 53));
+    _lapReading = Duration(
+        milliseconds: (JsonCompat.intOrNull(state['lapReadingMs']) ?? 0)
+            .clamp(0, _readingSoFar.inMilliseconds));
     final isPaused = state['isPaused'] == true;
-    _banked = Duration(
-        seconds: JsonCompat.intOrNull(state['accumulatedElapsedSeconds']) ?? 0);
-    _lastLap = Duration(
-        seconds: JsonCompat.intOrNull(state['lastLapElapsedSeconds']) ?? 0);
-    _previousLineDuration = Duration(
-        seconds:
-            JsonCompat.intOrNull(state['previousLineDurationSeconds']) ?? 0);
-    _breakSoFar = Duration(
-        seconds: JsonCompat.intOrNull(state['accumulatedBreakSeconds']) ?? 0);
+    _banked = JsonCompat.checkpointDuration(state, 'accumulatedElapsed');
+    _lastLap = JsonCompat.checkpointDuration(state, 'lastLapElapsed');
+    _previousLineDuration =
+        JsonCompat.checkpointDuration(state, 'previousLineDuration');
+    _breakSoFar = JsonCompat.checkpointDuration(state, 'accumulatedBreak');
     final started = state['sessionStartTime'] is String
         ? state['sessionStartTime'] as String
         : null;
@@ -306,6 +404,7 @@ class TimerController {
     _startedAt = null;
 
     if (isPaused) {
+      _normalizeTimeline();
       final breakStarted = state['breakStartedAt'] is String
           ? state['breakStartedAt'] as String
           : null;
@@ -330,8 +429,48 @@ class TimerController {
     _startedAt = _now();
     _isRunning = true;
     _runMark = _monotonic();
+    if (state['isReadingCorrection'] == true) {
+      final checkpointAt = DateTime.tryParse('${state['readingCheckpointAt']}');
+      final readingAway = checkpointAt == null
+          ? Duration.zero
+          : _now().difference(checkpointAt);
+      if (readingAway > Duration.zero) _readingSoFar += readingAway;
+      _readingMark = _monotonic();
+    }
+    final timelineAt = DateTime.tryParse('${state['timelineCheckpointAt']}');
+    if (timelineAt != null && state['workIntervals'] is List) {
+      final spanAway = _now().difference(timelineAt);
+      if (spanAway > Duration.zero) {
+        _workSpans.add(WritingSpan(timelineAt, _now(), spanAway.inMilliseconds,
+            reading: isReadingCorrection));
+      }
+    }
+    _normalizeTimeline();
+    _openWorkSpan();
     _startTicking();
     return true;
+  }
+
+  void _normalizeTimeline() {
+    final measured = _workSpans.fold<int>(0, (n, span) => n + span.workMs);
+    final total = elapsed.inMilliseconds;
+    if (measured > total) {
+      _workSpans = WritingTimeline.slice(_workSpans, 0, total);
+    }
+    if (measured < total) {
+      final missing = total - measured;
+      final knownReading = _workSpans
+          .where((s) => s.reading)
+          .fold<int>(0, (n, s) => n + s.workMs);
+      final read = (readingCorrectionElapsed.inMilliseconds - knownReading)
+          .clamp(0, missing);
+      if (missing > read) {
+        _workSpans.add(WritingSpan(null, null, missing - read));
+      }
+      if (read > 0) {
+        _workSpans.add(WritingSpan(null, null, read, reading: true));
+      }
+    }
   }
 
   // --- Android: keeping time while the app is in the background -------------
@@ -340,7 +479,7 @@ class TimerController {
   /// would freeze. A foreground service holds it, and shows the time in a
   /// notification while it does.
   Future<void> initForegroundService() async {
-    if (!Platform.isAndroid) return;
+    if (!PlatformSupport.hasForegroundTimerService) return;
     final permission =
         await FlutterForegroundTask.checkNotificationPermission();
     if (permission != NotificationPermission.granted) {
@@ -367,7 +506,7 @@ class TimerController {
 
   Future<void> startForegroundService() async {
     final started = _startedAt;
-    if (!Platform.isAndroid || started == null) return;
+    if (!PlatformSupport.hasForegroundTimerService || started == null) return;
     await FlutterForegroundTask.saveData(
       key: 'timerSessionStartTime',
       value: started.toIso8601String(),
@@ -385,7 +524,7 @@ class TimerController {
   }
 
   Future<void> stopForegroundService() async {
-    if (!Platform.isAndroid) return;
+    if (!PlatformSupport.hasForegroundTimerService) return;
     await FlutterForegroundTask.stopService();
   }
 

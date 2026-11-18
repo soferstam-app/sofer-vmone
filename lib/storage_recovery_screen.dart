@@ -1,12 +1,14 @@
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import 'backup_service.dart';
-import 'platform_support.dart';
+import 'logic/diagnostic_report.dart';
+import 'logic/save_user_file.dart';
+import 'settings/diagnostic_report_dialog.dart';
 import 'storage_service.dart';
 
 /// Works without loading preferences: a damaged journal must not prevent the
@@ -53,25 +55,25 @@ class _StorageRecoveryScreenState extends State<StorageRecoveryScreen> {
     final data = await StorageService().exportRecoveryData();
     final bytes = Uint8List.fromList(
         utf8.encode(const JsonEncoder.withIndent('  ').convert(data)));
-    final path = await FilePicker.platform.saveFile(
+    final path = await saveUserFile(
       dialogTitle: _text('שמירת עותק לחילוץ נתונים', 'Save recovery copy'),
       fileName:
           'sofer-vmone-recovery-${DateTime.now().millisecondsSinceEpoch}.json',
       type: FileType.custom,
       allowedExtensions: const ['json'],
-      bytes: PlatformSupport.isMobile ? bytes : null,
+      bytes: bytes,
     );
     if (path == null) return;
-    if (!PlatformSupport.isMobile) {
-      await File(path).writeAsBytes(bytes, flush: true);
-    }
     if (mounted) {
       setState(() {
         _savedExternalCopy = true;
-        _message = _text(
-          'עותק החילוץ נשמר. הוא מכיל גם את הנתונים שאינם ניתנים לקריאה.',
-          'Recovery copy saved, including data this version cannot read.',
-        );
+        _message = kIsWeb
+            ? _text('ודא שעותק החילוץ הורד לפני השחזור.',
+                'Confirm the recovery copy was downloaded before restoring.')
+            : _text(
+                'עותק החילוץ נשמר. הוא מכיל גם את הנתונים שאינם ניתנים לקריאה.',
+                'Recovery copy saved, including data this version cannot read.',
+              );
       });
     }
   }
@@ -79,7 +81,10 @@ class _StorageRecoveryScreenState extends State<StorageRecoveryScreen> {
   Future<void> _restore() async {
     // Keep a user-accessible copy as well as the local archive, so newer work
     // remains available after the recovery screen has closed.
-    if (!_savedExternalCopy) await _export();
+    if (!_savedExternalCopy) {
+      await _export();
+      if (kIsWeb) return;
+    }
     if (!_savedExternalCopy || !mounted) return;
     final read = await BackupService.instance.readBackupFile(english: _english);
     if (read.error == BackupReadError.cancelled || !mounted) return;
@@ -164,6 +169,14 @@ class _StorageRecoveryScreenState extends State<StorageRecoveryScreen> {
                       onPressed: _busy ? null : () => _run(_export),
                       child: Text(
                           _text('שמירת עותק לחילוץ', 'Save recovery copy'))),
+                  if (Diagnostics.supported)
+                    OutlinedButton(
+                      onPressed: _busy
+                          ? null
+                          : () => showDiagnosticReportDialog(context,
+                              workDataAvailable: false),
+                      child: Text(diagnosticReportTitle(context)),
+                    ),
                   FilledButton(
                       onPressed: _busy ? null : () => _run(_restore),
                       child: Text(_text('בחירת גיבוי לשחזור הכתיבה',

@@ -7,6 +7,7 @@ import 'logic/hebrew_clock.dart';
 import 'logic/hebrew_work_calendar.dart';
 import 'logic/keyboard_shortcuts.dart';
 import 'logic/home_additions.dart';
+import 'logic/merge_service.dart';
 import 'logic/writing_journal.dart';
 import 'entry/entry_draft.dart';
 import 'models.dart';
@@ -67,10 +68,15 @@ class _DiskStore implements KeyValueStore {
   Future<void> remove(String key) => _write(key, () => _prefs.remove(key));
 }
 
-/// A store that lives and dies with the process. Demo builds only.
+/// In-memory preferences for demos and for staging an account write.
 class MemoryStore implements KeyValueStore {
   final Map<String, Object> _values;
   MemoryStore(Map<String, Object> initial) : _values = {...initial};
+
+  Map<String, Object> get snapshot => {..._values};
+
+  Future<void> transaction(Future<void> Function(KeyValueStore) write) =>
+      write(this);
 
   @override
   String? getString(String key) =>
@@ -145,6 +151,12 @@ class StorageService {
   /// Set once, by a demo build, before anything reads a setting. While it is
   /// set nothing in the app opens the preferences file at all.
   static MemoryStore? demoStore;
+  static MemoryStore? browserAccountStore;
+  static MemoryStore? get _memoryStore => browserAccountStore ?? demoStore;
+
+  static Future<void> _transaction(
+          KeyValueStore store, Future<void> Function(KeyValueStore) write) =>
+      store is MemoryStore ? store.transaction(write) : write(store);
 
   /// Installed by the application root.  Tests and demo builds leave it
   /// unset, so storage remains independent of the filesystem.
@@ -165,9 +177,11 @@ class StorageService {
   }
 
   static Future<KeyValueStore> _open({bool observed = true}) async {
-    if (observed && _workBarrier != null) await _workBarrier!.future;
-    final demo = demoStore;
+    final demo = _memoryStore;
     final store = demo ?? _DiskStore(await SharedPreferences.getInstance());
+    while (observed && _workBarrier != null) {
+      await _workBarrier!.future;
+    }
     final String? journal;
     try {
       journal = store.getString(_keyWorkJournal);
@@ -237,7 +251,7 @@ class StorageService {
   Future<String?> recoveryLanguageCode() async {
     try {
       final store =
-          demoStore ?? _DiskStore(await SharedPreferences.getInstance());
+          _memoryStore ?? _DiskStore(await SharedPreferences.getInstance());
       final code = store.getString(_keyAppLanguage);
       return code == 'he' || code == 'en' ? code : null;
     } catch (_) {
@@ -249,10 +263,10 @@ class StorageService {
   /// contains the damaged journal, original stored strings and local settings.
   Future<Map<String, dynamic>> exportRecoveryData() async {
     if (_workBarrier != null) await _workBarrier!.future;
-    final demo = demoStore;
+    final demo = _memoryStore;
     final Map<String, Object?> values;
     if (demo != null) {
-      values = {...demo._values};
+      values = demo.snapshot;
     } else {
       final prefs = await SharedPreferences.getInstance();
       values = {for (final key in prefs.getKeys()) key: prefs.get(key)};
@@ -280,26 +294,28 @@ class StorageService {
         (archive['preferences'] as Map).removeWhere((key, _) =>
             key is String && key.startsWith('work_recovery_archive_'));
         final store =
-            demoStore ?? _DiskStore(await SharedPreferences.getInstance());
+            _memoryStore ?? _DiskStore(await SharedPreferences.getInstance());
         final barrier = Completer<void>();
         _workBarrier = barrier;
         try {
-          await store.setString(
-              'work_recovery_archive_${DateTime.now().microsecondsSinceEpoch}',
-              jsonEncode(archive));
-          await store.setString(
-              _keyWorkJournal,
-              jsonEncode({
-                'before': {
-                  _keyProjects:
-                      jsonEncode(projects.map((p) => p.toJson()).toList()),
-                  _keyHistory:
-                      jsonEncode(history.map((s) => s.toJson()).toList()),
-                },
-                'recoveryPositions': lastPositions,
-                'archiveOpenSitting': true,
-              }));
-          await _recoverWorkJournal(store);
+          await _transaction(store, (store) async {
+            await store.setString(
+                'work_recovery_archive_${DateTime.now().microsecondsSinceEpoch}',
+                jsonEncode(archive));
+            await store.setString(
+                _keyWorkJournal,
+                jsonEncode({
+                  'before': {
+                    _keyProjects:
+                        jsonEncode(projects.map((p) => p.toJson()).toList()),
+                    _keyHistory:
+                        jsonEncode(history.map((s) => s.toJson()).toList()),
+                  },
+                  'recoveryPositions': lastPositions,
+                  'archiveOpenSitting': true,
+                }));
+            await _recoverWorkJournal(store);
+          });
         } finally {
           _workBarrier = null;
           barrier.complete();
@@ -312,10 +328,30 @@ class StorageService {
     final raw = store.getString(_keyWorkJournal);
     if (raw == null) return;
     final journal = jsonDecode(raw);
-    if (journal is! Map || journal['before'] is! Map) {
+    if (journal is! Map) {
       throw const FormatException('Unreadable work recovery journal');
     }
-    final before = journal['before'] as Map;
+    if (journal['kind'] == 'backupImport') {
+      final before = journal['beforeImport'];
+      if (before is! Map ||
+          before.length != _importPreferenceKeys.length ||
+          !_importPreferenceKeys.every(before.containsKey) ||
+          before.values.any((value) =>
+              value != null &&
+              value is! String &&
+              value is! bool &&
+              value is! int)) {
+        throw const FormatException(
+            'Incomplete backup import recovery journal');
+      }
+      await _restorePreferenceValues(store, Map<String, Object?>.from(before));
+      await store.remove(_keyWorkJournal);
+      return;
+    }
+    final before = journal['before'];
+    if (before is! Map) {
+      throw const FormatException('Unreadable work recovery journal');
+    }
     if (journal['archiveOpenSitting'] == true &&
         journal['recoveryPositions'] is! Map) {
       throw const FormatException('Unreadable recovery positions');
@@ -364,13 +400,15 @@ class StorageService {
         final barrier = Completer<void>();
         _workBarrier = barrier;
         try {
-          await store.setString(
-              _keyWorkJournal, jsonEncode({'before': before}));
-          await _writeListPreservingUnknown(
-              store, _keyProjects, projects.map((p) => p.toJson()).toList());
-          await _writeListPreservingUnknown(
-              store, _keyHistory, history.map((s) => s.toJson()).toList());
-          await store.remove(_keyWorkJournal);
+          await _transaction(store, (store) async {
+            await store.setString(
+                _keyWorkJournal, jsonEncode({'before': before}));
+            await _writeListPreservingUnknown(
+                store, _keyProjects, projects.map((p) => p.toJson()).toList());
+            await _writeListPreservingUnknown(
+                store, _keyHistory, history.map((s) => s.toJson()).toList());
+            await store.remove(_keyWorkJournal);
+          });
         } catch (_) {
           // Leave the journal in place if rollback itself fails. A later open
           // retries recovery and never silently presents a partially saved set.
@@ -494,13 +532,11 @@ class StorageService {
     if (changed != null) await _afterChanged(changed);
   }
 
-  /// Applies a merged backup as one queued storage operation.
+  /// Merges and applies a backup as one queued storage operation.
   ///
-  /// All record lists, forward-only positions and portable user preferences
-  /// are prepared before the single backup callback runs. If a preference
-  /// write fails, the original values are restored best-effort so the import
-  /// cannot report a successful half-restore.
-  Future<void> saveImportedSnapshot({
+  /// The rollback journal is written before changing any preferences. Reads
+  /// wait for the import, and an interrupted import rolls back on next open.
+  Future<MergeOutcome> saveImportedSnapshot({
     required List<Project> projects,
     required List<WorkSession> history,
     required List<Expense> expenses,
@@ -510,41 +546,76 @@ class StorageService {
     required Map<String, dynamic> lastPositions,
     required Map<String, dynamic> settings,
   }) async {
+    late MergeOutcome outcome;
     await _enqueue(() async {
-      final prefs = await _open(observed: false);
-      final keys = <String>{
-        _keyProjects,
-        _keyHistory,
-        _keyExpenses,
-        _keyProofreads,
-        _keyPayments,
-        _keyOrders,
-        _keyLastPositions,
-        ..._portableSettingKeys,
-      };
-      final before = _capturePreferenceValues(prefs, keys);
+      final store = await _open(observed: false);
+      final barrier = Completer<void>();
+      _workBarrier = barrier;
       try {
-        await _writeListPreservingUnknown(
-            prefs, _keyProjects, projects.map((p) => p.toJson()).toList());
-        await _writeListPreservingUnknown(
-            prefs, _keyHistory, history.map((s) => s.toJson()).toList());
-        await _writeListPreservingUnknown(
-            prefs, _keyExpenses, expenses.map((e) => e.toJson()).toList());
-        await _writeListPreservingUnknown(
-            prefs, _keyProofreads, proofreads.map((r) => r.toJson()).toList());
-        await _writeListPreservingUnknown(
-            prefs, _keyPayments, payments.map((p) => p.toJson()).toList());
-        await _writeListPreservingUnknown(
-            prefs, _keyOrders, orders.map((o) => o.toJson()).toList());
-        await _writePositionsPreservingForward(prefs, lastPositions);
-        await _applyPortableSettings(prefs, settings);
-        await _notifyChanged();
+        await _transaction(store, (prefs) async {
+          // A queued import must see the state committed by earlier writes.
+          outcome = MergeService.mergeBackup(
+            localProjects:
+                _parseList(prefs.getString(_keyProjects), Project.fromJson),
+            localHistory:
+                _parseList(prefs.getString(_keyHistory), WorkSession.fromJson),
+            localExpenses:
+                _parseList(prefs.getString(_keyExpenses), Expense.fromJson),
+            localProofreads:
+                _parseList(prefs.getString(_keyProofreads), Proofread.fromJson),
+            localPayments:
+                _parseList(prefs.getString(_keyPayments), Payment.fromJson),
+            localOrders:
+                _parseList(prefs.getString(_keyOrders), Order.fromJson),
+            incomingProjects: projects,
+            incomingHistory: history,
+            incomingExpenses: expenses,
+            incomingProofreads: proofreads,
+            incomingPayments: payments,
+            incomingOrders: orders,
+          );
+          final before = _capturePreferenceValues(prefs, _importPreferenceKeys);
+          await prefs.setString(_keyWorkJournal,
+              jsonEncode({'kind': 'backupImport', 'beforeImport': before}));
+          await _writeListPreservingUnknown(prefs, _keyProjects,
+              outcome.projects.map((p) => p.toJson()).toList());
+          await _writeListPreservingUnknown(prefs, _keyHistory,
+              outcome.history.map((s) => s.toJson()).toList());
+          await _writeListPreservingUnknown(prefs, _keyExpenses,
+              outcome.expenses.map((e) => e.toJson()).toList());
+          await _writeListPreservingUnknown(prefs, _keyProofreads,
+              outcome.proofreads.map((r) => r.toJson()).toList());
+          await _writeListPreservingUnknown(prefs, _keyPayments,
+              outcome.payments.map((p) => p.toJson()).toList());
+          await _writeListPreservingUnknown(prefs, _keyOrders,
+              outcome.orders.map((o) => o.toJson()).toList());
+          await _writePositionsPreservingForward(prefs, lastPositions);
+          await _applyPortableSettings(prefs, settings);
+          await prefs.remove(_keyWorkJournal);
+        });
       } catch (_) {
-        await _restorePreferenceValues(prefs, before);
+        // A failed rollback leaves the journal for the next open to retry.
+        await _recoverWorkJournal(store);
         rethrow;
+      } finally {
+        _workBarrier = null;
+        barrier.complete();
       }
+      await _notifyChanged();
     });
+    return outcome;
   }
+
+  static const Set<String> _importPreferenceKeys = {
+    _keyProjects,
+    _keyHistory,
+    _keyExpenses,
+    _keyProofreads,
+    _keyPayments,
+    _keyOrders,
+    _keyLastPositions,
+    ..._portableSettingKeys,
+  };
 
   static const Set<String> _portableSettingKeys = {
     _keyNotificationEnabled,
@@ -592,7 +663,7 @@ class StorageService {
     return out;
   }
 
-  Future<void> _restorePreferenceValues(
+  static Future<void> _restorePreferenceValues(
       KeyValueStore prefs, Map<String, Object?> values) async {
     for (final entry in values.entries) {
       final value = entry.value;
@@ -700,7 +771,7 @@ class StorageService {
       await prefs.setString(_keyAppTheme, theme);
     }
     final language = settings[_keyAppLanguage];
-    if (language == 'he' || language == 'en') {
+    if (language == 'he' || language == 'en' || language == 'yi') {
       await prefs.setString(_keyAppLanguage, language as String);
     }
     final currency = settings[_keyCurrency];
@@ -712,12 +783,8 @@ class StorageService {
       await prefs.setInt(_keyInterfaceTextScale, scale.toInt());
     }
     final shortcuts = settings[_keyShortcuts];
-    if (shortcuts is String) {
-      try {
-        if (jsonDecode(shortcuts) is Map) {
-          await prefs.setString(_keyShortcuts, shortcuts);
-        }
-      } catch (_) {}
+    if (shortcuts is String && _decodeSettings(shortcuts) != null) {
+      await prefs.setString(_keyShortcuts, shortcuts);
     }
   }
 
@@ -758,19 +825,30 @@ class StorageService {
   /// had just erased everything could reopen the app to a clock still counting
   /// against a commission he had deleted.
   Future<void> eraseAllRecords() async {
-    await eraseList(_keyProjects);
-    await eraseList(_keyHistory);
-    await eraseList(_keyExpenses);
-    await eraseList(_keyProofreads);
-    await eraseList(_keyPayments);
-    await eraseList(_keyOrders);
-
-    // State that names a record. Settings are left alone: how the writer set
-    // the app up for himself is not data about his work.
-    await eraseList(_keyTimerState);
-    await eraseList(_keyPendingEntry);
-    await eraseList(_keyLastPositions);
-    await eraseList(_keyLastProject);
+    const keys = [
+      _keyProjects,
+      _keyHistory,
+      _keyExpenses,
+      _keyProofreads,
+      _keyPayments,
+      _keyOrders,
+      _keyTimerState,
+      _keyPendingEntry,
+      _keyLastPositions,
+      _keyLastProject,
+    ];
+    final account = browserAccountStore;
+    if (account != null) {
+      await _enqueue(() => account.transaction((store) async {
+            for (final key in keys) {
+              await store.remove(key);
+            }
+          }));
+      return;
+    }
+    for (final key in keys) {
+      await eraseList(key);
+    }
   }
 
   /// The stored entries of a list, without trying to understand any of them.
@@ -850,6 +928,17 @@ class StorageService {
     return _parseList(prefs.getString(_keyHistory), WorkSession.fromJson);
   }
 
+  /// Background backup captures a complete local transaction, then releases
+  /// the local write queue before doing any external provider I/O. Do not call
+  /// this from an awaited onChanged hook inside that same queue.
+  Future<Map<String, dynamic>> exportAllAfterPendingWrites() async {
+    late Map<String, dynamic> snapshot;
+    await _enqueue(() async {
+      snapshot = await exportAll();
+    });
+    return snapshot;
+  }
+
   /// Every user-owned value in one map: all data lists plus all
   /// settings. Open work is retained separately for review during migration;
   /// an ordinary backup merge must never resume a timer from another device.
@@ -894,6 +983,14 @@ class StorageService {
         'requiresReview': true,
         'timerStateRaw': prefs.getString(_keyTimerState),
         'pendingEntryRaw': prefs.getString(_keyPendingEntry),
+        'nextWritingConditions': {
+          for (final raw in decodeList(_keyProjects))
+            if (raw is Map &&
+                raw['id'] is String &&
+                prefs.getString('next_writing_conditions_${raw['id']}') != null)
+              '${raw['id']}':
+                  prefs.getString('next_writing_conditions_${raw['id']}'),
+        },
       },
       'settings': {
         _keyNotificationEnabled: prefs.getBool(_keyNotificationEnabled),
@@ -1091,9 +1188,48 @@ class StorageService {
     await prefs.remove(_keyTimerState);
   }
 
+  // Device-local preparation for the next sitting; historical snapshots live
+  // on WorkSession and are exported through the normal history list.
+  Future<Map<String, dynamic>?> getNextWritingConditions(
+      String projectId) async {
+    final prefs = await _open();
+    final raw = prefs.getString('next_writing_conditions_$projectId');
+    if (raw == null) return null;
+    try {
+      final value = jsonDecode(raw);
+      return value is Map ? Map<String, dynamic>.from(value) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> setNextWritingConditions(
+      String projectId, Map<String, dynamic> value) async {
+    final prefs = await _open();
+    await prefs.setString(
+        'next_writing_conditions_$projectId', jsonEncode(value));
+  }
+
+  Future<void> clearNextWritingConditions(String projectId) async {
+    final prefs = await _open();
+    await prefs.remove('next_writing_conditions_$projectId');
+  }
+
   Future<void> savePendingEntry(EntryDraft draft) async {
     final prefs = await _open();
     await prefs.setString(_keyPendingEntry, jsonEncode(draft.toJson()));
+  }
+
+  Future<void> checkpointStoppedTimer(EntryDraft draft) async {
+    final account = browserAccountStore;
+    if (account != null) {
+      await account.transaction((store) async {
+        await store.setString(_keyPendingEntry, jsonEncode(draft.toJson()));
+        await store.remove(_keyTimerState);
+      });
+    } else {
+      await savePendingEntry(draft);
+    }
   }
 
   Future<EntryDraft?> getPendingEntry() async {
@@ -1112,6 +1248,23 @@ class StorageService {
   Future<void> clearPendingEntry() async {
     final prefs = await _open();
     await prefs.remove(_keyPendingEntry);
+  }
+
+  Future<void> finishSavedEntry(String projectId) async {
+    final account = browserAccountStore;
+    if (account != null) {
+      await account.transaction((store) async {
+        await store.setString(_keyLastProject, projectId);
+        await store.remove(_keyPendingEntry);
+      });
+      return;
+    }
+    try {
+      await setLastProjectId(projectId);
+    } catch (_) {
+      // Remembering the last project is optional once history is durable.
+    }
+    await clearPendingEntry();
   }
 
   Future<int> getDayRolloverHour() async {
@@ -1253,6 +1406,12 @@ class StorageService {
     await prefs.setString('auto_backup_status', jsonEncode(value));
   }
 
+  /// Background backup diagnostics share the local queue too, so a desktop
+  /// preferences-file write cannot race an ordinary foreground save.
+  Future<void> saveAutoBackupStatusAfterPendingWrites(
+          Map<String, dynamic> value) =>
+      _enqueue(() => saveAutoBackupStatus(value));
+
   Future<void> setAutoBackupFolder(String? path) async {
     final prefs = await _open();
     if (path == null || path.isEmpty) {
@@ -1306,7 +1465,11 @@ class StorageService {
   /// leaving the app unthemed.
   Future<AppTheme> getAppTheme() async {
     final prefs = await _open();
-    return AppTheme.fromName(prefs.getString(_keyAppTheme));
+    final savedTheme = prefs.getString(_keyAppTheme);
+    if (savedTheme == null && browserAccountStore != null) {
+      return AppTheme.klaf;
+    }
+    return AppTheme.fromName(savedTheme);
   }
 
   Future<void> setAppTheme(AppTheme theme) async {
@@ -1320,11 +1483,11 @@ class StorageService {
   Future<String?> getAppLanguageCode() async {
     final prefs = await _open();
     final code = prefs.getString(_keyAppLanguage);
-    return code == 'he' || code == 'en' ? code : null;
+    return code == 'he' || code == 'en' || code == 'yi' ? code : null;
   }
 
   Future<void> setAppLanguageCode(String code) async {
-    if (code != 'he' && code != 'en') {
+    if (code != 'he' && code != 'en' && code != 'yi') {
       throw ArgumentError.value(code, 'code', 'unsupported app language');
     }
     final prefs = await _open();

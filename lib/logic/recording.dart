@@ -1,3 +1,5 @@
+import 'writing_timeline.dart';
+import 'work_time_breakdown.dart';
 import '../models.dart';
 import 'session_logic.dart';
 
@@ -103,11 +105,16 @@ class Recording {
       end: end,
       weights: [for (final s in sessions) weight(s)],
     );
-    return [
-      for (var i = 0; i < sessions.length; i++)
-        sessions[i]
-            .copyWith(startTime: slices[i].start, endTime: slices[i].end),
-    ];
+    final details = WorkTimeBreakdown.of(sessions);
+    return WorkTimeBreakdown.allocate(
+        [
+          for (var i = 0; i < sessions.length; i++)
+            sessions[i]
+                .copyWith(startTime: slices[i].start, endTime: slices[i].end),
+        ],
+        reading: details.reading,
+        breaks: details.breaks,
+        intervals: [for (final s in sessions) ...WritingTimeline.of(s)]);
   }
 
   /// Chronological, and by id where two slices begin together — so that an

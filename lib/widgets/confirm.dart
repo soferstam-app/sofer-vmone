@@ -70,14 +70,21 @@ Future<bool> confirmOverlap(
   List<int> pages = const [],
   bool range = false,
 }) {
-  final english = context.l10n.isEnglish;
-  final where = switch ((english, pages.length)) {
-    (true, 0) => range ? 'in this page range' : 'on this page',
-    (true, 1) => 'on page ${formatHebrewNumber(pages.first)}',
-    (true, _) => 'on pages ${pages.map(formatHebrewNumber).join(', ')}',
-    (false, 0) => range ? 'בטווח העמודים' : 'בעמוד זה',
-    (false, 1) => 'בעמוד ${formatHebrewNumber(pages.first)}',
-    (false, _) => 'בעמודים ${pages.map(formatHebrewNumber).join(', ')}',
+  final l10n = context.l10n;
+  final numbers = pages.map(formatHebrewNumber).join(', ');
+  final where = switch (pages.length) {
+    0 => range
+        ? l10n.pick(
+            he: 'בטווח העמודים',
+            en: 'in this page range',
+            yi: 'אויף די דאָזיקע עמודים')
+        : l10n.pick(he: 'בעמוד זה', en: 'on this page', yi: 'אויף דעם עמוד'),
+    1 => l10n.pick(
+        he: 'בעמוד $numbers', en: 'on page $numbers', yi: 'אויף עמוד $numbers'),
+    _ => l10n.pick(
+        he: 'בעמודים $numbers',
+        en: 'on pages $numbers',
+        yi: 'אויף די עמודים $numbers'),
   };
   return confirmAction(
     context,

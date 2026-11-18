@@ -1,6 +1,3 @@
-import 'dart:io';
-
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 
@@ -12,6 +9,7 @@ import 'l10n/app_localizations.dart';
 import 'logic/calendar_days.dart';
 import 'logic/hebrew_clock.dart';
 import 'logic/id_generator.dart';
+import 'logic/save_user_file.dart';
 import 'logic/writing_journal.dart';
 import 'models.dart';
 import 'plan/plan_export.dart';
@@ -310,7 +308,7 @@ class _WritingJournalScreenState extends State<WritingJournalScreen> {
       );
       final bytes = await PlanExport.toXlsx(table);
       if (!mounted) return;
-      final path = await FilePicker.platform.saveFile(
+      final path = await saveUserFile(
         dialogTitle: context.l10n.pick(
           he: 'שמירת יומן כתיבה',
           en: 'Save Writing Journal',
@@ -319,9 +317,6 @@ class _WritingJournalScreenState extends State<WritingJournalScreen> {
         bytes: bytes,
       );
       if (path == null) return;
-      if (!Platform.isAndroid && !Platform.isIOS) {
-        await File(path).writeAsBytes(bytes, flush: true);
-      }
       if (mounted) {
         showAppSuccess(
           context,

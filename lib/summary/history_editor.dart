@@ -1,3 +1,5 @@
+import '../logic/writing_timeline.dart';
+import '../logic/work_time_breakdown.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -17,6 +19,7 @@ import '../theme/app_theme.dart';
 import '../widgets/confirm.dart';
 import '../widgets/feedback.dart';
 import '../l10n/app_localizations.dart';
+import '../l10n/prior_writing_labels.dart';
 
 /// Correcting what was recorded.
 ///
@@ -54,7 +57,9 @@ Future<void> showHistoryEditor({
     final sessions = showAllDays
         ? (live.toList()..sort((a, b) => b.startTime.compareTo(a.startTime)))
         : live
-            .where((s) => DateLogic.sessionIsOnDay(s, day, dayStart))
+            .where((s) =>
+                !s.backlogOnly &&
+                DateLogic.sessionIsFiledOnDate(s, day, dayStart))
             .toList();
     if (projectFilter.isEmpty) return sessions;
     return sessions.where((s) => s.projectId == projectFilter).toList();
@@ -228,9 +233,11 @@ Widget _row({
   // Across all days the date is essential to tell otherwise-identical rows
   // apart — and it has to be the day the session was filed under, not its clock
   // date, or this list contradicts the day it was opened from.
-  final when = showAllDays
-      ? "${formatDisplayDate(DateLogic.workingDateOf(session, dayStart), useGregorianDates, english: context.l10n.isEnglish)} · "
-      : "";
+  final when = session.backlogOnly
+      ? '${context.l10n.priorWriting} · '
+      : showAllDays
+          ? "${formatDisplayDate(DateLogic.workingDateOf(session, dayStart), useGregorianDates, english: context.l10n.isEnglish)} · "
+          : "";
 
   return ListTile(
     leading: Checkbox(
@@ -245,11 +252,25 @@ Widget _row({
     ),
     title: Text(project.name),
     subtitle: Text(
-        "$when${session.description}\n${sessionTimeLabel(session, english: context.l10n.isEnglish)}${session.isTimeOnly ? context.l10n.pick(he: ' · זמן שורה חלקית', en: ' · Partial line time') : ''}"),
+        "$when${session.description}\n${sessionTimeLabel(session, english: context.l10n.isEnglish)}${session.isTimeOnly ? context.l10n.pick(he: ' · זמן שורה חלקית', en: ' · Partial line time') : ''}${WorkTimeBreakdown.of([
+          session
+        ]).hasDetails ? '\n${WorkTimeBreakdown.of([
+                session
+              ]).label(english: context.l10n.isEnglish)}' : ''}"),
     isThreeLine: true,
     trailing: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (session.isManual &&
+            !session.backlogOnly &&
+            !session.timeRecorded &&
+            session.countsAsOutput)
+          IconButton(
+            icon: const Icon(Icons.history),
+            tooltip: context.l10n.markAsPriorWriting,
+            onPressed: () => _markPriorWriting(
+                context, sheetCtx, session, history, onHistoryUpdated),
+          ),
         if (!session.isTimeOnly)
           IconButton(
             icon: Icon(Icons.edit, color: SoferTokens.of(context).accent),
@@ -278,6 +299,43 @@ Widget _row({
   );
 }
 
+Future<void> _markPriorWriting(
+  BuildContext context,
+  BuildContext sheetCtx,
+  WorkSession session,
+  List<WorkSession> history,
+  FutureOr<void> Function(List<WorkSession>) onHistoryUpdated,
+) async {
+  final l10n = context.l10n;
+  final confirmed = await confirmAction(
+    context,
+    title: l10n.markAsPriorWriting,
+    message: l10n.priorWritingHelp,
+    confirmLabel: l10n.confirm,
+  );
+  if (!confirmed || !sheetCtx.mounted) return;
+  final updated = [
+    for (final record in history)
+      if (record.id == session.id ||
+          (session.entryId != null &&
+              record.entryId == session.entryId &&
+              record.projectId == session.projectId &&
+              !record.isDeleted &&
+              record.isManual &&
+              !record.timeRecorded &&
+              record.countsAsOutput))
+        record.copyWith(backlogOnly: true)
+      else
+        record,
+  ];
+  try {
+    await onHistoryUpdated(updated);
+    if (sheetCtx.mounted) Navigator.pop(sheetCtx);
+  } catch (_) {
+    if (sheetCtx.mounted) showAppError(sheetCtx, l10n.writingChangeSaveFailed);
+  }
+}
+
 Future<void> _editWordSession(
     {required BuildContext context,
     required WorkSession session,
@@ -294,11 +352,6 @@ Future<void> _editWordSession(
             en: 'This word record version is unsupported. Use the app version that created it.'));
     return;
   }
-  var until = words.until;
-  String clock(DateTime d) =>
-      '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
-  final start = TextEditingController(text: clock(session.startTime));
-  final end = TextEditingController(text: clock(session.endTime));
   final hasLater = history.any((s) =>
       s.id != session.id &&
       !s.isDeleted &&
@@ -308,62 +361,19 @@ Future<void> _editWordSession(
       s.tefillinType == session.tefillinType &&
       s.parshiya == session.parshiya &&
       (TefillinWordRange.read(s)?.from ?? -1) >= words.until);
-  final ok = await showDialog<bool>(
+  final initialStart = _wordRecordClock(session.startTime);
+  final initialEnd = _wordRecordClock(session.endTime);
+  final edit = await showDialog<({String start, String end, int until})>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-          builder: (ctx, setDialog) => AlertDialog(
-                title: Text(ctx.l10n
-                    .pick(he: 'עריכת רישום מילים', en: 'Edit word record')),
-                scrollable: true,
-                content: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Text(
-                      'מילים ${words.from + 1}–$until · ${words.text.wordAt(until)}'),
-                  OutlinedButton(
-                      onPressed: hasLater
-                          ? null
-                          : () async {
-                              final chosen = await showTefillinWords(
-                                  context: ctx,
-                                  parshiya: words.parshiya,
-                                  script: StamScript.fromId(words.script),
-                                  unitLabel: session.description,
-                                  fromWord: words.from,
-                                  selectedWord: until);
-                              if (chosen != null && ctx.mounted) {
-                                setDialog(() => until = chosen);
-                              }
-                            },
-                      child: Text(ctx.l10n.pick(
-                          he: 'שינוי המילה האחרונה', en: 'Change last word'))),
-                  if (hasLater)
-                    Text(ctx.l10n.pick(
-                        he: 'יש רישומים מאוחרים יותר בפרשייה; נקודת הסיום נשמרת כדי לשמור על הרצף.',
-                        en: 'Later records depend on this boundary; it is kept to preserve continuity.')),
-                  TextField(
-                      controller: start,
-                      decoration: InputDecoration(
-                          labelText: ctx.l10n.pick(
-                              he: 'שעת התחלה HH:MM', en: 'Start time HH:MM'))),
-                  TextField(
-                      controller: end,
-                      decoration: InputDecoration(
-                          labelText: ctx.l10n.pick(
-                              he: 'שעת סיום HH:MM', en: 'End time HH:MM'))),
-                ]),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      child: Text(ctx.l10n.cancel)),
-                  FilledButton(
-                      onPressed: () => Navigator.pop(ctx, true),
-                      child: Text(ctx.l10n.pick(he: 'שמור', en: 'Save')))
-                ],
-              )));
-  final first = SessionLogic.parseTimeString(start.text);
-  final last = SessionLogic.parseTimeString(end.text);
-  start.dispose();
-  end.dispose();
-  if (ok != true || !context.mounted) return;
+      builder: (_) => _WordSessionDialog(
+            session: session,
+            words: words,
+            hasLater: hasLater,
+          ));
+  if (edit == null || !context.mounted) return;
+  final until = edit.until;
+  final first = SessionLogic.parseTimeString(edit.start);
+  final last = SessionLogic.parseTimeString(edit.end);
   if (first == null || last == null) {
     showAppError(
         context,
@@ -408,12 +418,15 @@ Future<void> _editWordSession(
             en: 'A later Parashah was already written. Correct the continuation in this set first.'));
     return;
   }
-  final time = SessionLogic.buildTimeRange(
-      date: session.startTime,
-      startHour: first.hour,
-      startMinute: first.minute,
-      endHour: last.hour,
-      endMinute: last.minute);
+  final timeChanged = edit.start != initialStart || edit.end != initialEnd;
+  final time = timeChanged
+      ? SessionLogic.buildTimeRange(
+          date: session.startTime,
+          startHour: first.hour,
+          startMinute: first.minute,
+          endHour: last.hour,
+          endMinute: last.minute)
+      : (start: session.startTime, end: session.endTime);
   final changed = TefillinWordRange(
       parshiya: words.parshiya,
       from: words.from,
@@ -424,18 +437,109 @@ Future<void> _editWordSession(
   final updated = session.copyWith(
       startTime: time.start,
       endTime: time.end,
-      timeRecorded: true,
-      timeOfDayKnown: true,
-      dayRule: dayStart,
-      workingDateAtEntry: DateLogic.effectiveDate(time.start, dayStart),
+      timeRecorded: timeChanged ? true : null,
+      timeOfDayKnown: timeChanged ? true : null,
+      dayRule: timeChanged ? dayStart : null,
+      workingDateAtEntry:
+          timeChanged ? DateLogic.effectiveDate(time.start, dayStart) : null,
       description:
           'פרשיית ${TefillinUnits.names[words.parshiya - 1]} של ${session.tefillinType == 'head' ? 'ראש' : 'יד'} (זוג ${session.pairIndex}, מילים ${words.from + 1}–$until, עד ${words.text.wordAt(until)})',
       extraFields: {
-        ...session.extraFields,
+        ...WritingTimeline.restated(session, time.start, time.end),
         TefillinWordRange.key: changed.toJson()
       });
   await onHistoryUpdated(
       [for (final s in history) s.id == session.id ? updated : s]);
+}
+
+String _wordRecordClock(DateTime time) =>
+    '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+
+class _WordSessionDialog extends StatefulWidget {
+  const _WordSessionDialog({
+    required this.session,
+    required this.words,
+    required this.hasLater,
+  });
+
+  final WorkSession session;
+  final TefillinWordRange words;
+  final bool hasLater;
+
+  @override
+  State<_WordSessionDialog> createState() => _WordSessionDialogState();
+}
+
+class _WordSessionDialogState extends State<_WordSessionDialog> {
+  late final _start =
+      TextEditingController(text: _wordRecordClock(widget.session.startTime));
+  late final _end =
+      TextEditingController(text: _wordRecordClock(widget.session.endTime));
+  late int _until = widget.words.until;
+
+  @override
+  void dispose() {
+    _start.dispose();
+    _end.dispose();
+    super.dispose();
+  }
+
+  Future<void> _chooseWord() async {
+    final words = widget.words;
+    final chosen = await showTefillinWords(
+        context: context,
+        parshiya: words.parshiya,
+        script: StamScript.fromId(words.script),
+        unitLabel: widget.session.description,
+        fromWord: words.from,
+        selectedWord: _until);
+    if (chosen != null && mounted) setState(() => _until = chosen);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final words = widget.words;
+    return AlertDialog(
+      title: Text(l10n.pick(he: 'עריכת רישום מילים', en: 'Edit word record')),
+      scrollable: true,
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        Text('מילים ${words.from + 1}–$_until · ${words.text.wordAt(_until)}'),
+        OutlinedButton(
+          onPressed: widget.hasLater ? null : _chooseWord,
+          child: Text(
+              l10n.pick(he: 'שינוי המילה האחרונה', en: 'Change last word')),
+        ),
+        if (widget.hasLater)
+          Text(l10n.pick(
+              he: 'יש רישומים מאוחרים יותר בפרשייה; נקודת הסיום נשמרת כדי לשמור על הרצף.',
+              en: 'Later records depend on this boundary; it is kept to preserve continuity.')),
+        TextField(
+          controller: _start,
+          decoration: InputDecoration(
+              labelText:
+                  l10n.pick(he: 'שעת התחלה HH:MM', en: 'Start time HH:MM')),
+        ),
+        TextField(
+          controller: _end,
+          decoration: InputDecoration(
+              labelText: l10n.pick(he: 'שעת סיום HH:MM', en: 'End time HH:MM')),
+        ),
+      ]),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(context), child: Text(l10n.cancel)),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, (
+            start: _start.text.trim(),
+            end: _end.text.trim(),
+            until: _until
+          )),
+          child: Text(l10n.pick(he: 'שמור', en: 'Save')),
+        ),
+      ],
+    );
+  }
 }
 
 /// Marks records deleted. Dropping them from the list instead is what this used
@@ -753,6 +857,7 @@ Future<void> _editSession({
   final updated = session.copyWith(
     startTime: range.start,
     endTime: range.end,
+    extraFields: WritingTimeline.restated(session, range.start, range.end),
     startLine: startLine,
     endLine: endLine,
     amount: amount,

@@ -1,0 +1,6 @@
+/build/
+/PLAN.md
+/MEMORY.md
+/server/node_modules/
+/server/.wrangler/
+/server/wrangler.jsonc

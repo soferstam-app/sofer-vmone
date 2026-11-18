@@ -1,3 +1,5 @@
+import 'writing_conditions.dart';
+import 'writing_timeline.dart';
 import '../hebrew_utils.dart';
 import '../models.dart';
 import 'id_generator.dart';
@@ -414,7 +416,17 @@ class EntryBuilder {
         .copyWith(
             isPartialLine: true,
             partialLineCompleted: true,
-            extraFields: {TefillinWordRange.key: range.toJson()});
+            extraFields: {
+          WritingConditions.key:
+              WritingConditions.project(input.project).toJson(),
+          if (input.isManual && input.timeOfDayKnown && input.timeRecorded)
+            WritingTimeline.key: [
+              WritingSpan(input.start, input.end,
+                      input.end.difference(input.start).inMilliseconds)
+                  .toJson()
+            ],
+          TefillinWordRange.key: range.toJson()
+        });
     return EntryBuilt(
         sessions: [session],
         overlapsRecordedWork: false,
@@ -738,5 +750,14 @@ class EntryBuilder {
         linesPerPageAtEntry: linesPerPageAtEntry,
         entryId: entryId,
         workingDateAtEntry: input.statedDate,
+        extraFields: {
+          WritingConditions.key:
+              WritingConditions.project(input.project).toJson(),
+          if (input.isManual && input.timeOfDayKnown && input.timeRecorded)
+            WritingTimeline.key: [
+              WritingSpan(start, end, end.difference(start).inMilliseconds)
+                  .toJson()
+            ],
+        },
       );
 }

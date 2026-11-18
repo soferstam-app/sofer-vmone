@@ -31,6 +31,8 @@ class FloatingTimerWindow extends StatelessWidget {
   final bool lineSaving;
   final String lineActionTooltip;
   final Duration? lineElapsed;
+  final bool showReadingCorrection;
+  final VoidCallback? onReadingCorrection;
 
   const FloatingTimerWindow({
     super.key,
@@ -43,6 +45,8 @@ class FloatingTimerWindow extends StatelessWidget {
     this.lineSaving = false,
     this.lineActionTooltip = "סיום שורה",
     this.lineElapsed,
+    this.showReadingCorrection = false,
+    this.onReadingCorrection,
   });
 
   Widget _button({
@@ -78,7 +82,7 @@ class FloatingTimerWindow extends StatelessWidget {
                 children: [
                   _FloatingClock(
                     label:
-                        context.l10n.pick(he: 'זמן כתיבה', en: 'Writing time'),
+                        context.l10n.pick(he: 'זמן עבודה', en: 'Working time'),
                     value: formatClock(clock.elapsed),
                   ),
                   Container(
@@ -93,6 +97,17 @@ class FloatingTimerWindow extends StatelessWidget {
                   ),
                 ],
               ),
+              if (showReadingCorrection)
+                TextButton.icon(
+                  onPressed:
+                      clock.isPaused || lineSaving ? null : onReadingCorrection,
+                  icon: Icon(clock.isReadingCorrection
+                      ? Icons.play_arrow
+                      : Icons.menu_book_outlined),
+                  label: Text(context.l10n.pick(
+                      he: '${clock.isReadingCorrection ? "חזרה לכתיבה" : "קריאה / תיקון"} · ${formatClock(clock.readingCorrectionElapsed)}',
+                      en: '${clock.isReadingCorrection ? "Back to writing" : "Reading / correction"} · ${formatClock(clock.readingCorrectionElapsed)}')),
+                ),
               const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -123,7 +138,7 @@ class FloatingTimerWindow extends StatelessWidget {
                   ),
                   // Marking a line finished means nothing during a break: the
                   // time it would report is time nobody was writing.
-                  if (!clock.isPaused)
+                  if (!clock.isPaused && !clock.isReadingCorrection)
                     _button(
                       onPressed: lineSaving ? null : onLap,
                       icon: Icons.flag,
