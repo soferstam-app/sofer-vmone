@@ -344,7 +344,8 @@ class _SoferHomeState extends State<SoferHome>
         _isSmartWorkflow = smartEnabled;
         _homeAdditions = homeAdditions;
         _journalSettings = journalSettings;
-        _selectedProject = _pickStartingProject(activeProjects, lastId);
+        _selectedProject = _pickStartingProject(
+            activeProjects.where((p) => !p.isClosed).toList(), lastId);
       });
       if (_isSmartWorkflow && _selectedProject != null) {
         await _loadSmartPosition();
@@ -477,7 +478,9 @@ class _SoferHomeState extends State<SoferHome>
   /// app uses — one pace calculation, one estimator — rather than from numbers
   /// the layout works out for itself.
   HomeSnapshot _buildHomeSnapshot(DateTime today) {
-    final project = _selectedProject;
+    final selected = _selectedProject;
+    final project =
+        selected?.isClosed == true && !_clock.isActive ? null : selected;
     final now = DateTime.now();
 
     var todayOutput = "—";
@@ -630,7 +633,10 @@ class _SoferHomeState extends State<SoferHome>
 
     return HomeSnapshot(
       project: project,
-      projects: projects,
+      projects: [
+        for (final p in projects)
+          if (!p.isClosed || (_clock.isActive && p.id == project?.id)) p,
+      ],
       hebrewDate: _getDisplayDate(today),
       isRunning: _clock.isRunning,
       isPaused: _clock.isPaused,
@@ -1075,7 +1081,8 @@ class _SoferHomeState extends State<SoferHome>
     if (_reviewingLineTime || _timerCheckpointSaving || _smartLineSaving) {
       return;
     }
-    if (_selectedProject == null) {
+    if (_selectedProject == null ||
+        (_selectedProject!.isClosed && !_clock.isActive)) {
       showAppError(
         context,
         context.l10n.pick(
@@ -3089,7 +3096,8 @@ class _SoferHomeState extends State<SoferHome>
     EntryDraft? initialDraft,
   }) async {
     if (!await _prepareWindowForDialog() || !mounted) return;
-    Project? initialProject = _selectedProject;
+    Project? initialProject =
+        _selectedProject?.isClosed == true ? null : _selectedProject;
     if (initialDraft != null) {
       for (final project in projects) {
         if (project.id == initialDraft.projectId) initialProject = project;
@@ -3098,7 +3106,11 @@ class _SoferHomeState extends State<SoferHome>
     final used = await showEntrySheet(
       context: context,
       isManual: isManual,
-      projects: projects,
+      projects: [
+        for (final project in projects)
+          if (!project.isClosed || project.id == initialDraft?.projectId)
+            project,
+      ],
       history: history,
       useGregorianDates: _useGregorianDates,
       dayStart: _dayStart,
@@ -3116,7 +3128,7 @@ class _SoferHomeState extends State<SoferHome>
     );
     // The commission the form was last used on stays selected here, so the two
     // screens never disagree about what is being worked on.
-    if (used != null && mounted) {
+    if (used != null && !used.isClosed && mounted) {
       setState(() => _selectedProject =
           projects.firstWhere((p) => p.id == used.id, orElse: () => used));
     }
@@ -3368,6 +3380,56 @@ class _SoferHomeState extends State<SoferHome>
     return updated;
   }
 
+  Future<Project?> _setProjectClosed(Project project, bool closed) async {
+    late final Project updated;
+    try {
+      final pending = closed ? await _storageService.getPendingEntry() : null;
+      if (!mounted) return null;
+      if (closed &&
+          (pending?.projectId == project.id ||
+              (_selectedProject?.id == project.id &&
+                  (_clock.isActive ||
+                      _timerCheckpointSaving ||
+                      _stoppingTimer)))) {
+        showAppError(
+            context,
+            context.l10n.pick(
+              he: 'יש לסיים ולשמור את ישיבת הכתיבה לפני סגירת הפרויקט.',
+              en: 'Finish and save the writing session before closing the project.',
+              yi: 'ענדיקט און היט די שרײַבזיצונג איידער איר פֿאַרמאַכט דעם פּראָיעקט.',
+            ));
+        return null;
+      }
+      final index = projects.indexWhere((p) => p.id == project.id);
+      if (index == -1) return null;
+      updated = projects[index].copyWith(isClosed: closed);
+      await _storageService.saveProjects([updated]);
+    } catch (error) {
+      debugPrint('Project status save failed: $error');
+      if (mounted) {
+        showAppError(
+            context,
+            context.l10n.pick(
+              he: 'מצב הפרויקט לא נשמר. אפשר לנסות שוב.',
+              en: 'The project status could not be saved. Try again.',
+              yi: 'דער מצב פֿונעם פּראָיעקט איז נישט געהיט געוואָרן. פּרוּווט ווידער.',
+            ));
+      }
+      return null;
+    }
+    if (mounted) {
+      setState(() {
+        final current = projects.indexWhere((p) => p.id == updated.id);
+        if (current != -1) projects[current] = updated;
+        if (_selectedProject?.id == updated.id) {
+          _selectedProject = closed ? null : updated;
+          if (closed) _nextWritingConditions = null;
+        }
+      });
+    }
+    return updated;
+  }
+
   Future<bool> _deleteProjectFromCenter(Project project) async {
     if (!await _canDeleteProject(project)) return false;
     if (!mounted) return false;
@@ -3489,6 +3551,7 @@ class _SoferHomeState extends State<SoferHome>
             }
           },
           onBeforeProjectDelete: _canDeleteProject,
+          onSetProjectClosed: _setProjectClosed,
           onHistoryUpdated: (updatedHistory) async {
             await _storageService.saveHistory(updatedHistory);
             if (mounted) {
@@ -3644,6 +3707,7 @@ class _SoferHomeState extends State<SoferHome>
           },
           onEditProject: _editProjectFromCenter,
           onDeleteProject: _deleteProjectFromCenter,
+          onSetProjectClosed: _setProjectClosed,
           onProjectUpdated: (updated) async {
             final next = [
               for (final current in projects)
@@ -3934,6 +3998,18 @@ class _SoferHomeState extends State<SoferHome>
       );
     }
 
+    if (homeSnapshot.projects.isEmpty && projects.isNotEmpty) {
+      return Scaffold(
+        appBar: _homeAppBar(),
+        body: _ModernEmptyState(
+          hebrewDate: homeSnapshot.hebrewDate,
+          onCreateProject: _navigateToProjects,
+          onlyClosed: true,
+        ),
+        bottomNavigationBar: _homeBottomNav(),
+      );
+    }
+
     // The ruled themes share one home screen for both workflows; the cards
     // theme keeps the two it has always had.
     if (SoferTokens.of(context).isRules) {
@@ -4025,7 +4101,7 @@ class _SoferHomeState extends State<SoferHome>
                                       fontWeight: FontWeight.w500),
                                 )
                               : DropdownButtonFormField<Project>(
-                                  initialValue: _selectedProject,
+                                  initialValue: homeSnapshot.project,
                                   isExpanded: true,
                                   decoration: InputDecoration(
                                     border: UnderlineInputBorder(),
@@ -4035,7 +4111,7 @@ class _SoferHomeState extends State<SoferHome>
                                     ),
                                   ),
                                   items: [
-                                    for (final p in projects)
+                                    for (final p in homeSnapshot.projects)
                                       DropdownMenuItem(
                                           value: p, child: Text(p.name)),
                                   ],
@@ -4141,8 +4217,9 @@ class _SoferHomeState extends State<SoferHome>
                           child: ElevatedButton.icon(
                             // Nothing to start until there is a commission to
                             // start it against.
-                            onPressed:
-                                _selectedProject == null ? null : _startTimer,
+                            onPressed: homeSnapshot.project == null
+                                ? null
+                                : _startTimer,
                             icon: const Icon(Icons.play_arrow, size: 28),
                             label: Text(context.l10n.pick(
                               he: "תחילת כתיבה",
@@ -4296,10 +4373,12 @@ class _SoferHomeState extends State<SoferHome>
 class _ModernEmptyState extends StatelessWidget {
   final String hebrewDate;
   final VoidCallback onCreateProject;
+  final bool onlyClosed;
 
   const _ModernEmptyState({
     required this.hebrewDate,
     required this.onCreateProject,
+    this.onlyClosed = false,
   });
 
   @override
@@ -4314,15 +4393,25 @@ class _ModernEmptyState extends StatelessWidget {
                 style: TextStyle(fontSize: 15, color: Colors.grey.shade600)),
             const SizedBox(height: 22),
             Text(
-                context.l10n
-                    .pick(he: "אין עוד פרויקטים", en: "No projects yet"),
+                onlyClosed
+                    ? context.l10n.pick(
+                        he: 'אין פרויקטים פתוחים לכתיבה',
+                        en: 'No projects open for writing',
+                        yi: 'קיין אָפֿענע פּראָיעקטן צום שרײַבן')
+                    : context.l10n
+                        .pick(he: "אין עוד פרויקטים", en: "No projects yet"),
                 style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 10),
             Text(
-              context.l10n.pick(
-                he: "פתח פרויקט ראשון כדי להתחיל למדוד כתיבה, רווח וצפי סיום.",
-                en: "Create your first project to start measuring writing, profit, and estimated completion.",
-              ),
+              onlyClosed
+                  ? context.l10n.pick(
+                      he: 'אפשר לפתוח פרויקט חדש או לפתוח מחדש פרויקט סגור.',
+                      en: 'Create a project or reopen a closed project.',
+                      yi: 'איר קענט שאַפֿן אַ פּראָיעקט אָדער ווידער עפֿענען אַ פֿאַרמאַכטן פּראָיעקט.')
+                  : context.l10n.pick(
+                      he: "פתח פרויקט ראשון כדי להתחיל למדוד כתיבה, רווח וצפי סיום.",
+                      en: "Create your first project to start measuring writing, profit, and estimated completion.",
+                    ),
               textAlign: TextAlign.center,
               style: TextStyle(
                   fontSize: 15, height: 1.6, color: Colors.grey.shade700),
@@ -4331,10 +4420,15 @@ class _ModernEmptyState extends StatelessWidget {
             ElevatedButton.icon(
               onPressed: onCreateProject,
               icon: const Icon(Icons.add),
-              label: Text(context.l10n.pick(
-                he: "פתיחת פרויקט ראשון",
-                en: "Create first project",
-              )),
+              label: Text(onlyClosed
+                  ? context.l10n.pick(
+                      he: 'ניהול פרויקטים',
+                      en: 'Manage projects',
+                      yi: 'פֿאַרוואַלטן פּראָיעקטן')
+                  : context.l10n.pick(
+                      he: "פתיחת פרויקט ראשון",
+                      en: "Create first project",
+                    )),
               style: ElevatedButton.styleFrom(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 32, vertical: 18),

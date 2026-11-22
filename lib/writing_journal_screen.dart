@@ -100,10 +100,11 @@ class _WritingJournalScreenState extends State<WritingJournalScreen> {
     final storedLast = await _storage.getLastProjectId();
     if (!mounted) return;
     Project? initial;
-    for (final project in _projects) {
+    final writable = _projects.where((p) => !p.isClosed).toList();
+    for (final project in writable) {
       if (project.id == (draft?.projectId ?? storedLast)) initial = project;
     }
-    initial ??= _projects.isEmpty ? null : _projects.first;
+    initial ??= writable.isEmpty ? null : writable.first;
 
     final initialDraft = draft ??
         (initial == null
@@ -117,7 +118,7 @@ class _WritingJournalScreenState extends State<WritingJournalScreen> {
     await showEntrySheet(
       context: context,
       isManual: true,
-      projects: _projects,
+      projects: writable,
       history: _history,
       useGregorianDates: _settings.dateDisplay == JournalDateDisplay.gregorian,
       dayStart: _dayStart,
@@ -196,7 +197,9 @@ class _WritingJournalScreenState extends State<WritingJournalScreen> {
         key: ValueKey(_editingKey),
         day: _editingDay!,
         entry: _editingEntry,
-        projects: _projects,
+        projects: _editingEntry == null
+            ? _projects.where((p) => !p.isClosed).toList()
+            : _projects,
         history: _history,
         onClose: _closeInline,
         onAdd: (save) async {

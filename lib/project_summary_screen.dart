@@ -40,6 +40,8 @@ class ProjectSummaryScreen extends StatefulWidget {
   final String? initialProjectId;
   final Future<Project?> Function(Project project)? onEditProject;
   final Future<bool> Function(Project project)? onDeleteProject;
+  final Future<Project?> Function(Project project, bool closed)?
+      onSetProjectClosed;
   final FutureOr<void> Function(Project)? onProjectUpdated;
   final FutureOr<void> Function(List<WorkSession>)? onHistoryUpdated;
 
@@ -51,6 +53,7 @@ class ProjectSummaryScreen extends StatefulWidget {
     this.onWorkCommitted,
     this.onEditProject,
     this.onDeleteProject,
+    this.onSetProjectClosed,
     this.onProjectUpdated,
     this.onHistoryUpdated,
   });
@@ -63,6 +66,7 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
   late List<Project> _projects;
   late List<WorkSession> _history;
   bool _workSaving = false;
+  bool _changingStatus = false;
   Project? _selectedProject;
   WorkCalendarRules _rules = WorkCalendarRules.standard;
   bool _useGregorianDates = false;
@@ -428,6 +432,24 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                     setState(() => _section = value.first),
               ),
             ),
+            if (widget.onSetProjectClosed != null)
+              OutlinedButton.icon(
+                onPressed: _changingStatus || _workSaving
+                    ? null
+                    : () => _toggleProjectClosed(selected),
+                icon: Icon(selected.isClosed
+                    ? Icons.unarchive_outlined
+                    : Icons.archive_outlined),
+                label: Text(selected.isClosed
+                    ? context.l10n.pick(
+                        he: 'פתח מחדש לכתיבה',
+                        en: 'Reopen for writing',
+                        yi: 'עפֿן ווידער צום שרײַבן')
+                    : context.l10n.pick(
+                        he: 'סגור פרויקט',
+                        en: 'Close project',
+                        yi: 'שליסן דעם פּראָיעקט')),
+              ),
             Expanded(
               child: switch (_section) {
                 _ProjectSection.overview => _buildProjectContent(selected),
@@ -457,6 +479,24 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _toggleProjectClosed(Project project) async {
+    if (_changingStatus) return;
+    setState(() => _changingStatus = true);
+    try {
+      final updated =
+          await widget.onSetProjectClosed?.call(project, !project.isClosed);
+      if (updated == null || !mounted) return;
+      setState(() {
+        _projects = [
+          for (final p in _projects) p.id == updated.id ? updated : p
+        ];
+        if (_selectedProject?.id == updated.id) _selectedProject = updated;
+      });
+    } finally {
+      if (mounted) setState(() => _changingStatus = false);
+    }
   }
 
   Future<void> _editProject(Project project) async {
@@ -665,8 +705,9 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                   en: 'Outstanding unavailable — multiple currencies'),
           ].join(' · ');
 
-    return InkWell(
-      onTap: () async {
+    return OutlinedButton.icon(
+      icon: const Icon(Icons.payments_outlined),
+      onPressed: () async {
         final changed = await showPaymentSheet(
           context: context,
           project: project,
@@ -677,10 +718,19 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
         final fresh = await _storage.loadPayments();
         if (mounted) setState(() => _payments = fresh);
       },
-      child: SoferTokens.of(context).isRules
-          ? SoferStatRow(
-              context.l10n.pick(he: 'תשלומים', en: 'Payments'), value)
-          : _statRow(context.l10n.pick(he: "תשלומים:", en: "Payments:"), value),
+      label: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(context.l10n.pick(
+                he: 'ניהול תשלומים',
+                en: 'Manage payments',
+                yi: 'פֿאַרוואַלטן צאָלונגען')),
+            Text(value),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1450,11 +1500,14 @@ class _ProjectSummaryScreenState extends State<ProjectSummaryScreen> {
                 Icon(Icons.event_available,
                     color: SoferTokens.of(context).accent),
                 const SizedBox(width: 8),
-                Text(
+                Expanded(
+                  child: Text(
                     context.l10n
                         .pick(he: "צפי סיום", en: "Estimated completion"),
                     style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 17)),
+                        fontWeight: FontWeight.bold, fontSize: 17),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 10),

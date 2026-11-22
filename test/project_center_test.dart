@@ -76,6 +76,14 @@ void main() {
     expect(find.text('הכתיבה'), findsOneWidget);
     expect(find.text('פרטים'), findsOneWidget);
 
+    final payments = find.text('ניהול תשלומים');
+    await tester.ensureVisible(payments);
+    await tester.tap(payments);
+    await tester.pumpAndSettle();
+    expect(find.text('רישום תשלום'), findsOneWidget);
+    Navigator.of(tester.element(find.text('רישום תשלום'))).pop();
+    await tester.pumpAndSettle();
+
     await tester.tap(find.text('הכתיבה'));
     await tester.pumpAndSettle();
     expect(find.text('מפת העמודים'), findsOneWidget);

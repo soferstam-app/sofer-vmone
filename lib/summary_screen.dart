@@ -35,6 +35,8 @@ class SummaryScreen extends StatefulWidget {
   final FutureOr<void> Function(List<WorkSession>) onHistoryUpdated;
   final Future<Project?> Function(Project project)? onEditProject;
   final Future<bool> Function(Project project)? onDeleteProject;
+  final Future<Project?> Function(Project project, bool closed)?
+      onSetProjectClosed;
   final ValueChanged<Project>? onProjectUpdated;
   final bool useGregorianDates;
 
@@ -46,6 +48,7 @@ class SummaryScreen extends StatefulWidget {
     required this.onHistoryUpdated,
     this.onEditProject,
     this.onDeleteProject,
+    this.onSetProjectClosed,
     this.onProjectUpdated,
     this.useGregorianDates = false,
   });
@@ -733,6 +736,19 @@ class _SummaryScreenState extends State<SummaryScreen> {
                     },
                     onEditProject: widget.onEditProject,
                     onDeleteProject: widget.onDeleteProject,
+                    onSetProjectClosed: widget.onSetProjectClosed == null
+                        ? null
+                        : (project, closed) async {
+                            final updated = await widget.onSetProjectClosed!(
+                                project, closed);
+                            if (updated != null && mounted) {
+                              setState(() => _projects = [
+                                    for (final p in _projects)
+                                      p.id == updated.id ? updated : p,
+                                  ]);
+                            }
+                            return updated;
+                          },
                     onProjectUpdated: widget.onProjectUpdated,
                     onHistoryUpdated: _historyUpdated,
                   ),

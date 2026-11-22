@@ -43,15 +43,34 @@ void main() {
     totalPages: 245,
   );
 
-  final now = DateTime.now();
+  final now = DateTime(2026, 11, 18, 12);
+  final mezuza = Project(
+    id: 'm',
+    name: 'ליקווד',
+    type: ProjectType.mezuza,
+    price: 650,
+    expenses: 75,
+    targetDaily: 1,
+    targetMonthly: 0,
+    targetUnits: 9,
+  );
   final history = [
+    WorkSession(
+      id: 'untimed',
+      projectId: mezuza.id,
+      startTime: now,
+      endTime: now,
+      amount: 9,
+      startLine: 0,
+      endLine: 0,
+      description: '',
+      isManual: true,
+    ),
     for (var i = 0; i < 6; i++)
       WorkSession(
         id: 's$i',
         projectId: 'p1',
-        // Keep every sample in the Hebrew month under test. Using the first
-        // Gregorian week of DateTime.now().month becomes the previous Hebrew
-        // month whenever Rosh Chodesh falls later in the Gregorian month.
+        // Keep every sample in the Hebrew month under test.
         startTime: DateTime(now.year, now.month, now.day, 7 + i * 2),
         endTime: DateTime(now.year, now.month, now.day, 8 + i * 2),
         amount: 1 + i,
@@ -80,7 +99,7 @@ void main() {
               child: ElevatedButton(
                 onPressed: () => showMonthlySummary(
                   context: context,
-                  projects: [project],
+                  projects: [project, mezuza],
                   history: history,
                   month: now,
                   dayStart: DayStart.midnight,
@@ -104,5 +123,8 @@ void main() {
     expect(tester.takeException(), isNull,
         reason: 'the dialog must survive being laid out and animated');
     expect(find.text('סיכום חודשי'), findsOneWidget);
+    expect(find.text('כל 9 המזוזות בהזמנה נכתבו'), findsOneWidget);
+    expect(find.textContaining('9.0 / 17.0 (חסרים 8.0 ליעד החודש)'),
+        findsOneWidget);
   });
 }

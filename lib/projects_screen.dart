@@ -34,6 +34,7 @@ class ProjectsScreen extends StatefulWidget {
 
   /// Gives the owner a chance to block deletion while a session is active.
   final Future<bool> Function(Project)? onBeforeProjectDelete;
+  final Future<Project?> Function(Project, bool)? onSetProjectClosed;
   final FutureOr<void> Function(List<WorkSession>)? onHistoryUpdated;
   final VoidCallback onResetAllData;
 
@@ -45,6 +46,7 @@ class ProjectsScreen extends StatefulWidget {
     required this.onProjectUpdated,
     required this.onProjectDeleted,
     this.onBeforeProjectDelete,
+    this.onSetProjectClosed,
     this.onHistoryUpdated,
     required this.onResetAllData,
   });
@@ -214,6 +216,14 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
           initialProjectId: project.id,
           onEditProject: (current) => _openProjectDialog(project: current),
           onDeleteProject: _confirmDeleteProject,
+          onSetProjectClosed: widget.onSetProjectClosed == null
+              ? null
+              : (project, closed) async {
+                  final updated =
+                      await widget.onSetProjectClosed!(project, closed);
+                  if (updated != null && mounted) setState(() {});
+                  return updated;
+                },
           onProjectUpdated: (updated) async {
             await widget.onProjectUpdated(updated);
             final at = widget.projects.indexWhere((p) => p.id == updated.id);
@@ -509,7 +519,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text(_getProjectSubtitle(p)),
+                                Text(_projectSubtitle(p)),
                                 if (_estimateLine(p) case final line?)
                                   Padding(
                                     padding: const EdgeInsets.only(top: 2),
@@ -607,7 +617,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              _getProjectSubtitle(p),
+              _projectSubtitle(p),
               style: TextStyle(
                   fontFamily: t.labelFamily, fontSize: 12, color: t.inkMuted),
             ),
@@ -628,6 +638,14 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
         ),
       ),
     );
+  }
+
+  String _projectSubtitle(Project p) {
+    final details = _getProjectSubtitle(p);
+    if (!p.isClosed) return details;
+    final status = context.l10n.pick(
+        he: 'פרויקט סגור', en: 'Closed project', yi: 'פֿאַרמאַכטער פּראָיעקט');
+    return '$details · $status';
   }
 
   String _getProjectSubtitle(Project p) {

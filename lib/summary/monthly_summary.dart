@@ -191,6 +191,13 @@ Future<void> showMonthlySummary({
       target = project.targetDaily * workDays;
     }
 
+    final orderQuantity = project.targetUnits;
+    final orderComplete = project.type == ProjectType.mezuza &&
+        orderQuantity != null &&
+        orderQuantity > 0 &&
+        ProductionCalculator.projectUnits(project,
+                history.where((s) => s.projectId == projId && !s.isDeleted)) >=
+            orderQuantity;
     Widget? goalWidget;
     if (target > 0) {
       double progressPercent = actualForGoal / target;
@@ -198,13 +205,19 @@ Future<void> showMonthlySummary({
       String remainingText = remaining <= 0
           ? context.l10n.pick(he: "הושלם!", en: "Complete!")
           : context.l10n.pick(
-              he: "נותרו ${remaining.toStringAsFixed(1)}",
-              en: "${remaining.toStringAsFixed(1)} remaining");
+              he: "חסרים ${remaining.toStringAsFixed(1)} ליעד החודש",
+              en: "${remaining.toStringAsFixed(1)} short of the monthly goal",
+              yi: "עס פֿעלן ${remaining.toStringAsFixed(1)} צום חודש־ציל");
 
       goalWidget = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 4),
+          if (project.targetMonthly <= 0)
+            Text(context.l10n.pick(
+                he: 'היעד החודשי מחושב מהיעד היומי ומימי העבודה בחודש.',
+                en: 'The monthly goal uses the daily goal and the workdays in the month.',
+                yi: 'דער חודש־ציל ווערט גערעכנט לויטן טעגלעכן ציל און די אַרבעטסטעג אין חודש.')),
           LinearProgressIndicator(
             value: progressPercent > 1 ? 1 : progressPercent,
             backgroundColor: SoferTokens.of(context).rule,
@@ -216,8 +229,9 @@ Future<void> showMonthlySummary({
           const SizedBox(height: 2),
           Text(
             context.l10n.pick(
-                he: "יעד: ${actualForGoal.toStringAsFixed(1)} / ${target.toStringAsFixed(1)} ($remainingText)",
-                en: "Target: ${actualForGoal.toStringAsFixed(1)} / ${target.toStringAsFixed(1)} ($remainingText)"),
+                he: "יעד כתיבה לחודש: ${actualForGoal.toStringAsFixed(1)} / ${target.toStringAsFixed(1)} ($remainingText)",
+                en: "Monthly writing goal: ${actualForGoal.toStringAsFixed(1)} / ${target.toStringAsFixed(1)} ($remainingText)",
+                yi: "שרײַבציל פֿאַרן חודש: ${actualForGoal.toStringAsFixed(1)} / ${target.toStringAsFixed(1)} ($remainingText)"),
             style: TextStyle(
               fontSize: 12,
               color: remaining <= 0
@@ -236,6 +250,11 @@ Future<void> showMonthlySummary({
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text("• $projectText"),
+          if (orderComplete)
+            Text(context.l10n.pick(
+                he: 'כל $orderQuantity המזוזות בהזמנה נכתבו',
+                en: 'All $orderQuantity mezuzot in the order were written',
+                yi: 'אַלע $orderQuantity מזוזות אין דער באַשטעלונג זײַנען געשריבן')),
           if (WorkTimeBreakdown.of(sessions).hasDetails)
             Text(WorkTimeBreakdown.of(sessions)
                 .label(english: context.l10n.isEnglish)),
@@ -336,6 +355,10 @@ Future<void> showMonthlySummary({
                         fontWeight: FontWeight.bold,
                         color: SoferTokens.of(ctx).caution)),
               const Divider(),
+              Text(context.l10n.pick(
+                  he: 'כל עמודה מציגה את דקות העבודה שנמדדו באותו יום. לחיצה ממושכת מציגה את המספר.',
+                  en: 'Each bar shows the work minutes recorded that day. Press and hold to see the number.',
+                  yi: 'יעדער שטאַנג ווײַזט די געמאָסטענע אַרבעטסמינוטן פֿון יענעם טאָג. האַלט געדריקט צו זען די צאָל.')),
               SizedBox(
                 height: 200,
                 child: _monthlyChart(context, monthSessions, month, dayStart),
@@ -455,7 +478,11 @@ Widget _monthlyChart(BuildContext context, List<WorkSession> sessions,
                       Container(
                           height: 1, color: SoferTokens.of(context).inkFaint),
                       if (day % 5 == 0 || day == 1)
-                        Text("$day", style: const TextStyle(fontSize: 8)),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text("$day",
+                              maxLines: 1, style: const TextStyle(fontSize: 8)),
+                        ),
                     ],
                   ),
                 );

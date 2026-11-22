@@ -47,6 +47,7 @@ class Project implements Mergeable<Project> {
   /// Null means the size was never entered, and no completion date can be
   /// estimated for the project.
   final int? targetUnits;
+  final bool isClosed;
 
   @override
   final DateTime lastUpdated;
@@ -129,6 +130,7 @@ class Project implements Mergeable<Project> {
     'linesPerPage',
     'megillahFormat',
     'targetUnits',
+    'isClosed',
     'lastUpdated',
     'isDeleted',
     'deletedAt',
@@ -161,6 +163,7 @@ class Project implements Mergeable<Project> {
     this.linesPerPage,
     this.megillahFormat,
     this.targetUnits,
+    this.isClosed = false,
     DateTime? lastUpdated,
     this.deletedAt,
     this.restoredAt,
@@ -201,6 +204,7 @@ class Project implements Mergeable<Project> {
       'linesPerPage': linesPerPage,
       'megillahFormat': megillahFormat,
       'targetUnits': targetUnits,
+      'isClosed': isClosed,
       'lastUpdated': lastUpdated.toIso8601String(),
       // The flag is still written because an older build looks for it and
       // would read every record as alive without it. The registers are what
@@ -244,6 +248,7 @@ class Project implements Mergeable<Project> {
           ? null
           : JsonCompat.string(json['megillahFormat']),
       targetUnits: JsonCompat.intOrNull(json['targetUnits']),
+      isClosed: JsonCompat.boolean(json['isClosed'], false),
       lastUpdated: lastUpdated,
       deletedAt: tombstone.deletedAt,
       restoredAt: tombstone.restoredAt,
@@ -288,6 +293,7 @@ class Project implements Mergeable<Project> {
     int? linesPerPage,
     String? megillahFormat,
     int? targetUnits,
+    bool? isClosed,
     bool? isDeleted,
     Object? clientEmail = _keep,
     Object? targetCompletionDate = _keep,
@@ -309,6 +315,7 @@ class Project implements Mergeable<Project> {
       linesPerPage: linesPerPage ?? this.linesPerPage,
       megillahFormat: megillahFormat ?? this.megillahFormat,
       targetUnits: targetUnits ?? this.targetUnits,
+      isClosed: isClosed ?? this.isClosed,
       lastUpdated: DateTime.now(),
       // Deleting and restoring each move their own register, so a later edit
       // can never undo either of them by accident.
@@ -346,6 +353,7 @@ class Project implements Mergeable<Project> {
         linesPerPage: linesPerPage,
         megillahFormat: megillahFormat,
         targetUnits: targetUnits,
+        isClosed: isClosed,
         lastUpdated: lastUpdated,
         deletedAt: deletedAt,
         restoredAt: restoredAt,
